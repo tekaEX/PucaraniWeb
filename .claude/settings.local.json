@@ -1,0 +1,16 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(rm -f about.html contact.html get-a-quote.html pricing.html service-details.html services.html starter-page.html)",
+      "Bash(rm -f assets/css/main.css assets/css/design.css)",
+      "Bash(rm -f assets/img/apple-touch-icon.png assets/img/cta-bg.jpg assets/img/favicon.png assets/img/hero-img.svg assets/img/logo.png assets/img/page-title-bg.jpg assets/img/pucaranilogoname.JPG assets/img/quote-bg.jpg assets/img/service-1.jpg assets/img/service-2.jpg assets/img/service-3.jpg assets/img/service-4.jpg assets/img/service-5.jpg assets/img/service-6.jpg assets/img/services.jpg assets/img/testimonials-bg.jpg assets/img/world-dotted-map.png)",
+      "Bash(rm -rf assets/img/team)",
+      "Bash(rm -f Readme.txt assets/scss/Readme.txt forms/Readme.txt)",
+      "Bash(rm -f assets/vendor/fontawesome-free/css/all.css)",
+      "Bash(rm -f assets/vendor/fontawesome-free/css/brands.css assets/vendor/fontawesome-free/css/brands.min.css)",
+      "Bash(rm -f assets/vendor/fontawesome-free/css/fontawesome.css assets/vendor/fontawesome-free/css/fontawesome.min.css)",
+      "Bash(rm -f assets/vendor/fontawesome-free/css/regular.css assets/vendor/fontawesome-free/css/regular.min.css)",
+      "Bash(rm -f assets/vendor/fontawesome-free/css/solid.css assets/vendor/fontawesome-free/css/solid.min.css)"
+    ]
+  }
+}
