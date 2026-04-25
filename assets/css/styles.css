@@ -1,0 +1,1251 @@
+/* ================================================================
+   TRANSPORTES PUCARANI — Estilos
+   styles.css — archivo único de estilos
+   ================================================================
+
+   GUÍA RÁPIDA DE PERSONALIZACIÓN
+   ─────────────────────────────────────────────────────────────
+
+   🎨 COLORES — editar la sección "Variables Globales" (~línea 40)
+      --accent-color   → azul de botones, links y acentos
+      --heading-color  → color de todos los títulos
+
+   🖼  CAMBIAR IMÁGENES — editar src="..." en index.html
+      Hero fondo: class="hero-bg"      → assets/img/aricamap.png
+      Hero van:   id="herovan"         → assets/img/pucaranicar.png
+      About:      class="about-photo"  → assets/img/about.jpg
+      Servicios:  dentro de cada <div class="card-img">
+
+   📐 TAMAÑOS DE CONTENEDOR DE IMAGEN
+      Hero (alto mínimo)         → .hero           { min-height: 60vh; }
+      Van en el hero             → .van-crop        { width: 510px; }
+      Foto About                 → .about-photo     { height: 500px; }
+      Tarjetas de servicio       → .card .card-img  { height: 220px; }
+
+   📍 CENTRAR O REENCUADRAR IMAGEN (object-position)
+      Controla qué área de la foto queda visible al estar recortada.
+        1er valor = horizontal: left | center | right | 0%–100%
+        2do valor = vertical:   top  | center | bottom | 0%–100%
+      Ejemplos:
+        .hero-bg      { object-position: center 35%; }  ← fondo hero
+        .about-photo  { object-position: left center; } ← foto about
+        .card-img img { object-position: top center; }  ← fotos servicio
+      Más info: https://developer.mozilla.org/es/docs/Web/CSS/object-position
+
+   ================================================================ */
+
+
+/* ─── Variables Globales ──────────────────────────────────────── */
+
+:root {
+  --default-font:  "Roboto", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --heading-font:  "Poppins", sans-serif;
+  --nav-font:      "Poppins", sans-serif;
+}
+
+:root {
+  /* ── Paleta principal ─────────────────────────────── */
+  --background-color: #ffffff;
+  --default-color:    #212529;
+  --heading-color:    #001973;   /* ← cambia este para otro color de títulos */
+  --accent-color:     #0d42ff;   /* ← cambia este para otro color de acento  */
+  --surface-color:    #ffffff;
+  --contrast-color:   #ffffff;
+
+  /* ── Colores del menú de navegación ──────────────── */
+  --nav-color:                    rgba(255,255,255,0.6);
+  --nav-hover-color:              #ffffff;
+  --nav-mobile-background-color:  #ffffff;
+  --nav-dropdown-background-color:#ffffff;
+  --nav-dropdown-color:           #212529;
+  --nav-dropdown-hover-color:     #0d42ff;
+
+  scroll-behavior: smooth;
+}
+
+/* Fondo claro para secciones alternas */
+.light-background {
+  --background-color: #f7f9fc;
+  --surface-color:    #ffffff;
+}
+
+/* Fondo oscuro (hero, testimonios, footer, CTA) */
+.dark-background {
+  --background-color: #0e1d34;
+  --default-color:    #ffffff;
+  --heading-color:    #ffffff;
+  --surface-color:    #19335c;
+  --contrast-color:   #ffffff;
+}
+
+
+/* ─── Tipografía base ─────────────────────────────────────────── */
+
+body {
+  color:            var(--default-color);
+  background-color: var(--background-color);
+  font-family:      var(--default-font);
+}
+
+a {
+  color:           var(--accent-color);
+  text-decoration: none;
+  transition: 0.3s;
+}
+a:hover {
+  color:           color-mix(in srgb, var(--accent-color), transparent 25%);
+  text-decoration: none;
+}
+
+h1, h2, h3, h4, h5, h6 {
+  color:       var(--heading-color);
+  font-family: var(--heading-font);
+}
+
+
+/* ─── Header ──────────────────────────────────────────────────── */
+
+.header {
+  --background-color: rgba(255,255,255,0);
+  --heading-color:    #ffffff;
+  color:            var(--default-color);
+  background-color: var(--background-color);
+  padding:    20px 0;
+  transition: all 0.5s;
+  z-index: 997;
+}
+
+.header .logo {
+  line-height: 5;
+}
+.header .logo img {
+  max-height:   50px;
+  margin-right: 8px;
+}
+.header .logo h1 {
+  font-size:   30px;
+  margin:      0;
+  font-weight: 700;
+  color:       var(--heading-color);
+}
+
+/* Botón "Cotizar ahora" en el nav */
+.navmenu .btn-cotizar,
+.navmenu .btn-cotizar:focus {
+  background:    #25D366;
+  color:         #fff !important;
+  border-radius: 50px;
+  padding:       8px 22px !important;
+  font-weight:   600;
+  letter-spacing: 0.2px;
+  box-shadow:    0 4px 14px rgba(37, 211, 102, 0.42);
+  transition:    background 0.25s ease, box-shadow 0.25s ease;
+}
+
+.navmenu .btn-cotizar:hover {
+  background: #1ea855;
+  box-shadow: 0 8px 24px rgba(37, 211, 102, 0.55);
+  color:      #fff !important;
+}
+
+@media (max-width: 1200px) {
+  .header .logo    { order: 1; }
+  .header .navmenu { order: 2; }
+}
+
+/* Header al hacer scroll */
+.scrolled .header {
+  padding:    10px 0;
+  box-shadow: 0 0 18px rgba(0,0,0,0.1);
+  --background-color: rgba(14,29,52,0.92);
+}
+
+
+/* ─── Menú de navegación — Desktop ───────────────────────────── */
+
+@media (min-width: 1200px) {
+  .navmenu { padding: 0; }
+
+  .navmenu ul {
+    margin:      0;
+    padding:     0;
+    display:     flex;
+    list-style:  none;
+    align-items: center;
+  }
+  .navmenu li { position: relative; }
+
+  .navmenu a,
+  .navmenu a:focus {
+    color:           var(--nav-color);
+    padding:         18px 15px;
+    font-size:       16px;
+    font-family:     var(--nav-font);
+    font-weight:     400;
+    display:         flex;
+    align-items:     center;
+    justify-content: space-between;
+    white-space:     nowrap;
+    transition:      0.3s;
+  }
+  .navmenu a i,
+  .navmenu a:focus i {
+    font-size:   12px;
+    line-height: 0;
+    margin-left: 5px;
+    transition:  0.3s;
+  }
+  .navmenu li:last-child a { padding-right: 0; }
+
+  .navmenu li:hover > a,
+  .navmenu .active,
+  .navmenu .active:focus {
+    color: var(--nav-hover-color);
+  }
+
+  /* Dropdown */
+  .navmenu .dropdown ul {
+    margin:     0;
+    padding:    10px 0;
+    background: var(--nav-dropdown-background-color);
+    display:    block;
+    position:   absolute;
+    visibility: hidden;
+    left:       14px;
+    top:        130%;
+    opacity:    0;
+    transition: 0.3s;
+    border-radius: 4px;
+    z-index:    99;
+    box-shadow: 0 0 30px rgba(0,0,0,0.1);
+  }
+  .navmenu .dropdown ul li { min-width: 200px; }
+  .navmenu .dropdown ul a {
+    padding:    10px 20px;
+    font-size:  15px;
+    color:      var(--nav-dropdown-color);
+  }
+  .navmenu .dropdown ul a:hover,
+  .navmenu .dropdown ul .active:hover,
+  .navmenu .dropdown ul li:hover > a {
+    color: var(--nav-dropdown-hover-color);
+  }
+  .navmenu .dropdown:hover > ul {
+    opacity:    1;
+    top:        100%;
+    visibility: visible;
+  }
+}
+
+
+/* ─── Menú de navegación — Móvil ─────────────────────────────── */
+
+@media (max-width: 1199px) {
+  .mobile-nav-toggle {
+    color:      var(--nav-color);
+    font-size:  28px;
+    line-height:0;
+    margin-right: 10px;
+    cursor:     pointer;
+    transition: color 0.3s;
+  }
+
+  .navmenu { padding: 0; z-index: 9997; }
+
+  .navmenu ul {
+    display:          none;
+    list-style:       none;
+    position:         absolute;
+    inset:            60px 20px 20px 20px;
+    padding:          10px 0;
+    margin:           0;
+    border-radius:    6px;
+    background-color: var(--nav-mobile-background-color);
+    overflow-y:       auto;
+    transition:       0.3s;
+    z-index:          9998;
+    box-shadow:       0 0 30px rgba(0,0,0,0.1);
+  }
+
+  .navmenu a,
+  .navmenu a:focus {
+    color:           var(--nav-dropdown-color);
+    padding:         10px 20px;
+    font-family:     var(--nav-font);
+    font-size:       17px;
+    font-weight:     500;
+    display:         flex;
+    align-items:     center;
+    justify-content: space-between;
+    white-space:     nowrap;
+    transition:      0.3s;
+  }
+  .navmenu a i,
+  .navmenu a:focus i {
+    font-size:   12px;
+    line-height: 0;
+    margin-left: 5px;
+    width:       30px;
+    height:      30px;
+    display:     flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    transition:  0.3s;
+    background-color: color-mix(in srgb, var(--accent-color), transparent 90%);
+  }
+  .navmenu a i:hover,
+  .navmenu a:focus i:hover {
+    background-color: var(--accent-color);
+    color:            var(--contrast-color);
+  }
+  .navmenu a:hover,
+  .navmenu .active,
+  .navmenu .active:focus { color: var(--nav-dropdown-hover-color); }
+
+  .navmenu .active i,
+  .navmenu .active:focus i {
+    background-color: var(--accent-color);
+    color:            var(--contrast-color);
+    transform:        rotate(180deg);
+  }
+
+  .navmenu .dropdown ul {
+    position:         static;
+    display:          none;
+    z-index:          99;
+    padding:          10px 0;
+    margin:           10px 20px;
+    background-color: var(--nav-dropdown-background-color);
+    border:           1px solid color-mix(in srgb, var(--default-color), transparent 90%);
+    box-shadow:       none;
+    transition:       all 0.5s ease-in-out;
+  }
+  .navmenu .dropdown > .dropdown-active { display: block; }
+
+  .mobile-nav-active               { overflow: hidden; }
+  .mobile-nav-active .mobile-nav-toggle {
+    color:    #fff;
+    position: absolute;
+    font-size:28px;
+    top:      15px;
+    right:    15px;
+    margin:   0;
+    z-index:  9999;
+  }
+  .mobile-nav-active .navmenu {
+    position:   fixed;
+    overflow:   hidden;
+    inset:      0;
+    background: rgba(33,37,41,0.8);
+    transition: 0.3s;
+  }
+  .mobile-nav-active .navmenu > ul { display: block; }
+}
+
+
+/* ─── Footer ──────────────────────────────────────────────────── */
+
+.footer {
+  color:            var(--default-color);
+  background-color: #010c28;     /* ← color del footer */
+  font-size:        14px;
+  position:         relative;
+}
+
+.footer .footer-top {
+  padding-top:  50px;
+  border-top:   1px solid rgba(255,255,255,0.08);
+}
+
+.footer .footer-about .logo {
+  line-height:   1;
+  margin-bottom: 25px;
+}
+.footer .footer-about .logo img  { max-height: 40px; margin-right: 6px; }
+.footer .footer-about .logo span {
+  color:        var(--heading-color);
+  font-size:    22px;
+  font-weight:  700;
+  letter-spacing: 1px;
+  font-family:  var(--heading-font);
+}
+.footer .footer-about p {
+  color:       rgba(255,255,255,0.46);
+  font-size:   14px;
+  line-height: 1.75;
+  margin-top:  10px;
+  font-family: var(--heading-font);
+}
+
+.footer .social-links a {
+  display:         flex;
+  align-items:     center;
+  justify-content: center;
+  width:      40px;
+  height:     40px;
+  border-radius: 50%;
+  background: rgba(255,255,255,0.07);
+  border:     1px solid rgba(255,255,255,0.14);
+  font-size:  16px;
+  color:      rgba(255,255,255,0.52);
+  margin-right: 10px;
+  transition: all 0.25s ease;
+}
+.footer .social-links a:hover {
+  background:   var(--accent-color);
+  border-color: var(--accent-color);
+  color:        #fff;
+  transform:    translateY(-3px);
+}
+
+.footer h4 {
+  color:          rgba(255,255,255,0.9);
+  font-size:      11px;
+  font-weight:    bold;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  padding-bottom: 12px;
+  margin-bottom:  18px;
+}
+
+.footer .footer-contact p {
+  color:         rgba(255,255,255,0.46);
+  margin-bottom: 5px;
+}
+.footer .footer-contact strong { color: rgba(255,255,255,0.7); }
+
+.footer-bottom {
+  padding:     20px 0 30px;
+  margin-top:  0;
+  border-top:  1px solid rgba(255,255,255,0.08);
+  text-align:  center;
+}
+.footer-bottom p {
+  margin: 0;
+  color:  rgba(255,255,255,0.4);
+  font-size: 13px;
+}
+
+
+/* ─── Preloader ───────────────────────────────────────────────── */
+
+#preloader {
+  position:         fixed;
+  inset:            0;
+  z-index:          9999;
+  background-color: var(--background-color);
+  transition:       all 0.6s ease-out;
+}
+#preloader::before,
+#preloader::after {
+  content:      "";
+  position:     absolute;
+  border:       4px solid var(--accent-color);
+  border-radius:50%;
+  animation:    preloader-spin 2s cubic-bezier(0,0.2,0.8,1) infinite;
+}
+#preloader::after { animation-delay: -0.5s; }
+
+@keyframes preloader-spin {
+  0%   { width:10px;  height:10px;  top:calc(50% - 5px);  left:calc(50% - 5px);  opacity:1; }
+  100% { width:72px;  height:72px;  top:calc(50% - 36px); left:calc(50% - 36px); opacity:0; }
+}
+
+
+/* ─── Botón ir arriba ─────────────────────────────────────────── */
+
+.scroll-top {
+  position:         fixed;
+  visibility:       hidden;
+  opacity:          0;
+  right:            15px;
+  bottom:           15px;
+  z-index:          99999;
+  background-color: var(--accent-color);
+  width:  40px;
+  height: 40px;
+  border-radius: 4px;
+  transition: all 0.4s;
+}
+.scroll-top i {
+  font-size:   24px;
+  color:       var(--contrast-color);
+  line-height: 0;
+}
+.scroll-top:hover {
+  background-color: color-mix(in srgb, var(--accent-color), transparent 20%);
+  color:            var(--contrast-color);
+}
+.scroll-top.active { visibility:visible; opacity:1; }
+
+
+/* ─── Secciones globales ──────────────────────────────────────── */
+
+/* Desactivar delays AOS en móvil para mejor rendimiento */
+@media screen and (max-width: 768px) {
+  [data-aos-delay] { transition-delay: 0 !important; }
+}
+
+section,
+.section {
+  color:            var(--default-color);
+  background-color: var(--background-color);
+  padding:          60px 0;
+  scroll-margin-top:100px;
+  overflow:         clip;
+}
+@media (max-width: 1199px) {
+  section, .section { scroll-margin-top: 66px; }
+}
+
+
+/* ─── Títulos de sección ──────────────────────────────────────── */
+
+.section-title {
+  text-align:    center;
+  padding:       30px 0;
+  margin-bottom: 30px;
+  position:      relative;
+}
+.section-title h2 {
+  font-size:      32px;
+  font-weight:    700;
+  text-transform: uppercase;
+  margin-bottom:  20px;
+  padding-bottom: 18px;   /* espacio para la línea de acento */
+  position:       relative;
+  z-index:        2;
+}
+/* Línea decorativa bajo el título */
+.section-title h2::after {
+  content:   '';
+  position:  absolute;
+  bottom:    0;
+  left:      50%;
+  transform: translateX(-50%);
+  width:  56px;
+  height: 4px;
+  background:    var(--accent-color);
+  border-radius: 2px;
+}
+/* Texto fantasma detrás del título */
+.section-title span {
+  position:       absolute;
+  top:            4px;
+  color:          color-mix(in srgb, var(--heading-color), transparent 95%);
+  left:           0;
+  right:          0;
+  z-index:        1;
+  font-weight:    700;
+  font-size:      52px;
+  text-transform: uppercase;
+  line-height:    1;
+}
+.section-title p {
+  margin-bottom: 0;
+  position:      relative;
+  z-index:       2;
+}
+@media (max-width: 575px) {
+  .section-title h2  { font-size: 28px; margin-bottom: 15px; }
+  .section-title span{ font-size: 38px; }
+}
+
+
+/* ================================================================
+   SECCIONES
+   ================================================================ */
+
+
+/* ─── HERO ────────────────────────────────────────────────────── */
+
+/*
+ * 📐 Alto del hero: cambia min-height abajo.
+ *    Usa vh (% de pantalla) o px.
+ *    Ejemplo: min-height: 80vh; o min-height: 600px;
+ */
+.hero {
+  width:      100%;
+  min-height: 60vh;          /* ← ALTO DEL HERO */
+  position:   relative;
+  padding:    120px 0 60px 0;
+  overflow:   hidden;
+}
+
+/*
+ * 📍 Imagen de fondo del hero (aricamap.png)
+ *    object-position controla el encuadre:
+ *      center center  → centrado (por defecto)
+ *      center 30%     → desplaza hacia arriba (muestra más del norte del mapa)
+ *      center 60%     → desplaza hacia abajo  (muestra más del sur)
+ *    Cambia los valores hasta que el mapa quede donde quieras.
+ */
+.hero-bg {
+  position:        absolute;
+  inset:           0;
+  display:         block;
+  width:           100%;
+  height:          100%;
+  object-fit:      cover;
+  object-position: center center;   /* ← CENTRADO DEL MAPA DEL HERO */
+  z-index:         1;
+}
+
+/* Overlay degradado — da contraste al texto sobre el mapa */
+.hero::before {
+  content:  '';
+  position: absolute;
+  inset:    0;
+  background: linear-gradient(
+    130deg,
+    rgba(0,8,52,0.90)  0%,
+    rgba(0,18,76,0.68) 52%,
+    rgba(0,5,30,0.38)  100%
+  );
+  z-index:         2;
+  pointer-events:  none;
+}
+
+/* Contenido del hero sobre el overlay */
+.hero .container {
+  position: relative;
+  z-index:  4 !important;
+}
+
+.hero h2 {
+  margin-bottom: 20px;
+  font-size:     3rem;
+  font-weight:   800;
+  line-height:   1.2;
+  text-shadow:   0 2px 22px rgba(0,0,0,0.45);
+}
+.hero p {
+  font-size:   1.05rem;
+  font-weight: 400;
+  line-height: 1.78;
+  max-width:   490px;
+  margin-bottom: 40px;
+}
+
+/* Tarjetas de estadísticas con efecto cristal */
+.hero .stats-item {
+  padding:        20px 10px;
+  width:          100%;
+  background:     rgba(255,255,255,0.09);
+  border:         1px solid rgba(255,255,255,0.18);
+  border-radius:  14px;
+  backdrop-filter:blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  transition:     background 0.3s ease;
+}
+.hero .stats-item:hover {
+  background: rgba(255,255,255,0.14);
+}
+.hero .stats-item span {
+  font-size:      2.3rem;
+  display:        block;
+  font-weight:    700;
+  margin-bottom:  15px;
+  padding-bottom: 15px;
+  position:       relative;
+}
+.hero .stats-item span::after {
+  content:    "";
+  position:   absolute;
+  display:    block;
+  width:      20px;
+  height:     3px;
+  background: var(--accent-color);
+  left:       0;
+  right:      0;
+  bottom:     0;
+  margin:     auto;
+}
+.hero .stats-item p {
+  padding:     0;
+  margin:      0;
+  font-family: var(--heading-font);
+  font-size:   15px;
+  font-weight: 600;
+}
+
+/*
+ * 📐 Tarjeta de la van — ajusta width para hacerla más grande o pequeña.
+ *    La van se oculta automáticamente en pantallas < 992px (d-none d-lg-block).
+ */
+.van-crop {
+  position:   absolute;
+  top:        50%;
+  right:      4%;
+  transform:  translateY(-50%);
+  width:      510px;          /* ← ANCHO DE LA TARJETA DE LA VAN */
+  height:     auto;
+  overflow:   visible;
+  pointer-events: none;
+  z-index:    4;
+  /* Efecto cristal — integra el fondo blanco de la imagen */
+  background:         rgba(255,255,255,0.08);
+  border-radius:      22px;
+  border:             1px solid rgba(255,255,255,0.20);
+  backdrop-filter:    blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  padding:            26px 30px 18px;
+  display:            flex;
+  align-items:        center;
+  box-shadow:
+    0 24px 60px rgba(0,0,0,0.40),
+    inset 0 1px 0 rgba(255,255,255,0.25);
+}
+.van-crop img {
+  width:           100%;
+  height:          auto;
+  object-fit:      contain;
+  object-position: center;
+  display:         block;
+  filter:          drop-shadow(0 12px 24px rgba(0,0,0,0.30));
+}
+
+
+/* ─── ABOUT ───────────────────────────────────────────────────── */
+
+.about .content h3 {
+  font-size:      2rem;
+  font-weight:    700;
+  padding-bottom: 18px;
+  margin-bottom:  24px;
+  position:       relative;
+}
+/* Línea de acento bajo "Quiénes somos" */
+.about .content h3::after {
+  content:       '';
+  position:      absolute;
+  bottom:        0;
+  left:          0;
+  width:         48px;
+  height:        4px;
+  background:    var(--accent-color);
+  border-radius: 2px;
+}
+
+.about .content p:last-child { margin-bottom: 0; }
+
+.about .content ul {
+  list-style: none;
+  padding:    0;
+}
+.about .content ul li {
+  display:       flex;
+  align-items:   flex-start;
+  margin-top:    14px;
+  background:    #f3f6ff;
+  border-left:   4px solid var(--accent-color);
+  border-radius: 0 10px 10px 0;
+  padding:       18px 20px;
+  transition:    transform 0.25s ease, box-shadow 0.25s ease;
+}
+.about .content ul li:hover {
+  transform:  translateX(6px);
+  box-shadow: 5px 4px 22px rgba(13,66,255,0.10);
+}
+.about .content ul i {
+  flex-shrink:  0;
+  font-size:    28px;
+  color:        var(--accent-color);
+  margin-right: 18px;
+  margin-top:   3px;
+  line-height:  0;
+}
+.about .content ul h5 {
+  font-size:   18px;
+  font-weight: 700;
+}
+.about .content ul p { font-size: 15px; }
+
+/*
+ * 📐 Foto de la sección "Quiénes Somos"
+ *    Cambia height para hacerla más alta o baja (solo en desktop).
+ *
+ * 📍 Reencuadrar la foto:
+ *    object-position controla qué parte de la imagen se ve.
+ *    Ejemplos: left center | right center | center top | 30% 50%
+ *    → Cambia el valor en object-position abajo.
+ *
+ * 🖼  Para reemplazar la imagen: editar src="..." en index.html
+ *    buscando class="about-photo"
+ */
+.about-photo {
+  display:         block;
+  width:           100%;
+  height:          500px;          /* ← ALTO DE LA FOTO ABOUT */
+  object-fit:      cover;
+  object-position: left center;    /* ← ENCUADRE DE LA FOTO ABOUT */
+  border-radius:   12px;
+  box-shadow:      0 12px 40px rgba(0,0,0,0.12);
+}
+@media (max-width: 991px) {
+  .about-photo { height: 300px; }
+}
+
+
+/* ─── SERVICES ────────────────────────────────────────────────── */
+
+/*
+ * 📐 Alto de las imágenes de servicio: cambia height en .card-img.
+ * 📍 Para reencuadrar una foto específica de servicio, añade en el HTML:
+ *    style="object-position: top center"  dentro del <img> de esa tarjeta.
+ */
+.services .card {
+  background-color: var(--surface-color);
+  color:            var(--default-color);
+  position:         relative;
+  border-radius:    14px;
+  border:           none;
+  height:           100%;
+  box-shadow:       0 4px 24px rgba(0,0,0,0.07);
+  overflow:         hidden;
+  transition:       transform 0.32s ease, box-shadow 0.32s ease;
+}
+.services .card:hover {
+  transform:  translateY(-12px);
+  box-shadow: 0 28px 55px rgba(0,0,0,0.14);
+}
+
+.services .card .card-img {
+  height:   220px;          /* ← ALTO DE LAS IMÁGENES DE SERVICIO */
+  overflow: hidden;
+  position: relative;
+}
+.services .card .card-img img {
+  width:      100%;
+  height:     100%;
+  object-fit: cover;
+  /* 📍 Para reencuadrar esta imagen añade: object-position: top center; */
+  transition: transform 0.5s ease;
+}
+.services .card:hover .card-img img { transform: scale(1.09); }
+
+/* Overlay azul al pasar el cursor */
+.services .card .card-img::after {
+  content:    '';
+  position:   absolute;
+  inset:      0;
+  background: linear-gradient(180deg, transparent 42%, rgba(0,12,80,0.55) 100%);
+  opacity:    0;
+  transition: opacity 0.35s ease;
+}
+.services .card:hover .card-img::after { opacity: 1; }
+
+.services .card h3 {
+  font-weight:    700;
+  font-size:      15px;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  padding:        20px 22px 8px;
+  margin-bottom:  0;
+}
+.services .card a {
+  color:      var(--heading-color);
+  transition: 0.3s;
+}
+.services .card a:hover { color: var(--accent-color); }
+.services .card p {
+  padding:       0 22px 22px;
+  margin-bottom: 0;
+  font-size:     14px;
+  line-height:   1.65;
+  color:         color-mix(in srgb, var(--default-color), transparent 40%);
+}
+
+
+/* ─── FEATURES ────────────────────────────────────────────────── */
+
+.features {
+  background: #f7f9fc;
+}
+.features .features-item {
+  color:         color-mix(in srgb, var(--default-color), transparent 20%);
+  background:    #fff;
+  padding:       44px 40px;
+  border-radius: 18px;
+  box-shadow:    0 4px 32px rgba(0,0,0,0.06);
+}
+.features .features-item + .features-item { margin-top: 36px; }
+
+@media (max-width: 640px) {
+  .features .features-item         { padding: 28px 18px; }
+  .features .features-item + .features-item { margin-top: 24px; }
+}
+
+.features .features-item h3 {
+  font-weight:   700;
+  font-size:     1.4rem;
+  margin-bottom: 12px;
+}
+.features .features-item img {
+  border-radius: 14px;
+  box-shadow:    0 14px 42px rgba(0,0,0,0.13);
+}
+.features .features-item ul {
+  list-style: none;
+  padding:    0;
+}
+.features .features-item ul li {
+  padding-bottom: 8px;
+  padding-top:    8px;
+  display:        flex;
+  align-items:    center;
+  font-size:      15px;
+}
+.features .features-item ul li:last-child { padding-bottom: 0; }
+.features .features-item ul i {
+  font-size:    20px;
+  padding-right:4px;
+  color:        var(--accent-color);
+}
+.features .features-item p:last-child { margin-bottom: 0; }
+.features .features-item p            { font-size: 15px; }
+
+
+/* ─── TESTIMONIOS ─────────────────────────────────────────────── */
+
+.testimonials {
+  padding:  80px 0;
+  position: relative;
+}
+/* Overlay oscuro sobre la imagen de fondo */
+.testimonials::before {
+  content:    "";
+  background: rgba(3,8,44,0.82);
+  position:   absolute;
+  inset:      0;
+  z-index:    2;
+}
+/* Imagen de fondo — buscar class="testimonials-bg" en el HTML */
+.testimonials-bg {
+  position:        absolute;
+  inset:           0;
+  display:         block;
+  width:           100%;
+  height:          100%;
+  object-fit:      cover;
+  object-position: center center;  /* ← ENCUADRE DEL FONDO DE TESTIMONIOS */
+  z-index:         1;
+}
+.testimonials .container { position: relative; z-index: 3; }
+
+.testimonials .swiper { padding: 10px 0 42px; }
+
+.testimonials .testimonial-item {
+  text-align:    center;
+  background:    rgba(255,255,255,0.07);
+  border:        1px solid rgba(255,255,255,0.15);
+  border-radius: 20px;
+  padding:       42px 38px;
+  max-width:     700px;
+  margin:        0 auto;
+}
+.testimonials .testimonial-item .testimonial-img {
+  width:         80px;
+  height:        80px;
+  border-radius: 50%;
+  object-fit:    cover;
+  border:        3px solid rgba(255,255,255,0.32);
+  margin:        0 auto;
+}
+.testimonials .testimonial-item h3 {
+  font-size:   18px;
+  font-weight: bold;
+  margin:      14px 0 5px 0;
+}
+.testimonials .testimonial-item h4 {
+  font-size: 14px;
+  margin:    0 0 14px 0;
+  color:     rgba(255,255,255,0.50);
+}
+.testimonials .testimonial-item .stars { margin-bottom: 15px; }
+.testimonials .testimonial-item .stars i {
+  color:    #ffc107;
+  margin:   0 1px;
+  font-size:15px;
+}
+.testimonials .testimonial-item .quote-icon-left,
+.testimonials .testimonial-item .quote-icon-right {
+  color:    color-mix(in srgb, var(--default-color), transparent 40%);
+  font-size:26px;
+  line-height:0;
+}
+.testimonials .testimonial-item .quote-icon-left  { display:inline-block; left:-5px; position:relative; }
+.testimonials .testimonial-item .quote-icon-right { display:inline-block; right:-5px; position:relative; top:10px; transform:scale(-1,-1); }
+.testimonials .testimonial-item p {
+  font-style:  italic;
+  font-size:   15px;
+  line-height: 1.78;
+  color:       rgba(255,255,255,0.84);
+  margin:      0 auto 15px auto;
+}
+@media (min-width: 992px) { .testimonials .testimonial-item p { width: 80%; } }
+
+.testimonials .swiper-wrapper    { height: auto; }
+.testimonials .swiper-pagination { margin-top: 20px; position: relative; }
+.testimonials .swiper-pagination .swiper-pagination-bullet {
+  width:            12px;
+  height:           12px;
+  background-color: color-mix(in srgb, var(--default-color), transparent 50%);
+  opacity:          0.5;
+}
+.testimonials .swiper-pagination .swiper-pagination-bullet-active {
+  background-color: var(--default-color);
+  opacity:          1;
+}
+
+
+/* ─── FAQ ─────────────────────────────────────────────────────── */
+
+.faq .faq-container { margin-top: 15px; }
+
+.faq .faq-container .faq-item {
+  position:         relative;
+  padding:          20px;
+  margin-bottom:    20px;
+  background-color: color-mix(in srgb, var(--default-color), transparent 96%);
+  border-radius:    10px;
+  border-left:      4px solid transparent;
+  overflow:         hidden;
+  transition:       border-left-color 0.3s ease, background-color 0.3s ease;
+}
+.faq .faq-container .faq-item:last-child { margin-bottom: 0; }
+
+.faq .faq-container .faq-item:hover:not(.faq-active) {
+  border-left-color: var(--accent-color);
+  background-color:  rgba(13,66,255,0.04);
+}
+
+.faq .faq-container .faq-item h3 {
+  font-weight: 600;
+  font-size:   16px;
+  line-height: 24px;
+  margin:      0 30px 0 32px;
+  transition:  0.3s;
+  cursor:      pointer;
+}
+.faq .faq-container .faq-item h3:hover { color: var(--accent-color); }
+
+.faq .faq-container .faq-item .faq-content {
+  display:              grid;
+  grid-template-rows:   0fr;
+  transition:           0.3s ease-in-out;
+  visibility:           hidden;
+  opacity:              0;
+}
+.faq .faq-container .faq-item .faq-content p { margin-bottom: 0; overflow: hidden; }
+
+.faq .faq-container .faq-item .faq-icon {
+  position:  absolute;
+  top:       22px;
+  left:      20px;
+  font-size: 20px;
+  line-height:0;
+  transition:0.3s;
+  color:     var(--accent-color);
+}
+.faq .faq-container .faq-item .faq-toggle {
+  position:  absolute;
+  top:       20px;
+  right:     20px;
+  font-size: 16px;
+  line-height:0;
+  transition:0.3s;
+  cursor:    pointer;
+}
+.faq .faq-container .faq-item .faq-toggle:hover { color: var(--accent-color); }
+
+/* Item activo (abierto) */
+.faq .faq-container .faq-active {
+  background-color:  var(--heading-color);
+  border-left-color: rgba(255,255,255,0.45) !important;
+}
+.faq .faq-container .faq-active h3,
+.faq .faq-container .faq-active h3:hover,
+.faq .faq-container .faq-active .faq-toggle,
+.faq .faq-container .faq-active .faq-icon,
+.faq .faq-container .faq-active .faq-content {
+  color: var(--contrast-color);
+}
+.faq .faq-container .faq-active .faq-content {
+  grid-template-rows: 1fr;
+  visibility:         visible;
+  opacity:            1;
+  padding-top:        10px;
+}
+.faq .faq-container .faq-active .faq-toggle { transform: rotate(90deg); }
+
+
+/* ─── CTA CONTACTO ────────────────────────────────────────────── */
+
+/*
+ * 🎨 Para cambiar los colores del fondo:
+ *    edita los valores rgba en "background" del .cta-contact
+ */
+.cta-contact {
+  background: linear-gradient(
+    135deg,
+    #000d3c 0%,
+    #001b74 55%,
+    #001254 100%
+  );
+  text-align: center;
+  padding:    80px 0;
+  position:   relative;
+  overflow:   hidden;
+}
+/* Círculos decorativos de fondo */
+.cta-contact::before {
+  content:      '';
+  position:     absolute;
+  width:        700px;
+  height:       700px;
+  border-radius:50%;
+  border:       100px solid rgba(255,255,255,0.04);
+  top:          -280px;
+  right:        -200px;
+  pointer-events:none;
+  z-index:      0;
+}
+.cta-contact::after {
+  content:       '';
+  position:      absolute;
+  width:         500px;
+  height:        500px;
+  border-radius: 50%;
+  border:        70px solid rgba(255,255,255,0.03);
+  bottom:        -190px;
+  left:          -110px;
+  pointer-events:none;
+  z-index:       0;
+}
+.cta-contact .container { position: relative; z-index: 2; }
+
+.cta-contact h2 {
+  font-size:   2.6rem;
+  font-weight: 800;
+  color:       #fff;
+  margin-bottom: 16px;
+}
+.cta-contact > .container > p {
+  font-size:     1.05rem;
+  color:         rgba(255,255,255,0.68);
+  max-width:     540px;
+  margin-left:   auto;
+  margin-right:  auto;
+  margin-bottom: 44px;
+}
+.cta-contact .cta-phone {
+  margin-top: 26px;
+  font-size:  0.9rem;
+  color:      rgba(255,255,255,0.42);
+}
+.cta-contact .cta-phone strong { color: rgba(255,255,255,0.78); }
+
+
+/* ─── Botones de WhatsApp ─────────────────────────────────────── */
+
+/* Botón dentro del hero */
+.btn-whatsapp-hero {
+  display:       inline-flex;
+  align-items:   center;
+  gap:           10px;
+  background:    #25D366;
+  color:         #fff;
+  padding:       14px 32px;
+  border-radius: 50px;
+  font-size:     1rem;
+  font-weight:   700;
+  text-decoration:none;
+  box-shadow:    0 6px 20px rgba(37,211,102,0.45);
+  transition:    transform 0.2s ease, box-shadow 0.2s ease;
+}
+.btn-whatsapp-hero i   { font-size: 1.3rem; }
+.btn-whatsapp-hero:hover {
+  transform:  translateY(-3px);
+  color:      #fff;
+  box-shadow: 0 10px 30px rgba(37,211,102,0.55);
+}
+
+/* Botón grande de la sección CTA — con pulso animado */
+.btn-whatsapp-cta {
+  display:       inline-flex;
+  align-items:   center;
+  gap:           12px;
+  background:    #25D366;
+  color:         #fff;
+  padding:       18px 44px;
+  border-radius: 50px;
+  font-size:     1.2rem;
+  font-weight:   700;
+  text-decoration:none;
+  transition:    transform 0.2s ease, box-shadow 0.2s ease;
+  animation:     wa-pulse 2.8s ease-in-out infinite;
+}
+.btn-whatsapp-cta i   { font-size: 1.7rem; }
+.btn-whatsapp-cta:hover {
+  transform:  translateY(-3px);
+  color:      #fff;
+}
+@keyframes wa-pulse {
+  0%, 100% { box-shadow: 0 8px 30px rgba(37,211,102,0.48); }
+  50%       { box-shadow: 0 8px 58px rgba(37,211,102,0.75); }
+}
+
+/* Botón flotante fijo (esquina inferior izquierda) */
+.whatsapp-float {
+  position:      fixed;
+  left:          20px;             /* ← posición horizontal */
+  bottom:        20px;             /* ← posición vertical   */
+  width:         56px;
+  height:        56px;
+  border-radius: 50%;
+  display:       flex;
+  align-items:   center;
+  justify-content:center;
+  font-size:     28px;
+  color:         #fff;
+  background:    #25D366;
+  box-shadow:    0 10px 25px rgba(0,0,0,0.25);
+  z-index:       9999;
+  text-decoration:none;
+  overflow:      visible;
+  transition:    transform 0.2s ease;
+}
+.whatsapp-float:hover { transform: translateY(-2px); color: #fff; }
+
+/* Anillo de pulso que se expande desde el botón flotante */
+.whatsapp-float::before {
+  content:      '';
+  position:     absolute;
+  inset:        0;
+  border-radius:50%;
+  background:   #25D366;
+  animation:    wa-ring 2.3s ease-out infinite;
+  pointer-events:none;
+  z-index:      -1;
+}
+@keyframes wa-ring {
+  0%   { transform: scale(1);    opacity: 0.7; }
+  70%  { transform: scale(1.65); opacity: 0;   }
+  100% { transform: scale(1.65); opacity: 0;   }
+}
+
+
+/* ─── Responsive final ────────────────────────────────────────── */
+
+@media (max-width: 768px) {
+  .hero h2       { font-size: 2.1rem; }
+  .cta-contact h2{ font-size: 1.9rem; }
+
+  .hero .stats-item {
+    padding:       14px 8px;
+    border-radius: 10px;
+  }
+  .hero .stats-item span { font-size: 1.9rem; }
+}
