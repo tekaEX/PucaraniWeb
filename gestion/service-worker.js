@@ -2,13 +2,13 @@
 // Diseñado para vivir en una SUBCARPETA (ej: /gestion/) sin interferir
 // con la página de presentación que está en la raíz del dominio.
 
-const CACHE_VERSION = 'pucarani-gestion-v1';
+const CACHE_VERSION = 'pucarani-gestion-v2';
 
 // El "scope" es la carpeta donde está este SW (ej: /gestion/).
-// Solo gestionamos peticiones dentro de este scope; todo lo demás
-// (incluida la página de presentación en la raíz) pasa sin tocarse.
 const SCOPE = self.registration.scope; // ej: https://transportespucarani.cl/gestion/
 
+// Recursos que se precachean. Las librerías pesadas (jszip, xlsx) se
+// sirven desde caché para velocidad; el HTML se busca primero en la red.
 const APP_SHELL = [
   './',
   './index.html',
@@ -18,6 +18,16 @@ const APP_SHELL = [
   './icon-192.png',
   './icon-512.png',
 ];
+
+// Recursos que SIEMPRE deben buscarse en la red primero (para que las
+// actualizaciones se vean al instante). Caen al caché solo si no hay internet.
+const NETWORK_FIRST = ['index.html', 'manifest.json', './', '/'];
+
+function isNetworkFirst(url) {
+  return NETWORK_FIRST.some(p =>
+    url.pathname.endsWith(p) || url.href === SCOPE || url.href === SCOPE + 'index.html'
+  );
+}
 
 // Instala: precachea el app shell
 self.addEventListener('install', event => {
@@ -45,21 +55,34 @@ self.addEventListener('fetch', event => {
   if (req.method !== 'GET') return;
 
   const url = new URL(req.url);
-  const inScope = url.href.startsWith(SCOPE);          // dentro de /gestion/
+  const inScope = url.href.startsWith(SCOPE);             // dentro de /gestion/
   const isExternal = url.origin !== self.location.origin; // fuentes, iconos CDN
 
   if (inScope) {
-    // App shell (dentro de la subcarpeta) → cache primero, red de respaldo
-    event.respondWith(
-      caches.match(req).then(cached => {
-        if (cached) return cached;
-        return fetch(req).then(resp => {
+    if (isNetworkFirst(url)) {
+      // HTML y manifest → RED PRIMERO (actualizaciones instantáneas),
+      // caché solo como respaldo sin internet.
+      event.respondWith(
+        fetch(req).then(resp => {
           const copy = resp.clone();
           caches.open(CACHE_VERSION).then(c => c.put(req, copy));
           return resp;
-        }).catch(() => caches.match('./index.html'));
-      })
-    );
+        }).catch(() => caches.match(req).then(c => c || caches.match('./index.html')))
+      );
+    } else {
+      // Librerías e íconos (no cambian seguido) → CACHÉ PRIMERO (rápido),
+      // red como respaldo.
+      event.respondWith(
+        caches.match(req).then(cached => {
+          if (cached) return cached;
+          return fetch(req).then(resp => {
+            const copy = resp.clone();
+            caches.open(CACHE_VERSION).then(c => c.put(req, copy));
+            return resp;
+          }).catch(() => caches.match('./index.html'));
+        })
+      );
+    }
   } else if (isExternal) {
     // Recursos externos (Google Fonts, Tabler Icons) → red primero, cache respaldo
     event.respondWith(
@@ -70,7 +93,6 @@ self.addEventListener('fetch', event => {
       }).catch(() => caches.match(req))
     );
   }
-  // Cualquier otra petición del mismo origen pero FUERA de /gestion/
-  // (ej: la página de presentación en la raíz) NO se intercepta:
-  // el navegador la maneja normalmente.
+  // Peticiones del mismo origen FUERA de /gestion/ (la presentación en la
+  // raíz) NO se interceptan: el navegador las maneja normalmente.
 });
