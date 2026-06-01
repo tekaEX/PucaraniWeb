@@ -1042,12 +1042,35 @@ td.monto {
 const MONTHS = ['Enero','Febrero','Marzo','Abril','Mayo','Junio',
                  'Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
 
+// Generador de IDs único que funciona en CUALQUIER contexto.
+// crypto.randomUUID() solo existe en HTTPS/localhost, así que usamos
+// un respaldo robusto para que la app nunca falle al agregar datos.
+function uid() {
+  if (typeof crypto !== 'undefined' && crypto.randomUUID) {
+    try { return crypto.randomUUID(); } catch(e) {}
+  }
+  // Respaldo: timestamp + aleatorio (suficientemente único para uso local)
+  return 'id-' + Date.now().toString(36) + '-' +
+         Math.random().toString(36).slice(2, 10) +
+         Math.random().toString(36).slice(2, 10);
+}
+
 const _now     = new Date();
 let current    = _now.getMonth();
 let tipoSel    = 'local';
 let data       = {};
 let companies  = [];
 let drivers    = [];
+
+// Generador de IDs único que funciona en CUALQUIER contexto
+// (crypto.randomUUID solo existe en HTTPS/localhost; este tiene respaldo).
+function uid() {
+  if (typeof crypto !== 'undefined' && crypto.randomUUID) {
+    try { return crypto.randomUUID(); } catch (e) {}
+  }
+  return 'id-' + Date.now().toString(36) + '-' +
+         Math.random().toString(36).slice(2, 10);
+}
 let activeYear = _now.getFullYear();
 let dirHandle  = null;
 let dirName    = '';
@@ -1247,7 +1270,7 @@ async function addCompany() {
   if (companies.find(c => c.name.toLowerCase() === name.toLowerCase())) {
     showToast('Empresa ya registrada'); return;
   }
-  const co = { id: crypto.randomUUID(), name };
+  const co = { id: uid(), name };
   await dbPut('empresas', co);
   companies.push(co);
   inp.value = ''; inp.focus();
@@ -1312,7 +1335,7 @@ async function addDriver() {
   if (drivers.find(d => d.name.toLowerCase() === name.toLowerCase())) {
     showToast('Chofer ya registrado'); return;
   }
-  const dr = { id: crypto.randomUUID(), name };
+  const dr = { id: uid(), name };
   await dbPut('choferes', dr);
   drivers.push(dr);
   inp.value = ''; inp.focus();
@@ -1474,7 +1497,7 @@ async function addService() {
   if (!s)     { document.getElementById('inp-servicio').focus(); showToast('Ingresa una descripción'); return; }
   if (isNaN(v)||v<0) { document.getElementById('inp-monto').focus(); showToast('Ingresa un monto válido'); return; }
 
-  const rec = { id: crypto.randomUUID(), year: activeYear, month: MONTHS[current],
+  const rec = { id: uid(), year: activeYear, month: MONTHS[current],
                 fecha, tipo: tipoSel, servicio: s, proveedor: p, monto: v,
                 empresa, empresaId, chofer, choferId,
                 created_at: new Date().toISOString() };
@@ -1699,36 +1722,54 @@ async function fillTemplateXML(uint8, mes, year, empresa, rows) {
            .replaceAll('{{A&#209;O}}', String(year))
            .replaceAll('{{EMPRESA}}', empresa || 'Todos');
 
+  // STEP 3.5: Inject our OWN styles into styles.xml so the data table looks
+  // professional (header, zebra rows, borders, bold total, currency format)
+  // regardless of which template is used. We append new fonts/fills/borders/
+  // numFmts/cellXfs and remember the new style indices.
+  const stStyles = await injectTableStyles(zip);
+
   // STEP 4: Find {{DATOS}} row.
   const datosMatch = xml.match(/<row[^>]*r="(\d+)"[^>]*>(?:(?!<\/row>)[\s\S])*?{{DATOS}}[\s\S]*?<\/row>/);
   if (!datosMatch) return null;
 
   const datosRowNum = parseInt(datosMatch[1]);
-  const hdrStyA     = (datosMatch[0].match(/<c r="A\d+"[^>]*s="(\d+)"/) || ['',''])[1];
-  const hdrStyOther = (datosMatch[0].match(/<c r="[B-G]\d+"[^>]*s="(\d+)"/) || ['', hdrStyA])[1];
-  const styAttr = s => s ? ` s="${s}"` : '';
 
   const COLS = 'ABCDEFG';
   const esc = s => String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-  const mkRow = (r, vals, styles) =>
+  // styles[i] is the cellXf index for column i; numCols flags which are numeric
+  const mkRow = (r, vals, styles, numCols) =>
     `<row r="${r}">${vals.map((v,i) => {
-      const s = styles ? styAttr(styles[i]) : '';
-      const n = typeof v === 'number';
-      return `<c r="${COLS[i]}${r}"${s}${n?'':' t="str"'}><v>${esc(v)}</v></c>`;
+      const s = styles && styles[i] != null ? ` s="${styles[i]}"` : '';
+      const isNum = numCols && numCols[i];
+      return `<c r="${COLS[i]}${r}"${s}${isNum?'':' t="str"'}><v>${isNum?Number(v):esc(v)}</v></c>`;
     }).join('')}</row>`;
 
+  // Header row (reuses our injected header style for all 7 columns)
   const headers   = ['Fecha','Tipo','Empresa','Chofer','Descripción','Nombre','Monto ($)'];
-  const hdrStyles = [hdrStyA,hdrStyOther,hdrStyOther,hdrStyOther,hdrStyOther,hdrStyOther,hdrStyOther];
-  const hdrRow    = mkRow(datosRowNum, headers, hdrStyles);
+  const hdrStyles = Array(7).fill(stStyles.header);
+  const hdrRow    = mkRow(datosRowNum, headers, hdrStyles, null);
 
-  const dataXml = rows.map((r,i) => mkRow(datosRowNum+1+i, [
-    fmtFecha(r.fecha),
-    r.tipo === 'local' ? 'Local' : 'Aeropuerto',
-    r.empresa || '', r.chofer || '', r.servicio, r.proveedor || '', Number(r.monto)
-  ], null)).join('');
+  // Data rows with zebra striping; Monto column uses currency format
+  const dataXml = rows.map((r,i) => {
+    const even = i % 2 === 0;
+    const cellSty = even ? stStyles.cellA : stStyles.cellB;
+    const moneySty = even ? stStyles.moneyA : stStyles.moneyB;
+    const styles = [cellSty,cellSty,cellSty,cellSty,cellSty,cellSty,moneySty];
+    const numCols = [false,false,false,false,false,false,true];
+    return mkRow(datosRowNum+1+i, [
+      fmtFecha(r.fecha),
+      r.tipo === 'local' ? 'Local' : 'Aeropuerto',
+      r.empresa || '', r.chofer || '', r.servicio, r.proveedor || '', Number(r.monto)
+    ], styles, numCols);
+  }).join('');
 
-  const totalRowNum = datosRowNum + 1 + rows.length + 1;
-  const totalXml    = mkRow(totalRowNum, ['','','','','','TOTAL', rows.reduce((s,r)=>s+Number(r.monto),0)], null);
+  // TOTAL row: bold label + bold currency, highlighted
+  const totalRowNum = datosRowNum + 1 + rows.length;
+  const totalVals   = ['','','','','','TOTAL', rows.reduce((s,r)=>s+Number(r.monto),0)];
+  const totalStyles = [stStyles.totalEmpty,stStyles.totalEmpty,stStyles.totalEmpty,
+                       stStyles.totalEmpty,stStyles.totalEmpty,stStyles.totalLabel,stStyles.totalMoney];
+  const totalNum    = [false,false,false,false,false,false,true];
+  const totalXml    = mkRow(totalRowNum, totalVals, totalStyles, totalNum);
 
   xml = xml
     .replace(datosMatch[0], hdrRow + dataXml + totalXml)
@@ -1737,6 +1778,91 @@ async function fillTemplateXML(uint8, mes, year, empresa, rows) {
 
   zip.file(sheetPath, xml);
   return await zip.generateAsync({ type:'uint8array', compression:'DEFLATE', compressionOptions:{level:6} });
+}
+
+// Injects table styles into the workbook's styles.xml and returns the new
+// cellXf indices. Colors match the Pucarani brand.
+async function injectTableStyles(zip) {
+  const path = 'xl/styles.xml';
+  let st = await zip.file(path).async('string');
+
+  // Helper to get current count + append items before the closing tag
+  const appendInto = (xml, tag, additions) => {
+    const re = new RegExp(`<${tag} count="(\\d+)">`);
+    const m = xml.match(re);
+    let base, hadTag;
+    if (m) {
+      base = parseInt(m[1]); hadTag = true;
+    } else {
+      base = 0; hadTag = false;
+    }
+    const addStr = additions.join('');
+    if (hadTag) {
+      xml = xml.replace(new RegExp(`(<${tag} count=")(\\d+)("[\\s\\S]*?)(</${tag}>)`),
+        (full, p1, cnt, mid, close) =>
+          `${p1}${base + additions.length}${mid}${addStr}${close}`);
+    } else {
+      // create the section right after </cellStyleXfs> or before <cellXfs>
+      xml = xml.replace('<cellXfs', `<${tag} count="${additions.length}">${addStr}</${tag}><cellXfs`);
+    }
+    return { xml, base };
+  };
+
+  // ── numFmts: currency $ #,##0 (es-CL style) ──
+  let r = appendInto(st, 'numFmts', ['<numFmt numFmtId="170" formatCode="&quot;$&quot;#,##0"/>']);
+  st = r.xml;
+  const FMT_MONEY = 170;
+
+  // ── fonts: [white bold header, dark normal, dark bold total] ──
+  r = appendInto(st, 'fonts', [
+    '<font><b/><sz val="11"/><color rgb="FFFFFFFF"/><name val="Calibri"/></font>',
+    '<font><sz val="11"/><color rgb="FF1A1916"/><name val="Calibri"/></font>',
+    '<font><b/><sz val="11"/><color rgb="FFFFFFFF"/><name val="Calibri"/></font>'
+  ]);
+  st = r.xml;
+  const F_HDR = r.base, F_BODY = r.base + 1, F_TOTAL = r.base + 2;
+
+  // ── fills: header blue, zebra white, zebra light, total green ──
+  r = appendInto(st, 'fills', [
+    '<fill><patternFill patternType="solid"><fgColor rgb="FF1B3FA0"/><bgColor indexed="64"/></patternFill></fill>',
+    '<fill><patternFill patternType="solid"><fgColor rgb="FFFFFFFF"/><bgColor indexed="64"/></patternFill></fill>',
+    '<fill><patternFill patternType="solid"><fgColor rgb="FFEEF1F8"/><bgColor indexed="64"/></patternFill></fill>',
+    '<fill><patternFill patternType="solid"><fgColor rgb="FF1A7A4A"/><bgColor indexed="64"/></patternFill></fill>'
+  ]);
+  st = r.xml;
+  const FILL_HDR = r.base, FILL_WHITE = r.base + 1, FILL_ZEBRA = r.base + 2, FILL_TOTAL = r.base + 3;
+
+  // ── borders: thin grey all around ──
+  r = appendInto(st, 'borders', [
+    '<border><left style="thin"><color rgb="FFD0D0D0"/></left><right style="thin"><color rgb="FFD0D0D0"/></right><top style="thin"><color rgb="FFD0D0D0"/></top><bottom style="thin"><color rgb="FFD0D0D0"/></bottom></border>'
+  ]);
+  st = r.xml;
+  const BORDER = r.base;
+
+  // ── cellXfs: build all the combinations we need ──
+  const xf = (font, fill, border, fmt, align) =>
+    `<xf numFmtId="${fmt||0}" fontId="${font}" fillId="${fill}" borderId="${border}" xfId="0"` +
+    ` applyFont="1" applyFill="1" applyBorder="1"${fmt?' applyNumberFormat="1"':''}` +
+    (align ? ` applyAlignment="1"><alignment horizontal="${align}" vertical="center"/></xf>` : '/>');
+
+  r = appendInto(st, 'cellXfs', [
+    xf(F_HDR,   FILL_HDR,   BORDER, 0,        'center'), // header
+    xf(F_BODY,  FILL_WHITE, BORDER, 0,        null),     // cellA (white)
+    xf(F_BODY,  FILL_ZEBRA, BORDER, 0,        null),     // cellB (zebra)
+    xf(F_BODY,  FILL_WHITE, BORDER, FMT_MONEY,'right'),  // moneyA
+    xf(F_BODY,  FILL_ZEBRA, BORDER, FMT_MONEY,'right'),  // moneyB
+    xf(F_TOTAL, FILL_TOTAL, BORDER, 0,        null),     // totalEmpty
+    xf(F_TOTAL, FILL_TOTAL, BORDER, 0,        'right'),  // totalLabel
+    xf(F_TOTAL, FILL_TOTAL, BORDER, FMT_MONEY,'right')   // totalMoney
+  ]);
+  st = r.xml;
+  const b = r.base;
+
+  zip.file(path, st);
+  return {
+    header: b, cellA: b+1, cellB: b+2, moneyA: b+3, moneyB: b+4,
+    totalEmpty: b+5, totalLabel: b+6, totalMoney: b+7
+  };
 }
 
 // ── Keyboard shortcuts ────────────────────────────────────────────────
