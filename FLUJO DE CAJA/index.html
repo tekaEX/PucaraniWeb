@@ -1,0 +1,687 @@
+<!DOCTYPE html>
+<html lang="es-CL">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#0f766e">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Flujo de Caja">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="icon" href="icon-192.png">
+<title>Flujo de Caja</title>
+<style>
+  :root{
+    --bg:#f4f6fa; --card:#fff; --ink:#1f2937; --muted:#6b7280; --line:#e8ecf2;
+    --brand:#0f766e; --brand2:#14b8a6; --pos:#059669; --neg:#dc2626; --warn:#d97706;
+    --bar:#0f172a; --shadow:0 1px 3px rgba(16,24,40,.08); --shadow-lg:0 10px 30px rgba(16,24,40,.16);
+    --safe-b:env(safe-area-inset-bottom,0px); --safe-t:env(safe-area-inset-top,0px);
+  }
+  *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+  html,body{overscroll-behavior-y:none}
+  body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;background:var(--bg);color:var(--ink);font-size:15px;line-height:1.45;-webkit-text-size-adjust:100%}
+  button{font-family:inherit;cursor:pointer;border:0;background:none}
+  input,select,textarea{font-family:inherit;font-size:16px}
+  .wrap{max-width:620px;margin:0 auto;min-height:100vh;padding-bottom:calc(86px + var(--safe-b))}
+
+  /* App bar */
+  .appbar{position:sticky;top:0;z-index:30;background:var(--brand);color:#fff;padding:calc(12px + var(--safe-t)) 16px 12px;display:flex;align-items:center;gap:10px}
+  .appbar .ttl{font-size:17px;font-weight:700;letter-spacing:-.2px}
+  .sync{margin-left:auto;display:flex;align-items:center;gap:6px;font-size:12px;background:rgba(255,255,255,.15);padding:5px 10px;border-radius:20px}
+  .sync .dot{width:8px;height:8px;border-radius:50%;background:#cbd5e1}
+  .sync.ok .dot{background:#4ade80} .sync.offline .dot{background:#fbbf24} .sync.sync .dot{background:#fbbf24} .sync.error .dot{background:#f87171} .sync.local .dot{background:#cbd5e1}
+
+  /* Filters */
+  .filters{position:sticky;top:0;z-index:20;background:var(--card);border-bottom:1px solid var(--line);padding:10px 14px;display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+  .chips{display:flex;gap:6px;background:var(--bg);padding:3px;border-radius:11px}
+  .chips button{padding:7px 12px;border-radius:9px;font-size:13px;font-weight:600;color:var(--muted)}
+  .chips button.on{background:#fff;color:var(--brand);box-shadow:var(--shadow)}
+  .filters select{margin-left:auto;height:36px;border:1px solid var(--line);border-radius:9px;padding:0 8px;background:#fff;color:var(--ink);font-size:14px}
+  #fMes{height:36px;border:1px solid var(--line);border-radius:9px;padding:0 8px}
+
+  .view{padding:16px 14px 24px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:16px;box-shadow:var(--shadow);padding:16px;margin-bottom:14px}
+  .sec-title{font-size:15px;font-weight:700} .sec-sub{font-size:12px;color:var(--muted);margin-bottom:12px}
+  .pos{color:var(--pos)} .neg{color:var(--neg)}
+
+  /* Balance hero */
+  .hero{background:linear-gradient(135deg,#134e4a,#0f766e);color:#fff;border:0}
+  .hero .lbl{font-size:12px;opacity:.85;font-weight:600;text-transform:uppercase;letter-spacing:.04em}
+  .hero .big{font-size:32px;font-weight:800;letter-spacing:-1px;margin:6px 0}
+  .hero .split{display:flex;gap:10px;margin-top:14px}
+  .hero .split>div{flex:1;background:rgba(255,255,255,.12);border-radius:12px;padding:10px 12px}
+  .hero .split .t{font-size:11px;opacity:.85} .hero .split .v{font-size:16px;font-weight:700;margin-top:2px}
+
+  .twocol{display:flex;gap:10px}
+  .twocol .card{flex:1;margin-bottom:14px}
+  .mini .t{font-size:12px;color:var(--muted);font-weight:600} .mini .v{font-size:20px;font-weight:750;margin-top:4px}
+
+  /* Bars chart */
+  .bars{display:flex;align-items:flex-end;gap:10px;height:150px;padding-top:8px}
+  .bcol{flex:1;display:flex;flex-direction:column;align-items:center;gap:5px;height:100%;justify-content:flex-end}
+  .bpair{display:flex;gap:3px;align-items:flex-end;height:100%;justify-content:center;width:100%}
+  .b{width:13px;border-radius:4px 4px 0 0;min-height:2px}
+  .b.i{background:var(--pos)} .b.e{background:var(--neg)}
+  .blbl{font-size:11px;color:var(--muted);font-weight:600}
+  .legend{display:flex;gap:14px;font-size:12px;color:var(--muted);margin-top:10px}
+  .legend i{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:5px;vertical-align:middle}
+  .donutwrap{display:flex;gap:16px;align-items:center;flex-wrap:wrap}
+  .dlegend{flex:1;min-width:140px;display:flex;flex-direction:column;gap:6px}
+  .dl{display:flex;align-items:center;gap:7px;font-size:12px} .dl b{margin-left:auto}
+
+  /* Vehicle cards */
+  .veh .vtag{font-size:11px;color:var(--muted);font-weight:600}
+  .veh .vname{font-size:15px;font-weight:700;margin:2px 0 10px}
+  .veh .vrow{display:flex;justify-content:space-between;padding:4px 0;font-size:13px}
+  .veh .vnet{margin-top:8px;padding-top:8px;border-top:2px solid var(--line);display:flex;justify-content:space-between;font-weight:750}
+
+  /* Movement list */
+  .mvrow{display:flex;align-items:center;gap:12px;padding:13px 14px;background:var(--card);border-bottom:1px solid var(--line)}
+  .mvrow:active{background:#f0f2f6}
+  .mvicon{width:38px;height:38px;border-radius:11px;display:grid;place-items:center;font-size:17px;font-weight:800;flex-shrink:0}
+  .mvicon.ingreso{background:#ecfdf5;color:var(--pos)} .mvicon.gasto{background:#fef2f2;color:var(--neg)}
+  .mvmid{flex:1;min-width:0}
+  .mvcat{font-weight:600;font-size:14px}
+  .mvsub{font-size:12px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .mvamt{font-weight:750;font-size:15px;white-space:nowrap}
+  .chip{display:inline-block;font-size:11px;font-weight:600;padding:1px 7px;border-radius:6px}
+  .chip.personal{background:#eef2ff;color:#4f46e5} .chip.emprendimiento{background:#f0fdfa;color:var(--brand)}
+  .listcard{background:var(--card);border:1px solid var(--line);border-radius:16px;overflow:hidden;box-shadow:var(--shadow)}
+  .listcard .mvrow:last-child{border-bottom:0}
+
+  .empty{padding:46px 20px;text-align:center;color:var(--muted)}
+  .empty .big{font-size:42px;margin-bottom:10px}
+
+  /* Toolbar */
+  .toolbar{display:flex;gap:8px;margin-bottom:12px}
+  .toolbar input,.toolbar select{height:40px;border:1px solid var(--line);border-radius:10px;padding:0 12px;background:#fff}
+  .toolbar .search{flex:1}
+
+  /* List manage */
+  .mitem{display:flex;align-items:center;gap:11px;padding:13px 14px;border-bottom:1px solid var(--line)}
+  .mitem:last-child{border-bottom:0}
+  .mitem .swatch{width:13px;height:13px;border-radius:4px;flex-shrink:0}
+  .mitem .grow{flex:1;min-width:0} .mitem .meta{font-size:12px;color:var(--muted)}
+  .iconbtn{font-size:17px;padding:6px;color:var(--muted)}
+
+  /* Buttons */
+  .btn{display:inline-flex;align-items:center;justify-content:center;gap:7px;height:46px;border-radius:12px;font-size:15px;font-weight:600;padding:0 16px}
+  .btn-primary{background:var(--brand);color:#fff} .btn-primary:active{background:#0c5d57}
+  .btn-ghost{background:var(--bg);color:var(--ink)} .btn-danger{background:var(--neg);color:#fff}
+  .btn-block{width:100%} .btn-sm{height:38px;font-size:14px}
+  .row-btns{display:flex;gap:10px}
+
+  /* "Más" menu */
+  .menu .mlink{display:flex;align-items:center;gap:14px;padding:16px 14px;border-bottom:1px solid var(--line);font-weight:600}
+  .menu .mlink:last-child{border-bottom:0} .menu .mlink .ic{font-size:20px;width:26px;text-align:center}
+  .menu .mlink .ar{margin-left:auto;color:var(--muted)}
+  .hint{font-size:12px;color:var(--muted);line-height:1.5;margin-top:10px}
+  .steps{font-size:13px;line-height:1.7;padding-left:18px} .steps li{margin-bottom:4px}
+  code{background:var(--bg);padding:1px 5px;border-radius:5px;font-size:12px;word-break:break-all}
+
+  /* Bottom tab bar */
+  .tabbar{position:fixed;bottom:0;left:0;right:0;z-index:40;background:#fff;border-top:1px solid var(--line);display:flex;justify-content:center;padding-bottom:var(--safe-b);box-shadow:0 -2px 12px rgba(16,24,40,.05)}
+  .tabbar .inner{display:flex;max-width:620px;width:100%;align-items:flex-end}
+  .tab{flex:1;display:flex;flex-direction:column;align-items:center;gap:2px;padding:9px 0 8px;color:var(--muted);font-size:11px;font-weight:600}
+  .tab .ic{font-size:21px} .tab.on{color:var(--brand)}
+  .tab.add{flex:0 0 auto;margin:0 6px}
+  .tab.add .fab{width:56px;height:56px;border-radius:50%;background:var(--brand);color:#fff;font-size:28px;display:grid;place-items:center;box-shadow:0 6px 16px rgba(15,118,110,.45);margin-top:-22px;font-weight:300}
+  .tab.add .fab:active{background:#0c5d57}
+
+  /* Modal / sheet */
+  .overlay{position:fixed;inset:0;background:rgba(15,23,42,.5);display:none;align-items:flex-end;justify-content:center;z-index:60}
+  .overlay.show{display:flex}
+  .sheet{background:#fff;border-radius:20px 20px 0 0;width:100%;max-width:620px;max-height:94vh;overflow:auto;padding-bottom:var(--safe-b);animation:up .22s ease}
+  @keyframes up{from{transform:translateY(100%)}to{transform:translateY(0)}}
+  @media(min-width:621px){.overlay{align-items:center}.sheet{border-radius:20px;max-height:90vh}}
+  .sheet-head{padding:16px 18px;display:flex;align-items:center;border-bottom:1px solid var(--line);position:sticky;top:0;background:#fff}
+  .sheet-head h2{font-size:17px} .sheet-head .x{margin-left:auto;font-size:22px;color:var(--muted);padding:2px 6px}
+  .sheet-body{padding:16px 18px;display:grid;gap:14px}
+  .field{display:flex;flex-direction:column;gap:6px}
+  .field label{font-size:12px;font-weight:600;color:var(--muted)}
+  .field input,.field select,.field textarea{height:48px;border:1px solid var(--line);border-radius:12px;padding:0 13px;background:#fff;width:100%}
+  .field textarea{height:auto;min-height:90px;padding:11px 13px;resize:vertical;font-family:ui-monospace,monospace;font-size:13px}
+  .field input:focus,.field select:focus,.field textarea:focus{outline:2px solid var(--brand2);outline-offset:-1px}
+  .row2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  .seg{display:flex;border:1px solid var(--line);border-radius:12px;overflow:hidden}
+  .seg button{flex:1;padding:13px;font-weight:700;color:var(--muted);font-size:15px}
+  .seg button.on-i{background:var(--pos);color:#fff} .seg button.on-e{background:var(--neg);color:#fff}
+  .montohint{font-size:14px;color:var(--brand);font-weight:700;height:18px}
+  .sheet-foot{padding:14px 18px;display:flex;gap:10px;border-top:1px solid var(--line);position:sticky;bottom:0;background:#fff}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="appbar">
+    <span class="ttl" id="viewTitle">Resumen</span>
+    <button class="sync local" id="syncBadge" onclick="go('cuenta')"><span class="dot"></span><span id="syncTxt">Solo local</span></button>
+  </div>
+  <div class="filters" id="filters">
+    <div class="chips" id="ambChips">
+      <button data-a="todos" class="on">Todos</button>
+      <button data-a="personal">Personal</button>
+      <button data-a="emprendimiento">Negocio</button>
+    </div>
+    <select id="fPeriodo">
+      <option value="mes">Mes actual</option>
+      <option value="mesAnt">Mes anterior</option>
+      <option value="anio">Año actual</option>
+      <option value="todo">Todo</option>
+      <option value="elegir">Elegir mes…</option>
+    </select>
+    <input type="month" id="fMes" style="display:none">
+  </div>
+  <div class="view" id="view"></div>
+</div>
+
+<nav class="tabbar"><div class="inner">
+  <button class="tab on" data-tab="resumen"><span class="ic">📊</span>Resumen</button>
+  <button class="tab" data-tab="movimientos"><span class="ic">💸</span>Movim.</button>
+  <button class="tab add" id="tabAdd"><span class="fab">＋</span></button>
+  <button class="tab" data-tab="vehiculos"><span class="ic">🚗</span>Vehículos</button>
+  <button class="tab" data-tab="mas"><span class="ic">⋯</span>Más</button>
+</div></nav>
+
+<!-- Sheet: movimiento -->
+<div class="overlay" id="overlay">
+  <div class="sheet">
+    <div class="sheet-head"><h2 id="mTitle">Nuevo movimiento</h2><button class="x" onclick="closeModal()">✕</button></div>
+    <div class="sheet-body">
+      <input type="hidden" id="mId">
+      <div class="seg" id="mTipo">
+        <button type="button" data-tipo="ingreso">＋ Ingreso</button>
+        <button type="button" data-tipo="gasto">－ Gasto</button>
+      </div>
+      <div class="field"><label>Monto (CLP)</label><input type="text" id="mMonto" inputmode="numeric" placeholder="0" autocomplete="off"><div class="montohint" id="mMontoHint"></div></div>
+      <div class="row2">
+        <div class="field"><label>Fecha</label><input type="date" id="mFecha"></div>
+        <div class="field"><label>Ámbito</label><select id="mAmbito"><option value="personal">Personal</option><option value="emprendimiento">Negocio</option></select></div>
+      </div>
+      <div class="field"><label>Categoría</label><select id="mCategoria"></select></div>
+      <div class="field"><label>Vehículo (opcional)</label><select id="mVehiculo"></select></div>
+      <div class="field"><label>Descripción (opcional)</label><input type="text" id="mDesc" placeholder="Ej: Bencina Copec, viaje aeropuerto..."></div>
+    </div>
+    <div class="sheet-foot">
+      <button class="btn btn-ghost" id="mDelete" style="display:none">🗑️</button>
+      <button class="btn btn-primary btn-block" id="mSave">Guardar</button>
+    </div>
+  </div>
+</div>
+
+<!-- ====================== LÓGICA DE LA APP ====================== -->
+<script>
+const KEY='flujocaja_v1';
+const PALETTE=['#0f766e','#dc2626','#d97706','#4f46e5','#0891b2','#7c3aed','#db2777','#65a30d','#ca8a04','#0284c7'];
+let state, curUser=null;
+let ui={tab:'resumen',ambito:'todos',periodo:'mes',mes:new Date().toISOString().slice(0,7),tipo:'gasto'};
+
+function uid(){return Date.now().toString(36)+Math.random().toString(36).slice(2,7)}
+
+function defaults(){
+  const V=(nombre,marca,modelo,anio,tipo,nota)=>({id:uid(),nombre,marca,modelo,anio,patente:'',tipo,nota,activo:true});
+  const C=(nombre,tipo,ambito)=>({id:uid(),nombre,tipo,ambito});
+  return {version:1,updatedAt:0,
+    vehiculos:[
+      V('Suzuki Swift','Suzuki','Swift',2013,'arriendo','Arrendado para Uber'),
+      V('Furgón Hijet','Daihatsu','Hijet',2016,'propio','Reparto Starken'),
+      V('Mazda Axela','Mazda','Axela',2015,'mixto','Personal + Uber'),
+    ],
+    categorias:[
+      C('Arriendo Swift','ingreso','emprendimiento'),C('Uber','ingreso','emprendimiento'),
+      C('Starken / Reparto','ingreso','emprendimiento'),C('Otros ingresos negocio','ingreso','emprendimiento'),
+      C('Sueldo','ingreso','personal'),C('Reembolsos','ingreso','personal'),C('Otros ingresos','ingreso','personal'),
+      C('Combustible','gasto','ambos'),C('Mantención','gasto','ambos'),C('Reparaciones','gasto','ambos'),
+      C('Neumáticos','gasto','ambos'),C('Seguro','gasto','ambos'),C('Permiso de circulación','gasto','ambos'),
+      C('Revisión técnica','gasto','ambos'),C('Multas','gasto','ambos'),C('Lavado','gasto','ambos'),
+      C('Estacionamiento / TAG','gasto','ambos'),
+      C('Comisión plataforma','gasto','emprendimiento'),C('Otros gastos negocio','gasto','emprendimiento'),
+      C('Arriendo / Dividendo','gasto','personal'),C('Supermercado','gasto','personal'),
+      C('Servicios básicos','gasto','personal'),C('Internet / Telefonía','gasto','personal'),
+      C('Salud','gasto','personal'),C('Educación','gasto','personal'),C('Cuota auto','gasto','personal'),
+      C('Entretención','gasto','personal'),C('Vestuario','gasto','personal'),C('Otros gastos','gasto','personal'),
+    ],
+    transacciones:[]
+  };
+}
+
+/* ---- persistencia + sincronización ---- */
+function persist(){try{localStorage.setItem(KEY,JSON.stringify(state))}catch(e){}}
+function pushRemote(){if(window.fbSync&&window.fbSync.push)window.fbSync.push(state)}
+function save(){state.updatedAt=Date.now();persist();pushRemote()}
+function load(){
+  try{const r=localStorage.getItem(KEY);if(r){state=JSON.parse(r);if(state.updatedAt==null)state.updatedAt=0;return}}catch(e){}
+  state=defaults();persist();
+}
+// Llamado por el módulo Firebase cuando llegan datos del servidor
+window.getLocalState=()=>state;
+window.onRemoteState=function(payloadStr,remoteAt){
+  try{const remote=JSON.parse(payloadStr);
+    if((remote.updatedAt||0)>(state.updatedAt||0)){state=remote;persist();render();}
+  }catch(e){}
+};
+window.onAuthState=function(u){curUser=u;updateSyncTitle();if(ui.tab==='cuenta')render()};
+window.onSyncStatus=function(txt,kind){
+  const b=document.getElementById('syncBadge');b.className='sync '+(kind||'local');
+  document.getElementById('syncTxt').textContent=txt;
+};
+window.onFbReady=function(){if(ui.tab==='cuenta')render()};
+
+/* ---- helpers ---- */
+const CLP=new Intl.NumberFormat('es-CL',{style:'currency',currency:'CLP',maximumFractionDigits:0});
+const NUM=new Intl.NumberFormat('es-CL',{maximumFractionDigits:0});
+const fmt=n=>CLP.format(Math.round(n||0));
+const fechaCorta=f=>{const[y,m,d]=f.split('-');return `${d}-${m}-${y.slice(2)}`};
+const MESES=['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
+function vehName(id){const v=state.vehiculos.find(x=>x.id===id);return v?v.nombre:''}
+function catName(id){const c=state.categorias.find(x=>x.id===id);return c?c.nombre:'—'}
+function periodMatch(f){
+  if(ui.periodo==='todo')return true;
+  const now=new Date();
+  if(ui.periodo==='mes')return f.slice(0,7)===now.toISOString().slice(0,7);
+  if(ui.periodo==='anio')return f.slice(0,4)===String(now.getFullYear());
+  if(ui.periodo==='mesAnt'){const d=new Date(now.getFullYear(),now.getMonth()-1,1);return f.slice(0,7)===d.toISOString().slice(0,7)}
+  if(ui.periodo==='elegir')return f.slice(0,7)===ui.mes;
+  return true;
+}
+function filtered(){return state.transacciones.filter(t=>periodMatch(t.fecha)&&(ui.ambito==='todos'||t.ambito===ui.ambito))}
+function sum(arr,tipo){return arr.filter(t=>t.tipo===tipo).reduce((s,t)=>s+t.monto,0)}
+function periodLabel(){
+  const now=new Date();
+  if(ui.periodo==='mes')return MESES[now.getMonth()]+' '+now.getFullYear();
+  if(ui.periodo==='mesAnt'){const d=new Date(now.getFullYear(),now.getMonth()-1,1);return MESES[d.getMonth()]+' '+d.getFullYear()}
+  if(ui.periodo==='anio')return 'Año '+now.getFullYear();
+  if(ui.periodo==='todo')return 'Todo el historial';
+  if(ui.periodo==='elegir'){const[y,m]=ui.mes.split('-');return MESES[+m-1]+' '+y}
+}
+function updateSyncTitle(){}
+
+/* ---- render dispatch ---- */
+const $=s=>document.querySelector(s);
+const view=$('#view');
+const TITLES={resumen:'Resumen',movimientos:'Movimientos',vehiculos:'Vehículos',mas:'Más',categorias:'Categorías',respaldo:'Respaldo',cuenta:'Sincronización'};
+function go(tab){ui.tab=tab;render()}
+function render(){
+  $('#viewTitle').textContent=TITLES[ui.tab]||'';
+  document.querySelectorAll('.tab[data-tab]').forEach(b=>b.classList.toggle('on',b.dataset.tab===ui.tab||(ui.tab==='cuenta'&&b.dataset.tab==='mas')||(['categorias','respaldo'].includes(ui.tab)&&b.dataset.tab==='mas')));
+  const showFilters=ui.tab==='resumen'||ui.tab==='movimientos';
+  $('#filters').style.display=showFilters?'flex':'none';
+  ({resumen:renderResumen,movimientos:renderMovimientos,vehiculos:renderVehiculos,mas:renderMas,categorias:renderCategorias,respaldo:renderRespaldo,cuenta:renderCuenta}[ui.tab])();
+  window.scrollTo(0,0);
+}
+
+function renderResumen(){
+  const f=filtered();
+  const ing=sum(f,'ingreso'),gas=sum(f,'gasto'),bal=ing-gas;
+  const per=state.transacciones.filter(t=>periodMatch(t.fecha)&&t.ambito==='personal');
+  const emp=state.transacciones.filter(t=>periodMatch(t.fecha)&&t.ambito==='emprendimiento');
+  const perBal=sum(per,'ingreso')-sum(per,'gasto');
+  const empBal=sum(emp,'ingreso')-sum(emp,'gasto');
+  view.innerHTML=`
+  <div class="card hero">
+    <div class="lbl">Balance · ${periodLabel()}</div>
+    <div class="big">${fmt(bal)}</div>
+    <div class="split">
+      <div><div class="t">🏠 Personal</div><div class="v">${fmt(perBal)}</div></div>
+      <div><div class="t">💼 Negocio</div><div class="v">${fmt(empBal)}</div></div>
+    </div>
+  </div>
+  <div class="twocol">
+    <div class="card mini"><div class="t">🟢 Ingresos</div><div class="v pos">${fmt(ing)}</div></div>
+    <div class="card mini"><div class="t">🔴 Gastos</div><div class="v neg">${fmt(gas)}</div></div>
+  </div>
+  <div class="card">
+    <div class="sec-title">Ingresos vs Gastos</div><div class="sec-sub">Últimos 6 meses</div>
+    ${barChart()}
+  </div>
+  <div class="card">
+    <div class="sec-title">Gastos por categoría</div><div class="sec-sub">${periodLabel()}</div>
+    ${donutChart(f)}
+  </div>
+  <div class="card">
+    <div class="sec-title">Rentabilidad por vehículo</div><div class="sec-sub">Solo negocio · ${periodLabel()}</div>
+    <div style="display:flex;flex-direction:column;gap:10px;margin-top:8px">${vehicleRows()}</div>
+  </div>`;
+}
+function vehicleRows(){
+  const emp=state.transacciones.filter(t=>periodMatch(t.fecha)&&t.ambito==='emprendimiento');
+  return state.vehiculos.filter(v=>v.activo).map(v=>{
+    const tt=emp.filter(t=>t.vehiculoId===v.id);const i=sum(tt,'ingreso'),g=sum(tt,'gasto'),n=i-g;
+    return `<div style="border:1px solid var(--line);border-radius:12px;padding:12px">
+      <div class="veh"><div class="vname" style="margin:0 0 8px">${v.nombre}</div>
+        <div class="vrow"><span>Ingresos</span><span class="pos">${fmt(i)}</span></div>
+        <div class="vrow"><span>Gastos</span><span class="neg">${fmt(g)}</span></div>
+        <div class="vnet"><span>Neto</span><span class="${n>=0?'pos':'neg'}">${fmt(n)}</span></div>
+      </div></div>`;
+  }).join('')||'<div class="empty">Sin vehículos.</div>';
+}
+function barChart(){
+  const now=new Date(),months=[];
+  for(let k=5;k>=0;k--){const d=new Date(now.getFullYear(),now.getMonth()-k,1);months.push({key:d.toISOString().slice(0,7),lbl:MESES[d.getMonth()]})}
+  const data=months.map(m=>{const tt=state.transacciones.filter(t=>t.fecha.slice(0,7)===m.key&&(ui.ambito==='todos'||t.ambito===ui.ambito));return{lbl:m.lbl,i:sum(tt,'ingreso'),e:sum(tt,'gasto')}});
+  const max=Math.max(1,...data.map(d=>Math.max(d.i,d.e)));
+  return `<div class="bars">${data.map(d=>`<div class="bcol"><div class="bpair"><div class="b i" style="height:${d.i/max*100}%" title="${fmt(d.i)}"></div><div class="b e" style="height:${d.e/max*100}%" title="${fmt(d.e)}"></div></div><div class="blbl">${d.lbl}</div></div>`).join('')}</div>
+    <div class="legend"><span><i style="background:var(--pos)"></i>Ingresos</span><span><i style="background:var(--neg)"></i>Gastos</span></div>`;
+}
+function donutChart(f){
+  const gastos=f.filter(t=>t.tipo==='gasto'),tot=sum(gastos,'gasto');
+  if(tot===0)return '<div class="empty"><div class="big">📭</div>Sin gastos en el período</div>';
+  const byCat={};gastos.forEach(t=>byCat[t.categoriaId]=(byCat[t.categoriaId]||0)+t.monto);
+  let arr=Object.entries(byCat).map(([id,v])=>({nombre:catName(id),v})).sort((a,b)=>b.v-a.v);
+  if(arr.length>6){const rest=arr.slice(5).reduce((s,x)=>s+x.v,0);arr=arr.slice(0,5);arr.push({nombre:'Otros',v:rest})}
+  arr.forEach((a,i)=>a.color=PALETTE[i%PALETTE.length]);
+  const r=66,cx=80,cy=80,c=2*Math.PI*r;let off=0;
+  const circ=arr.map(a=>{const len=a.v/tot*c;const s=`<circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="${a.color}" stroke-width="26" stroke-dasharray="${len} ${c-len}" stroke-dashoffset="${-off}" transform="rotate(-90 ${cx} ${cy})"/>`;off+=len;return s}).join('');
+  return `<div class="donutwrap"><svg width="160" height="160" viewBox="0 0 160 160">${circ}
+    <text x="80" y="76" text-anchor="middle" font-size="10" fill="#6b7280">Gastos</text>
+    <text x="80" y="94" text-anchor="middle" font-size="14" font-weight="700" fill="#1f2937">${fmt(tot)}</text></svg>
+    <div class="dlegend">${arr.map(a=>`<div class="dl"><i style="display:inline-block;width:10px;height:10px;border-radius:3px;background:${a.color}"></i>${a.nombre}<b>${fmt(a.v)}</b></div>`).join('')}</div></div>`;
+}
+
+/* ---- Movimientos ---- */
+let movF={q:'',tipo:'todos'};
+function renderMovimientos(){
+  const f=filtered().filter(t=>{
+    if(movF.tipo!=='todos'&&t.tipo!==movF.tipo)return false;
+    if(movF.q){const q=movF.q.toLowerCase();if(!((t.descripcion+' '+catName(t.categoriaId)+' '+vehName(t.vehiculoId)).toLowerCase().includes(q)))return false}
+    return true;
+  }).sort((a,b)=>b.fecha.localeCompare(a.fecha)||(b.creado||0)-(a.creado||0));
+  const tIng=sum(f,'ingreso'),tGas=sum(f,'gasto');
+  let html=`<div class="toolbar">
+    <input class="search" id="movQ" placeholder="🔎 Buscar" value="${movF.q}">
+    <select id="movTipo"><option value="todos">Todos</option><option value="ingreso">Ingresos</option><option value="gasto">Gastos</option></select>
+  </div>
+  <div class="twocol">
+    <div class="card mini"><div class="t">Ingresos</div><div class="v pos" style="font-size:17px">${fmt(tIng)}</div></div>
+    <div class="card mini"><div class="t">Gastos</div><div class="v neg" style="font-size:17px">${fmt(tGas)}</div></div>
+    <div class="card mini"><div class="t">Balance</div><div class="v ${tIng-tGas>=0?'pos':'neg'}" style="font-size:17px">${fmt(tIng-tGas)}</div></div>
+  </div>`;
+  if(!f.length){html+=`<div class="card"><div class="empty"><div class="big">🧾</div>Sin movimientos.<br><br><button class="btn btn-primary" onclick="openModal()">＋ Registrar</button></div></div>`;}
+  else{
+    html+=`<div class="listcard">${f.map(t=>`<div class="mvrow" onclick="openModal('${t.id}')">
+      <div class="mvicon ${t.tipo}">${t.tipo==='ingreso'?'↑':'↓'}</div>
+      <div class="mvmid"><div class="mvcat">${catName(t.categoriaId)}</div>
+      <div class="mvsub">${fechaCorta(t.fecha)} · <span class="chip ${t.ambito}">${t.ambito==='personal'?'Personal':'Negocio'}</span>${t.vehiculoId?' · '+vehName(t.vehiculoId):''}${t.descripcion?' · '+t.descripcion:''}</div></div>
+      <div class="mvamt ${t.tipo==='ingreso'?'pos':'neg'}">${t.tipo==='ingreso'?'+':'−'}${fmt(t.monto)}</div>
+    </div>`).join('')}</div>
+    <div class="hint">${f.length} movimiento(s). Toca uno para editar.</div>`;
+  }
+  view.innerHTML=html;
+  const q=$('#movQ');q.oninput=e=>{movF.q=e.target.value;const p=e.target.selectionStart;renderMovimientos();const n=$('#movQ');n.focus();n.setSelectionRange(p,p)};
+  $('#movTipo').value=movF.tipo;$('#movTipo').onchange=e=>{movF.tipo=e.target.value;renderMovimientos()};
+}
+
+/* ---- Vehículos ---- */
+function renderVehiculos(){
+  const rows=state.vehiculos.map(v=>{
+    const all=state.transacciones.filter(t=>t.vehiculoId===v.id&&t.ambito==='emprendimiento');
+    const n=sum(all,'ingreso')-sum(all,'gasto');
+    return `<div class="mitem"><span style="font-size:22px">🚗</span>
+      <div class="grow"><b>${v.nombre}</b><div class="meta">${v.marca} ${v.modelo} ${v.anio} · ${({arriendo:'Arriendo',propio:'Propio',mixto:'Mixto'}[v.tipo])}${v.nota?' · '+v.nota:''}</div>
+      <div class="meta">Neto negocio (histórico): <b class="${n>=0?'pos':'neg'}">${fmt(n)}</b></div></div>
+      <button class="iconbtn" onclick="editVeh('${v.id}')">✏️</button><button class="iconbtn" onclick="delVeh('${v.id}')">🗑️</button></div>`;
+  }).join('');
+  view.innerHTML=`<button class="btn btn-primary btn-block" onclick="editVeh()" style="margin-bottom:14px">＋ Agregar vehículo</button>
+    <div class="listcard">${rows||'<div class="empty">Sin vehículos.</div>'}</div>`;
+}
+function editVeh(id){
+  const v=id?state.vehiculos.find(x=>x.id===id):null;
+  const nombre=prompt('Nombre del vehículo:',v?v.nombre:'');if(nombre===null)return;
+  const marca=prompt('Marca:',v?v.marca:'')||'';const modelo=prompt('Modelo:',v?v.modelo:'')||'';
+  const anio=prompt('Año:',v?v.anio:'')||'';const tipo=prompt('Tipo: arriendo / propio / mixto',v?v.tipo:'propio')||'propio';
+  if(v)Object.assign(v,{nombre,marca,modelo,anio,tipo});
+  else state.vehiculos.push({id:uid(),nombre,marca,modelo,anio,patente:'',tipo,nota:'',activo:true});
+  save();render();
+}
+function delVeh(id){
+  const u=state.transacciones.filter(t=>t.vehiculoId===id).length;
+  if(!confirm(u?`Tiene ${u} movimientos (quedarán sin vehículo). ¿Eliminar?`:'¿Eliminar vehículo?'))return;
+  state.transacciones.forEach(t=>{if(t.vehiculoId===id)t.vehiculoId=null});
+  state.vehiculos=state.vehiculos.filter(v=>v.id!==id);save();render();
+}
+
+/* ---- Más (menú) ---- */
+function renderMas(){
+  view.innerHTML=`<div class="listcard menu">
+    <div class="mlink" onclick="go('categorias')"><span class="ic">🏷️</span>Categorías<span class="ar">›</span></div>
+    <div class="mlink" onclick="go('vehiculos')"><span class="ic">🚗</span>Vehículos<span class="ar">›</span></div>
+    <div class="mlink" onclick="go('cuenta')"><span class="ic">☁️</span>Sincronización entre dispositivos<span class="ar">›</span></div>
+    <div class="mlink" onclick="go('respaldo')"><span class="ic">💾</span>Respaldo y exportar<span class="ar">›</span></div>
+  </div>
+  <div class="hint">Flujo de Caja · tus datos se guardan en este dispositivo${curUser?' y se sincronizan en la nube':''}.</div>`;
+}
+
+/* ---- Categorías ---- */
+function renderCategorias(){
+  const group=(tipo,ambito,titulo,color)=>{
+    const cs=state.categorias.filter(c=>c.tipo===tipo&&c.ambito===ambito);
+    return `<div class="card" style="padding:0;overflow:hidden">
+      <div style="padding:13px 14px;border-bottom:1px solid var(--line);display:flex;align-items:center"><b>${titulo}</b>
+        <button class="btn btn-ghost btn-sm" style="margin-left:auto;height:34px" onclick="addCat('${tipo}','${ambito}')">＋</button></div>
+      ${cs.map(c=>`<div class="mitem"><span class="swatch" style="background:${color}"></span><div class="grow">${c.nombre}</div><button class="iconbtn" onclick="renCat('${c.id}')">✏️</button><button class="iconbtn" onclick="delCat('${c.id}')">🗑️</button></div>`).join('')||'<div class="empty" style="padding:16px">Sin categorías</div>'}
+    </div>`;
+  };
+  view.innerHTML=`<button class="btn btn-ghost btn-block btn-sm" onclick="go('mas')" style="margin-bottom:12px">‹ Volver</button>
+    <div class="sec-title" style="margin:4px 0 10px">💼 Negocio</div>
+    ${group('ingreso','emprendimiento','Ingresos del negocio','#059669')}
+    ${group('gasto','emprendimiento','Gastos del negocio','#dc2626')}
+    ${group('gasto','ambos','Gastos de vehículo (ambos ámbitos)','#d97706')}
+    <div class="sec-title" style="margin:14px 0 10px">🏠 Personal</div>
+    ${group('ingreso','personal','Ingresos personales','#059669')}
+    ${group('gasto','personal','Gastos personales','#dc2626')}`;
+}
+function addCat(tipo,ambito){const n=prompt('Nombre de la categoría:');if(!n)return;state.categorias.push({id:uid(),nombre:n.trim(),tipo,ambito});save();render()}
+function renCat(id){const c=state.categorias.find(x=>x.id===id);const n=prompt('Nuevo nombre:',c.nombre);if(!n)return;c.nombre=n.trim();save();render()}
+function delCat(id){
+  const u=state.transacciones.filter(t=>t.categoriaId===id).length;
+  if(u){alert(`No se puede eliminar: ${u} movimientos la usan.`);return}
+  if(!confirm('¿Eliminar categoría?'))return;
+  state.categorias=state.categorias.filter(c=>c.id!==id);save();render();
+}
+
+/* ---- Respaldo ---- */
+function renderRespaldo(){
+  view.innerHTML=`<button class="btn btn-ghost btn-block btn-sm" onclick="go('mas')" style="margin-bottom:12px">‹ Volver</button>
+    <div class="card"><div class="sec-title">Tus datos</div>
+      <div class="sec-sub">${state.transacciones.length} movimientos · ${state.vehiculos.length} vehículos · ${state.categorias.length} categorías</div>
+      <p class="hint">Aunque uses sincronización, conviene guardar un respaldo de vez en cuando.</p></div>
+    <div class="card"><b>⬇️ Exportar respaldo (.json)</b><p class="hint">Copia completa para guardar o pasar a otro equipo.</p><button class="btn btn-primary btn-block" style="margin-top:10px" onclick="exportJSON()">Descargar respaldo</button></div>
+    <div class="card"><b>📊 Exportar a Excel/CSV</b><p class="hint">Abre tus movimientos en Excel o Google Sheets.</p><button class="btn btn-ghost btn-block" style="margin-top:10px" onclick="exportCSV()">Descargar CSV</button></div>
+    <div class="card"><b>⬆️ Importar respaldo</b><p class="hint">Restaura desde un archivo .json (reemplaza lo actual).</p><button class="btn btn-ghost btn-block" style="margin-top:10px" onclick="document.getElementById('impFile').click()">Seleccionar archivo</button><input type="file" id="impFile" accept=".json" style="display:none"></div>
+    <div class="card"><b class="neg">🗑️ Borrar todo</b><p class="hint">Elimina todos los datos de este dispositivo.</p><button class="btn btn-danger btn-block" style="margin-top:10px" onclick="wipe()">Borrar y reiniciar</button></div>`;
+  $('#impFile').onchange=importJSON;
+}
+function download(name,content,type){const b=new Blob([content],{type});const u=URL.createObjectURL(b);const a=document.createElement('a');a.href=u;a.download=name;a.click();URL.revokeObjectURL(u)}
+function exportJSON(){download('flujocaja-'+new Date().toISOString().slice(0,10)+'.json',JSON.stringify(state,null,2),'application/json')}
+function importJSON(e){const f=e.target.files[0];if(!f)return;const r=new FileReader();r.onload=()=>{try{const d=JSON.parse(r.result);if(!d.transacciones||!d.vehiculos)throw 0;if(confirm('Reemplazar tus datos actuales?')){d.updatedAt=Date.now();state=d;save();render()}}catch(_){alert('Archivo inválido.')}};r.readAsText(f)}
+function exportCSV(){
+  const head=['Fecha','Tipo','Ambito','Categoria','Vehiculo','Descripcion','Monto'];
+  const rows=state.transacciones.slice().sort((a,b)=>a.fecha.localeCompare(b.fecha)).map(t=>[t.fecha,t.tipo,t.ambito,catName(t.categoriaId),vehName(t.vehiculoId),(t.descripcion||'').replace(/"/g,'""'),t.monto]);
+  download('flujocaja-movimientos.csv','﻿'+[head,...rows].map(r=>r.map(c=>`"${c}"`).join(';')).join('\n'),'text/csv');
+}
+function wipe(){if(confirm('¿Seguro? Se borrarán TODOS los datos de este dispositivo.')){state=defaults();save();render()}}
+
+/* ---- Cuenta / Sincronización ---- */
+function parseLooseConfig(txt){
+  const m=txt.match(/\{[\s\S]*\}/);if(!m)throw new Error('no obj');
+  let s=m[0].replace(/([{,]\s*)([A-Za-z0-9_]+)\s*:/g,'$1"$2":').replace(/'/g,'"').replace(/,(\s*[}\]])/g,'$1');
+  return JSON.parse(s);
+}
+function renderCuenta(){
+  const back=`<button class="btn btn-ghost btn-block btn-sm" onclick="go('mas')" style="margin-bottom:12px">‹ Volver</button>`;
+  const guide=`<div class="card"><b>¿Cómo activar la sincronización?</b>
+    <ol class="steps">
+      <li>Entra a <code>console.firebase.google.com</code> con tu cuenta Google y crea un proyecto.</li>
+      <li>Menú <b>Compilación → Firestore Database → Crear base de datos</b> (modo producción).</li>
+      <li>Menú <b>Compilación → Authentication → Comenzar → Correo/contraseña → Habilitar</b>.</li>
+      <li>Engranaje ⚙️ → <b>Configuración del proyecto</b> → baja a "Tus apps" → ícono <b>&lt;/&gt;</b> (Web) → registra la app y copia el bloque <code>firebaseConfig</code>.</li>
+      <li>Pégalo abajo y guarda. Repite el inicio de sesión en cada dispositivo con el mismo correo.</li>
+    </ol>
+    <p class="hint">La guía completa con las reglas de seguridad está en el archivo <code>GUIA.md</code> de la carpeta del proyecto.</p></div>`;
+
+  if(!window.fbSync||!window.fbSync.configured){
+    view.innerHTML=back+`<div class="card"><div class="sec-title">Sincronización desactivada</div>
+      <div class="sec-sub">Hoy tus datos viven solo en este dispositivo. Conecta Firebase para sincronizar con tu teléfono/computador.</div></div>
+      ${guide}
+      <div class="card"><div class="field"><label>Pega aquí tu configuración de Firebase</label>
+        <textarea id="fbConfig" placeholder='const firebaseConfig = { apiKey: "...", authDomain: "...", projectId: "...", ... };'></textarea></div>
+        <button class="btn btn-primary btn-block" style="margin-top:10px" onclick="saveFbConfig()">Guardar configuración</button></div>`;
+    return;
+  }
+  if(!curUser){
+    view.innerHTML=back+`<div class="card"><div class="sec-title">Inicia sesión</div>
+      <div class="sec-sub">Usa el mismo correo y contraseña en todos tus dispositivos para sincronizar.</div>
+      <div class="field"><label>Correo</label><input id="logEmail" type="email" autocomplete="username" placeholder="tucorreo@gmail.com"></div>
+      <div class="field" style="margin-top:10px"><label>Contraseña</label><input id="logPass" type="password" autocomplete="current-password" placeholder="mínimo 6 caracteres"></div>
+      <div class="row-btns" style="margin-top:14px"><button class="btn btn-ghost btn-block" onclick="doAuth('register')">Crear cuenta</button><button class="btn btn-primary btn-block" onclick="doAuth('login')">Entrar</button></div>
+      </div>
+      <button class="btn btn-ghost btn-block btn-sm" onclick="clearFbConfig()">Cambiar configuración de Firebase</button>`;
+    return;
+  }
+  view.innerHTML=back+`<div class="card"><div class="sec-title">✅ Sincronización activa</div>
+    <div class="sec-sub">Conectado como <b>${curUser.email}</b></div>
+    <p class="hint">Tus datos se guardan en la nube y se actualizan solos en todos los dispositivos donde inicies sesión con este correo. Funciona también sin conexión: se sincroniza al volver a internet.</p>
+    <button class="btn btn-ghost btn-block" style="margin-top:12px" onclick="window.fbSync.logout()">Cerrar sesión</button></div>`;
+}
+function saveFbConfig(){
+  const txt=$('#fbConfig').value.trim();let cfg;
+  try{cfg=parseLooseConfig(txt)}catch(e){alert('No pude leer la configuración. Pega el bloque completo que te da Firebase.');return}
+  if(!cfg.apiKey||!cfg.projectId){alert('Falta apiKey o projectId en la configuración.');return}
+  localStorage.setItem('fb_config',JSON.stringify(cfg));
+  alert('Configuración guardada. La app se recargará para conectarse.');location.reload();
+}
+function clearFbConfig(){if(confirm('¿Quitar la configuración de Firebase de este dispositivo? (no borra tus datos)')){localStorage.removeItem('fb_config');location.reload()}}
+function doAuth(mode){
+  const email=$('#logEmail').value.trim(),pass=$('#logPass').value;
+  if(!email||!pass){alert('Ingresa correo y contraseña.');return}
+  const p=mode==='login'?window.fbSync.login(email,pass):window.fbSync.register(email,pass);
+  p.catch(err=>{
+    const map={'auth/invalid-credential':'Correo o contraseña incorrectos.','auth/email-already-in-use':'Ese correo ya tiene cuenta, usa "Entrar".','auth/weak-password':'La contraseña debe tener al menos 6 caracteres.','auth/invalid-email':'Correo inválido.','auth/network-request-failed':'Sin conexión a internet.'};
+    alert(map[err.code]||('Error: '+(err.code||err.message)));
+  });
+}
+
+/* ---- Modal movimiento ---- */
+function fillVeh(sel,val){sel.innerHTML='<option value="">— Sin vehículo —</option>'+state.vehiculos.filter(v=>v.activo).map(v=>`<option value="${v.id}">${v.nombre}</option>`).join('');if(val)sel.value=val}
+function fillCat(){const tipo=ui.tipo,ambito=$('#mAmbito').value,cur=$('#mCategoria').value;
+  const cs=state.categorias.filter(c=>c.tipo===tipo&&(c.ambito===ambito||c.ambito==='ambos'));
+  $('#mCategoria').innerHTML=cs.map(c=>`<option value="${c.id}">${c.nombre}</option>`).join('');
+  if(cs.some(c=>c.id===cur))$('#mCategoria').value=cur;}
+function setTipo(t){ui.tipo=t;document.querySelectorAll('#mTipo button').forEach(b=>{b.className='';if(b.dataset.tipo===t)b.className=t==='ingreso'?'on-i':'on-e'});fillCat()}
+function openModal(id){
+  const t=id?state.transacciones.find(x=>x.id===id):null;
+  $('#mTitle').textContent=t?'Editar movimiento':'Nuevo movimiento';
+  $('#mId').value=t?t.id:'';
+  $('#mFecha').value=t?t.fecha:new Date().toISOString().slice(0,10);
+  $('#mMonto').value=t?NUM.format(t.monto):'';$('#mMontoHint').textContent='';
+  $('#mAmbito').value=t?t.ambito:(ui.ambito==='emprendimiento'?'emprendimiento':'personal');
+  fillVeh($('#mVehiculo'),t?t.vehiculoId:'');
+  setTipo(t?t.tipo:'gasto');if(t)$('#mCategoria').value=t.categoriaId;
+  $('#mDesc').value=t?(t.descripcion||''):'';
+  $('#mDelete').style.display=t?'inline-flex':'none';
+  $('#overlay').classList.add('show');
+  if(!t)setTimeout(()=>$('#mMonto').focus(),250);
+}
+function closeModal(){$('#overlay').classList.remove('show')}
+function saveModal(){
+  const monto=parseInt(($('#mMonto').value||'').replace(/[^\d]/g,''),10);
+  if(!monto||monto<=0){alert('Ingresa un monto válido.');$('#mMonto').focus();return}
+  if(!$('#mCategoria').value){alert('Selecciona una categoría.');return}
+  const id=$('#mId').value;
+  const data={fecha:$('#mFecha').value,tipo:ui.tipo,monto,ambito:$('#mAmbito').value,vehiculoId:$('#mVehiculo').value||null,categoriaId:$('#mCategoria').value,descripcion:$('#mDesc').value.trim()};
+  if(id){Object.assign(state.transacciones.find(x=>x.id===id),data)}
+  else{state.transacciones.push({id:uid(),creado:Date.now(),...data})}
+  save();closeModal();render();
+}
+
+/* ---- eventos ---- */
+document.querySelectorAll('.tab[data-tab]').forEach(b=>b.onclick=()=>go(b.dataset.tab));
+$('#tabAdd').onclick=()=>openModal();
+document.querySelectorAll('#ambChips button').forEach(b=>b.onclick=()=>{ui.ambito=b.dataset.a;document.querySelectorAll('#ambChips button').forEach(x=>x.classList.toggle('on',x===b));render()});
+$('#fPeriodo').onchange=e=>{ui.periodo=e.target.value;$('#fMes').style.display=ui.periodo==='elegir'?'inline-block':'none';if(ui.periodo==='elegir'&&!$('#fMes').value)$('#fMes').value=ui.mes;render()};
+$('#fMes').value=ui.mes;$('#fMes').onchange=e=>{ui.mes=e.target.value;render()};
+document.querySelectorAll('#mTipo button').forEach(b=>b.onclick=()=>setTipo(b.dataset.tipo));
+$('#mAmbito').onchange=fillCat;
+$('#mMonto').oninput=e=>{const n=parseInt(e.target.value.replace(/[^\d]/g,''),10);e.target.value=n?NUM.format(n):'';$('#mMontoHint').textContent=n?fmt(n):''};
+$('#mSave').onclick=saveModal;
+$('#mDelete').onclick=()=>{const id=$('#mId').value;if(id&&confirm('¿Eliminar este movimiento?')){state.transacciones=state.transacciones.filter(t=>t.id!==id);save();closeModal();render()}};
+$('#overlay').onclick=e=>{if(e.target===$('#overlay'))closeModal()};
+window.addEventListener('online',()=>{pushRemote()});
+
+/* ---- inicio ---- */
+load();render();
+if('serviceWorker' in navigator){navigator.serviceWorker.register('service-worker.js').catch(()=>{})}
+</script>
+
+<!-- ====================== SINCRONIZACIÓN (Firebase) ====================== -->
+<script type="module">
+const raw = localStorage.getItem('fb_config');
+function status(t,k){ if(window.onSyncStatus) window.onSyncStatus(t,k); }
+function noConfig(){ return Promise.reject(new Error('Firebase no configurado')); }
+
+if(!raw){
+  window.fbSync = { configured:false, login:noConfig, register:noConfig, logout(){}, push(){} };
+  status('Solo local','local');
+  if(window.onFbReady) window.onFbReady();
+} else {
+  try{
+    const [{ initializeApp }, auth, fs] = await Promise.all([
+      import('https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js'),
+      import('https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js'),
+      import('https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js'),
+    ]);
+    const cfg = JSON.parse(raw);
+    const app = initializeApp(cfg);
+    const fbAuth = auth.getAuth(app);
+    let db;
+    try { db = fs.initializeFirestore(app, { localCache: fs.persistentLocalCache() }); }
+    catch(_) { db = fs.getFirestore(app); }
+
+    let curUid=null, unsub=null, timer=null;
+    window.fbSync = {
+      configured:true,
+      login:(e,p)=>auth.signInWithEmailAndPassword(fbAuth,e,p),
+      register:(e,p)=>auth.createUserWithEmailAndPassword(fbAuth,e,p),
+      logout:()=>auth.signOut(fbAuth),
+      push:(stateObj)=>{
+        if(!db||!curUid||!stateObj) return;
+        clearTimeout(timer);
+        timer=setTimeout(()=>{
+          fs.setDoc(fs.doc(db,'users',curUid), { payload: JSON.stringify(stateObj), updatedAt: stateObj.updatedAt||Date.now() }, { merge:true })
+            .then(()=>status(navigator.onLine?'Sincronizado':'Guardado offline', navigator.onLine?'ok':'offline'))
+            .catch(()=>status('Error al guardar','error'));
+        },700);
+      }
+    };
+
+    auth.onAuthStateChanged(fbAuth, user=>{
+      if(unsub){unsub();unsub=null;}
+      curUid = user ? user.uid : null;
+      if(window.onAuthState) window.onAuthState(user ? {email:user.email, uid:user.uid} : null);
+      if(user){
+        status('Conectando…','sync');
+        unsub = fs.onSnapshot(fs.doc(db,'users',user.uid), snap=>{
+          status(navigator.onLine?'Sincronizado':'Sin conexión', navigator.onLine?'ok':'offline');
+          if(snap.metadata.hasPendingWrites) return;
+          if(snap.exists()){
+            const d=snap.data();
+            if(window.onRemoteState) window.onRemoteState(d.payload, d.updatedAt||0);
+          } else {
+            window.fbSync.push(window.getLocalState && window.getLocalState());
+          }
+        }, err=>status('Error: '+(err.code||''),'error'));
+      } else {
+        status('Inicia sesión','local');
+      }
+    });
+    status('Configurado','sync');
+    if(window.onFbReady) window.onFbReady();
+  }catch(err){
+    window.fbSync = { configured:false, login:noConfig, register:noConfig, logout(){}, push(){} };
+    status('Config inválida','error');
+    if(window.onFbReady) window.onFbReady();
+  }
+}
+</script>
+</body>
+</html>
