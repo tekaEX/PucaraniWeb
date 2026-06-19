@@ -1,7 +1,7 @@
 /* Service Worker — Flujo de Caja PWA
    Cachea la "app shell" para que funcione sin conexión.
    Sube el número de versión cuando cambies archivos para forzar actualización. */
-const CACHE = 'flujocaja-v1';
+const CACHE = 'flujocaja-v2';
 const ASSETS = [
   './',
   './index.html',

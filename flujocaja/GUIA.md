@@ -67,33 +67,28 @@ service cloud.firestore {
 
 > Esto asegura que **solo tú** (con tu sesión iniciada) puedas leer/escribir tus datos.
 
-### 3.3 Activar el inicio de sesión
+### 3.3 Activar el inicio de sesión (autenticación)
 1. Menú: **Compilación → Authentication → Comenzar**.
-2. En **Sign-in method**, elige **Correo electrónico/contraseña** → **Habilitar** → Guardar.
+2. En la pestaña **Sign-in method** (Método de acceso), agrega los proveedores que quieras usar:
+   - **Correo electrónico/contraseña** → clic → **Habilitar** → Guardar.
+   - **Google** → clic → **Habilitar** → elige un **correo de asistencia del proyecto** (tu Gmail) → Guardar.
+3. Pestaña **Settings (Configuración) → Dominios autorizados**: asegúrate de que esté tu dominio. `localhost` viene por defecto; cuando subas la app a Netlify, agrega también tu dirección (ej: `tuapp.netlify.app`) con **Agregar dominio**. Esto es necesario para que funcione el botón **Continuar con Google**.
 
-### 3.4 Obtener la configuración (la "llave" de conexión)
-1. Arriba a la izquierda, engranaje ⚙️ → **Configuración del proyecto**.
-2. Baja hasta **"Tus apps"** → toca el ícono **`</>`** (Web).
-3. Ponle un apodo (ej: *web*) → **Registrar app** (NO actives Firebase Hosting).
-4. Te mostrará un bloque como este. **Cópialo completo**:
+> Con esto, la app mostrará una **pantalla de inicio de sesión** al abrirse: el usuario podrá entrar con **Google** o con **correo y contraseña**. Si una persona prefiere no crear cuenta, puede tocar "Usar sin cuenta" y los datos quedan solo en ese dispositivo (sin sincronización).
 
-```js
-const firebaseConfig = {
-  apiKey: "AIza....",
-  authDomain: "flujo-de-caja.firebaseapp.com",
-  projectId: "flujo-de-caja",
-  storageBucket: "flujo-de-caja.appspot.com",
-  messagingSenderId: "123456789",
-  appId: "1:123...:web:abc..."
-};
-```
+### 3.4 La configuración ya está integrada ✅
+La `firebaseConfig` del proyecto **flujocaja-3e058** ya quedó incrustada en `index.html`, así que **no tienes que copiar ni pegar nada** en la app. (Si en el futuro cambias de proyecto, se reemplaza el bloque `DEFAULT_FB_CONFIG` dentro del `<script type="module">` de `index.html`.)
 
-### 3.5 Conectar la app
-1. Abre la app (en el iPhone o el computador) → pestaña **Más → Sincronización**.
-2. Pega el bloque en el recuadro y toca **Guardar configuración**. La app se recargará.
-3. Vuelve a **Más → Sincronización** → **Crear cuenta** con tu correo y una contraseña (mínimo 6 caracteres). Esa será tu cuenta.
-4. En el **otro dispositivo**, repite 1–2 (pega la misma configuración) y usa **Entrar** con el **mismo correo y contraseña**.
-5. Listo: verás arriba a la derecha el indicador en verde **"Sincronizado"**. Lo que registres en un dispositivo aparecerá en el otro.
+### 3.5 Iniciar sesión
+1. Abre la app: verás la **pantalla de inicio de sesión** con el botón **Iniciar sesión con Google**.
+2. Tócalo y elige tu cuenta Google. (También hay "Entrar con correo y contraseña" como respaldo.)
+3. En el **otro dispositivo**, abre la app e inicia sesión con la **misma cuenta**.
+4. Listo: arriba verás el indicador en verde **"Sincronizado"**. Lo que registres en un dispositivo aparecerá en el otro.
+
+> ⚠️ **El login con Google solo funciona si la app está abierta por internet (https), es decir desde tu dirección de Netlify** — no funciona abriendo el archivo con doble clic (`file://`), porque Google no permite iniciar sesión desde archivos locales. Para probar en el computador antes de subirla, usa el respaldo de **correo y contraseña** (ese sí funciona en local).
+
+> En el **iPhone instalado**, el método más confiable es **correo y contraseña** (el inicio con Google a veces abre una ventana aparte). En el computador, Google funciona perfecto.
+> Si ya conectaste Firebase y quieres cambiar de cuenta más adelante, ve a **Sincronización** dentro de la app (menú lateral en el computador, o **Más** en el celular).
 
 > Si al iniciar sesión te diera un error de dominio: en Firebase → **Authentication → Settings → Dominios autorizados → Agregar dominio**, y agrega tu dirección de Netlify (ej: `algo.netlify.app`).
 
