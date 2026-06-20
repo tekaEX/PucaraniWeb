@@ -1,9 +1,8 @@
 <!DOCTYPE html>
-<html lang="es-CL">
-<head>
+<html lang="es-CL"><head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-<meta name="theme-color" content="#f5f5f7">
+<meta name="theme-color" content="#f3f3f1">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="Flujo de Caja">
@@ -11,14 +10,15 @@
 <link rel="apple-touch-icon" href="icon-180.png">
 <link rel="icon" href="icon-192.png">
 <title>Flujo de Caja</title>
+
 <style>
   :root{
-    --bg:#f5f5f7; --card:#ffffff; --ink:#1d1d1f; --muted:#86868b; --muted2:#6e6e73;
-    --line:#e3e3e8; --hair:#ededf0;
-    --accent:#0071e3; --accent-d:#0066cc;
-    --green:#28a745; --green2:#34c759; --red:#ff3b30; --orange:#ff9500;
-    --radius:18px; --shadow:0 1px 2px rgba(0,0,0,.04),0 6px 20px rgba(0,0,0,.05);
-    --blur:saturate(180%) blur(20px);
+    --bg:#f3f3f1; --card:#ffffff; --ink:#1c1c1a; --muted:#9a9a90; --muted2:#6f6f66;
+    --line:#e6e6e0; --hair:#eeeee9;
+    --accent:#0f766e; --accent-d:#0b5d56;
+    --green:#0f766e; --green2:#178a7e; --red:#bd5b3c; --orange:#a87b3e;
+    --radius:16px; --shadow:0 1px 2px rgba(25,25,20,.03),0 4px 16px rgba(25,25,20,.04);
+    --blur:saturate(150%) blur(20px);
     --safe-b:env(safe-area-inset-bottom,0px); --safe-t:env(safe-area-inset-top,0px);
   }
   *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
@@ -28,6 +28,9 @@
   button{font-family:inherit;cursor:pointer;border:0;background:none;color:inherit}
   input,select,textarea{font-family:inherit;font-size:16px;color:var(--ink)}
   .pos{color:var(--green)} .neg{color:var(--red)}
+  svg.ic-svg{vertical-align:-.18em;flex:none}
+  .ic{display:inline-flex;align-items:center;justify-content:center}
+  .li-ic{color:var(--muted2);display:inline-flex;align-items:center;flex:none}
   .desktop-only{display:none} .mobile-only{display:initial}
 
   /* ===== Layout shell ===== */
@@ -102,12 +105,12 @@
   .mvrow:not(:last-child)::after{content:"";position:absolute;left:61px;right:0;bottom:0;height:1px;background:var(--hair)}
   .mvrow:active{background:#f7f7fa}
   .mvicon{width:36px;height:36px;border-radius:50%;display:grid;place-items:center;font-size:16px;font-weight:700;flex-shrink:0}
-  .mvicon.ingreso{background:rgba(52,199,89,.14);color:var(--green)} .mvicon.gasto{background:rgba(255,59,48,.12);color:var(--red)}
+  .mvicon.ingreso{background:rgba(15,118,110,.11);color:var(--green)} .mvicon.gasto{background:rgba(189,91,60,.12);color:var(--red)}
   .mvmid{flex:1;min-width:0}
   .mvcat{font-weight:600;font-size:15px} .mvsub{font-size:12px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:1px}
   .mvamt{font-weight:600;font-size:16px;white-space:nowrap}
   .chip{display:inline-block;font-size:11px;font-weight:600;padding:1px 7px;border-radius:6px}
-  .chip.personal{background:rgba(0,113,227,.12);color:var(--accent)} .chip.emprendimiento{background:rgba(255,149,0,.16);color:#b35e00}
+  .chip.personal{background:rgba(15,118,110,.12);color:var(--accent)} .chip.emprendimiento{background:rgba(168,123,62,.16);color:#8a6322}
 
   .empty{padding:46px 20px;text-align:center;color:var(--muted)}
   .empty .big{font-size:42px;margin-bottom:10px}
@@ -141,7 +144,7 @@
   .tab{flex:1;display:flex;flex-direction:column;align-items:center;gap:2px;padding:8px 0 7px;color:var(--muted);font-size:10px;font-weight:500}
   .tab .ic{font-size:22px} .tab.on{color:var(--accent)}
   .tab.add{flex:0 0 auto;margin:0 4px}
-  .tab.add .fab{width:54px;height:54px;border-radius:50%;background:var(--accent);color:#fff;font-size:30px;font-weight:300;display:grid;place-items:center;box-shadow:0 4px 14px rgba(0,113,227,.4);margin-top:-20px}
+  .tab.add .fab{width:54px;height:54px;border-radius:50%;background:var(--accent);color:#fff;font-size:30px;font-weight:300;display:grid;place-items:center;box-shadow:0 4px 14px rgba(15,118,110,.32);margin-top:-20px}
   .tab.add .fab:active{background:var(--accent-d)}
 
   /* ===== Sheet / modal ===== */
@@ -156,7 +159,7 @@
   .field label{font-size:13px;font-weight:600;color:var(--muted2)}
   .field input,.field select,.field textarea{height:48px;border:1px solid var(--line);border-radius:12px;padding:0 13px;background:#fff;width:100%}
   .field textarea{height:auto;min-height:96px;padding:11px 13px;resize:vertical;font-family:ui-monospace,monospace;font-size:13px}
-  .field input:focus,.field select:focus,.field textarea:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px rgba(0,113,227,.15)}
+  .field input:focus,.field select:focus,.field textarea:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px rgba(15,118,110,.15)}
   .row2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
   .seg{display:flex;background:#e9e9eb;border-radius:12px;padding:3px}
   .seg button{flex:1;padding:11px;font-weight:600;color:var(--ink);font-size:15px;border-radius:9px}
@@ -172,7 +175,7 @@
   .auth-sub{font-size:14px;color:var(--muted2);margin-bottom:24px;line-height:1.45}
   .auth-note{font-size:13px;color:var(--muted2);margin-bottom:12px;text-align:left;line-height:1.5}
   .auth-input{width:100%;height:48px;border:1px solid var(--line);border-radius:12px;padding:0 14px;margin-bottom:10px;font-size:16px;background:#fff;text-align:left}
-  .auth-input:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px rgba(0,113,227,.15)}
+  .auth-input:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px rgba(15,118,110,.15)}
   .auth-textarea{width:100%;min-height:88px;border:1px solid var(--line);border-radius:12px;padding:11px 13px;margin-bottom:10px;font-family:ui-monospace,monospace;font-size:12px;resize:vertical;background:#fff;text-align:left}
   .authgate .btn{margin-bottom:10px}
   .btn-google{background:#fff;color:var(--ink);border:1px solid var(--line);font-weight:600}
@@ -217,14 +220,13 @@
   <nav class="sidebar">
     <div class="sb-logo"><img src="icon-192.png" alt=""> Flujo de Caja</div>
     <button class="sb-new" onclick="openModal()">＋ Nuevo movimiento</button>
-    <button class="navlink on" data-tab="resumen"><span class="ic">📊</span> Resumen</button>
-    <button class="navlink" data-tab="movimientos"><span class="ic">💸</span> Movimientos</button>
-    <button class="navlink" data-tab="vehiculos"><span class="ic">🚗</span> Vehículos</button>
-    <button class="navlink" data-tab="categorias"><span class="ic">🏷️</span> Categorías</button>
-    <button class="navlink" data-tab="cuenta"><span class="ic">☁️</span> Sincronización</button>
-    <button class="navlink" data-tab="respaldo"><span class="ic">💾</span> Respaldo</button>
+    <button class="navlink on" data-tab="resumen"><span class="ic" data-ic="chart"></span> Resumen</button>
+    <button class="navlink" data-tab="movimientos"><span class="ic" data-ic="move"></span> Movimientos</button>
+    <button class="navlink" data-tab="vehiculos"><span class="ic" data-ic="car"></span> Vehículos</button>
+    <button class="navlink" data-tab="cuentas"><span class="ic" data-ic="bank"></span> Cuentas y efectivo</button>
     <div class="sb-foot">
-      <button class="sb-install" id="sbInstall" style="display:none" onclick="installClicked()">⬇️ Instalar app</button>
+      <button class="navlink" data-tab="ajustes"><span class="ic" data-ic="settings"></span> Ajustes</button>
+      <button class="sb-install" id="sbInstall" style="display:none" onclick="installClicked()"><span class="ic" data-ic="download" data-sz="18"></span> Instalar app</button>
     </div>
   </nav>
 
@@ -267,11 +269,11 @@
 
 <!-- Bottom tabs (mobile) -->
 <nav class="tabbar"><div class="inner">
-  <button class="tab on" data-tab="resumen"><span class="ic">📊</span>Resumen</button>
-  <button class="tab" data-tab="movimientos"><span class="ic">💸</span>Movim.</button>
+  <button class="tab on" data-tab="resumen"><span class="ic" data-ic="chart"></span>Resumen</button>
+  <button class="tab" data-tab="movimientos"><span class="ic" data-ic="move"></span>Movim.</button>
   <button class="tab add" id="tabAdd"><span class="fab">＋</span></button>
-  <button class="tab" data-tab="vehiculos"><span class="ic">🚗</span>Vehículos</button>
-  <button class="tab" data-tab="mas"><span class="ic">⋯</span>Más</button>
+  <button class="tab" data-tab="vehiculos"><span class="ic" data-ic="car"></span>Vehículos</button>
+  <button class="tab" data-tab="mas"><span class="ic" data-ic="more"></span>Más</button>
 </div></nav>
 
 <!-- Sheet: movimiento -->
@@ -294,8 +296,32 @@
       <div class="field"><label>Descripción (opcional)</label><input type="text" id="mDesc" placeholder="Ej: Bencina Copec, viaje aeropuerto..."></div>
     </div>
     <div class="sheet-foot">
-      <button class="btn btn-ghost" id="mDelete" style="display:none">🗑️</button>
+      <button class="btn btn-ghost" id="mDelete" style="display:none"><span class="ic" data-ic="trash" data-sz="18"></span></button>
       <button class="btn btn-primary btn-block" id="mSave">Guardar</button>
+    </div>
+  </div>
+</div>
+
+<!-- Sheet: cuenta (saldo) -->
+<div class="overlay" id="cuentaOverlay">
+  <div class="sheet">
+    <div class="sheet-head"><h2 id="cTitle">Nueva cuenta</h2><button class="x" onclick="closeCuenta()">✕</button></div>
+    <div class="sheet-body">
+      <input type="hidden" id="cId">
+      <div class="field"><label>Nombre</label><input type="text" id="cNombre" placeholder="Ej: Cuenta corriente Santander, Efectivo billetera..."></div>
+      <div class="field"><label>Tipo</label><select id="cTipo">
+        <option value="banco">Cuenta bancaria</option>
+        <option value="efectivo">Efectivo</option>
+        <option value="tarjeta">Tarjeta / Prepago</option>
+        <option value="inversion">Inversión / Ahorro</option>
+        <option value="otro">Otro</option>
+      </select></div>
+      <div class="field"><label>Saldo actual (CLP)</label><input type="text" id="cSaldo" inputmode="numeric" placeholder="0" autocomplete="off"><div class="montohint" id="cSaldoHint"></div></div>
+      <div class="field"><label>Nota (opcional)</label><input type="text" id="cNota" placeholder="Ej: cuenta sueldo, vuelto del furgón..."></div>
+    </div>
+    <div class="sheet-foot">
+      <button class="btn btn-ghost" id="cDelete" style="display:none"><span class="ic" data-ic="trash" data-sz="18"></span></button>
+      <button class="btn btn-primary btn-block" id="cSave">Guardar</button>
     </div>
   </div>
 </div>
@@ -307,7 +333,7 @@
     <div class="sheet-body">
       <p style="font-size:14px;color:var(--muted2)">En el iPhone, Safari instala la app desde el menú Compartir:</p>
       <ol class="steps">
-        <li>Toca el botón <b>Compartir</b> <span style="font-size:17px">􀈂</span> (el cuadrito con la flecha hacia arriba, abajo en el centro).</li>
+        <li>Toca el botón <b>Compartir</b> <span style="display:inline-flex;vertical-align:-.18em;color:var(--accent)"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4.5v10.5"></path><path d="M8.4 8L12 4.5 15.6 8"></path><path d="M7 11H5.6a1.2 1.2 0 0 0-1.2 1.2v6.6a1.2 1.2 0 0 0 1.2 1.2h12.8a1.2 1.2 0 0 0 1.2-1.2v-6.6A1.2 1.2 0 0 0 18.4 11H17"></path></svg></span> (el cuadrito con la flecha hacia arriba, abajo en el centro).</li>
         <li>Desliza y toca <b>"Agregar a inicio"</b> (Add to Home Screen).</li>
         <li>Toca <b>Agregar</b>. El ícono quedará en tu pantalla de inicio.</li>
       </ol>
@@ -330,7 +356,39 @@
 <!-- ====================== LÓGICA DE LA APP ====================== -->
 <script>
 const KEY='flujocaja_v1';
-const PALETTE=['#0071e3','#ff3b30','#ff9500','#34c759','#5856d6','#af52de','#ff2d55','#00c7be','#a2845e','#5ac8fa'];
+const PALETTE=['#0f766e','#4f9d8b','#8aa15a','#c2a24a','#c47e4f','#bd5b4a','#9b6a86','#5d7f9c'];
+const ICN={
+chart:'<line x1="4" y1="20" x2="20" y2="20"/><rect x="6" y="11" width="3.2" height="7" rx="1"/><rect x="10.4" y="6" width="3.2" height="12" rx="1"/><rect x="14.8" y="14" width="3.2" height="4" rx="1"/>',
+move:'<path d="M8 4.5v15"/><path d="M5 7.5l3-3 3 3"/><path d="M16 19.5v-15"/><path d="M19 16.5l-3 3-3-3"/>',
+car:'<path d="M5 15.5l1.5-4.6A2 2 0 0 1 8.4 9.5h7.2a2 2 0 0 1 1.9 1.4l1.5 4.6"/><rect x="3.6" y="15.5" width="16.8" height="3.2" rx="1.2"/><circle cx="7.6" cy="17.1" r=".7"/><circle cx="16.4" cy="17.1" r=".7"/>',
+bank:'<path d="M4 10l8-5 8 5"/><path d="M5.5 10.5v7M9.5 10.5v7M14.5 10.5v7M18.5 10.5v7"/><path d="M3.5 19.5h17"/>',
+tag:'<path d="M19.5 13L13 19.5a1.5 1.5 0 0 1-2.1 0l-6.4-6.4a1.5 1.5 0 0 1-.4-1V5.6A1.6 1.6 0 0 1 5.6 4h6.4a1.5 1.5 0 0 1 1.1.4l6.4 6.4a1.6 1.6 0 0 1 0 2.2z"/><circle cx="8.4" cy="8.4" r="1"/>',
+cloud:'<path d="M7 18a4 4 0 0 1-.5-8 5 5 0 0 1 9.6-1.2A3.6 3.6 0 0 1 17 18z"/>',
+archive:'<rect x="4" y="5.5" width="16" height="4" rx="1.2"/><path d="M5.2 9.5v8.3a1.2 1.2 0 0 0 1.2 1.2h11.2a1.2 1.2 0 0 0 1.2-1.2V9.5"/><path d="M10 13h4"/>',
+download:'<path d="M12 4v10"/><path d="M8 11l4 3.5L16 11"/><path d="M5 19.5h14"/>',
+wallet:'<rect x="3.5" y="6.5" width="17" height="12" rx="2.6"/><path d="M15.5 11h5v4h-5a2 2 0 0 1 0-4z"/><circle cx="17" cy="13" r=".7"/>',
+cash:'<rect x="3" y="7" width="18" height="10" rx="2.2"/><circle cx="12" cy="12" r="2.3"/><path d="M6.5 9.5v5M17.5 9.5v5"/>',
+calendar:'<rect x="4" y="5.5" width="16" height="14" rx="2.2"/><path d="M4 9.5h16"/><path d="M8 3.5v3.5M16 3.5v3.5"/>',
+home:'<path d="M4 11l8-6.2 8 6.2"/><path d="M6 10v9.5h12V10"/>',
+briefcase:'<rect x="3.5" y="8" width="17" height="11" rx="2.2"/><path d="M9 8V6.6A1.6 1.6 0 0 1 10.6 5h2.8A1.6 1.6 0 0 1 15 6.6V8"/><path d="M3.5 13h17"/>',
+search:'<circle cx="11" cy="11" r="6.2"/><path d="M20 20l-3.6-3.6"/>',
+edit:'<path d="M4.5 19.5l4.2-1L19 8.2a1.5 1.5 0 0 0 0-2.1l-1.1-1.1a1.5 1.5 0 0 0-2.1 0L5.5 15.3z"/><path d="M14.5 6.7l2.8 2.8"/>',
+trash:'<path d="M5 7h14"/><path d="M9 7V5.6A1.6 1.6 0 0 1 10.6 4h2.8A1.6 1.6 0 0 1 15 5.6V7"/><path d="M7 7l1 12.2a1.2 1.2 0 0 0 1.2 1.1h5.6a1.2 1.2 0 0 0 1.2-1.1L17 7"/><path d="M10 10.5v6M14 10.5v6"/>',
+more:'<circle cx="5.2" cy="12" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="18.8" cy="12" r="1.5"/>',
+card:'<rect x="3" y="6" width="18" height="12" rx="2.4"/><path d="M3 10h18"/><path d="M6.5 14.5h3.5"/>',
+trend:'<path d="M4 15l5-5 3 3 7-7"/><path d="M15 6h4.5v4.5"/>',
+box:'<path d="M4 8l8-4 8 4v8l-8 4-8-4z"/><path d="M4 8l8 4 8-4M12 12v8"/>',
+inbox:'<path d="M4 13l3-7.5h10L20 13"/><path d="M4 13v4.5a1.2 1.2 0 0 0 1.2 1.2h13.6a1.2 1.2 0 0 0 1.2-1.2V13"/><path d="M4 13h4l1 2h6l1-2h4"/>',
+receipt:'<path d="M6 4h12v16l-2-1.3-2 1.3-2-1.3-2 1.3-2-1.3L6 20z"/><path d="M9 9h6M9 12.5h6"/>',
+share:'<path d="M12 4.5v10.5"/><path d="M8.4 8L12 4.5 15.6 8"/><path d="M7 11H5.6a1.2 1.2 0 0 0-1.2 1.2v6.6a1.2 1.2 0 0 0 1.2 1.2h12.8a1.2 1.2 0 0 0 1.2-1.2v-6.6A1.2 1.2 0 0 0 18.4 11H17"/>',
+file:'<path d="M13 4H7.2A1.2 1.2 0 0 0 6 5.2v13.6A1.2 1.2 0 0 0 7.2 20h9.6a1.2 1.2 0 0 0 1.2-1.2V9z"/><path d="M13 4v5h5"/><path d="M9.5 13h5M9.5 16h5"/>',
+upload:'<path d="M12 15.5V5"/><path d="M8 9l4-4 4 4"/><path d="M5 19.5h14"/>',
+check:'<path d="M5 12.5l4.5 4.5L19 7.5"/>',
+link:'<path d="M9.5 14.5l5-5"/><path d="M8.2 12.2l-2 2a3 3 0 0 0 4.24 4.24l2-2"/><path d="M15.8 11.8l2-2a3 3 0 0 0-4.24-4.24l-2 2"/>',
+settings:'<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>'
+};
+function ic(n,s){s=s||20;return '<svg class="ic-svg" width="'+s+'" height="'+s+'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">'+(ICN[n]||'')+'</svg>'}
+function injectIcons(){document.querySelectorAll('[data-ic]').forEach(e=>{e.innerHTML=ic(e.dataset.ic,+e.dataset.sz||21)})}
 let state, curUser=null, deferredPrompt=null, authReady=false, authTimedOut=false;
 let ui={tab:'resumen',ambito:'todos',periodo:'mes',mes:new Date().toISOString().slice(0,7),tipo:'gasto'};
 
@@ -359,7 +417,11 @@ function defaults(){
       C('Salud','gasto','personal'),C('Educación','gasto','personal'),C('Cuota auto','gasto','personal'),
       C('Entretención','gasto','personal'),C('Vestuario','gasto','personal'),C('Otros gastos','gasto','personal'),
     ],
-    transacciones:[]
+    transacciones:[],
+    cuentas:[
+      {id:uid(),nombre:'Efectivo',tipo:'efectivo',saldo:0,nota:'',updatedAt:0},
+      {id:uid(),nombre:'Cuenta bancaria',tipo:'banco',saldo:0,nota:'',updatedAt:0},
+    ]
   };
 }
 
@@ -367,13 +429,14 @@ function defaults(){
 function persist(){try{localStorage.setItem(KEY,JSON.stringify(state))}catch(e){}}
 function pushRemote(){if(window.fbSync&&window.fbSync.push)window.fbSync.push(state)}
 function save(){state.updatedAt=Date.now();persist();pushRemote()}
+function migrate(s){if(s&&!Array.isArray(s.cuentas))s.cuentas=[];return s;}
 function load(){
-  try{const r=localStorage.getItem(KEY);if(r){state=JSON.parse(r);if(state.updatedAt==null)state.updatedAt=0;return}}catch(e){}
+  try{const r=localStorage.getItem(KEY);if(r){state=migrate(JSON.parse(r));if(state.updatedAt==null)state.updatedAt=0;return}}catch(e){}
   state=defaults();persist();
 }
 window.getLocalState=()=>state;
 window.onRemoteState=function(payloadStr,remoteAt){
-  try{const remote=JSON.parse(payloadStr);if((remote.updatedAt||0)>(state.updatedAt||0)){state=remote;persist();render();}}catch(e){}
+  try{const remote=JSON.parse(payloadStr);if((remote.updatedAt||0)>(state.updatedAt||0)){state=migrate(remote);persist();render();}}catch(e){}
 };
 window.onAuthState=function(u){curUser=u;authReady=true;if(u)localStorage.removeItem('localMode');updateGate();if(ui.tab==='cuenta')render()};
 window.onSyncStatus=function(txt,kind){const b=document.getElementById('syncBadge');b.className='sync '+(kind||'local');document.getElementById('syncTxt').textContent=txt};
@@ -410,12 +473,13 @@ function periodLabel(){
 /* ---- render ---- */
 const $=s=>document.querySelector(s);
 const view=$('#view');
-const TITLES={resumen:'Resumen',movimientos:'Movimientos',vehiculos:'Vehículos',mas:'Más',categorias:'Categorías',respaldo:'Respaldo',cuenta:'Sincronización'};
+const TITLES={resumen:'Resumen',movimientos:'Movimientos',vehiculos:'Vehículos',cuentas:'Cuentas y efectivo',mas:'Más',ajustes:'Ajustes',categorias:'Categorías',respaldo:'Respaldo',cuenta:'Sincronización'};
 function go(tab){ui.tab=tab;render()}
 function setActiveNav(){
   document.querySelectorAll('[data-tab]').forEach(b=>{
     const t=b.dataset.tab;let on=t===ui.tab;
-    if(b.classList.contains('tab')&&t==='mas'&&['mas','categorias','respaldo','cuenta'].includes(ui.tab))on=true;
+    if(b.classList.contains('tab')&&t==='mas'&&['mas','categorias','respaldo','cuenta','cuentas','ajustes'].includes(ui.tab))on=true;
+    if(t==='ajustes'&&['ajustes','categorias','respaldo','cuenta'].includes(ui.tab))on=true;
     b.classList.toggle('on',on);
   });
 }
@@ -424,7 +488,7 @@ function render(){
   setActiveNav();
   const showFilters=ui.tab==='resumen'||ui.tab==='movimientos';
   $('#filters').style.display=showFilters?'flex':'none';
-  ({resumen:renderResumen,movimientos:renderMovimientos,vehiculos:renderVehiculos,mas:renderMas,categorias:renderCategorias,respaldo:renderRespaldo,cuenta:renderCuenta}[ui.tab])();
+  ({resumen:renderResumen,movimientos:renderMovimientos,vehiculos:renderVehiculos,cuentas:renderCuentas,mas:renderMas,ajustes:renderAjustes,categorias:renderCategorias,respaldo:renderRespaldo,cuenta:renderCuenta}[ui.tab])();
   window.scrollTo(0,0);
 }
 
@@ -435,13 +499,29 @@ function renderResumen(){
   const emp=state.transacciones.filter(t=>periodMatch(t.fecha)&&t.ambito==='emprendimiento');
   const perBal=sum(per,'ingreso')-sum(per,'gasto');
   const empBal=sum(emp,'ingreso')-sum(emp,'gasto');
+  const cuentas=state.cuentas||[];
+  const totalDisp=totalCuentas();
+  const efectivo=cuentas.filter(c=>c.tipo==='efectivo').reduce((s,c)=>s+(c.saldo||0),0);
+  const enCuentas=totalDisp-efectivo;
+  const hasAcc=cuentas.length>0;
   view.innerHTML=`
   <div class="card hero">
-    <div class="lbl">Balance · ${periodLabel()}</div>
-    <div class="big ${bal>=0?'pos':'neg'}">${fmt(bal)}</div>
+    <div class="lbl">Balance general</div>
+    <div class="big ${totalDisp>=0?'pos':'neg'}">${fmt(totalDisp)}</div>
     <div class="split">
-      <div><div class="t">🏠 Personal</div><div class="v ${perBal>=0?'pos':'neg'}">${fmt(perBal)}</div></div>
-      <div><div class="t">💼 Negocio</div><div class="v ${empBal>=0?'pos':'neg'}">${fmt(empBal)}</div></div>
+      <div><div class="t">En cuentas</div><div class="v">${fmt(enCuentas)}</div></div>
+      <div><div class="t">Efectivo</div><div class="v">${fmt(efectivo)}</div></div>
+    </div>
+    ${hasAcc
+      ? `<div style="margin-top:12px;text-align:center"><span onclick="go('cuentas')" style="color:var(--accent);font-size:13px;font-weight:600;cursor:pointer">Editar mis cuentas ›</span></div>`
+      : `<button class="btn btn-primary btn-block btn-sm" style="margin-top:14px" onclick="go('cuentas')">＋ Agrega tus cuentas y efectivo</button>`}
+  </div>
+  <div class="card hero">
+    <div class="lbl">Movimiento del período · ${periodLabel()}</div>
+    <div class="big ${bal>=0?'pos':'neg'}" style="font-size:30px">${bal>0?'+':''}${fmt(bal)}</div>
+    <div class="split">
+      <div><div class="t">Personal</div><div class="v ${perBal>=0?'pos':'neg'}">${fmt(perBal)}</div></div>
+      <div><div class="t">Negocio</div><div class="v ${empBal>=0?'pos':'neg'}">${fmt(empBal)}</div></div>
     </div>
   </div>
   <div class="cols" style="margin-bottom:14px">
@@ -477,7 +557,7 @@ function barChart(){
 }
 function donutChart(f){
   const gastos=f.filter(t=>t.tipo==='gasto'),tot=sum(gastos,'gasto');
-  if(tot===0)return '<div class="empty"><div class="big">📭</div>Sin gastos en el período</div>';
+  if(tot===0)return '<div class="empty"><div style="margin-bottom:8px;color:#c4c4bd">'+ic('inbox',38)+'</div>Sin gastos en el período</div>';
   const byCat={};gastos.forEach(t=>byCat[t.categoriaId]=(byCat[t.categoriaId]||0)+t.monto);
   let arr=Object.entries(byCat).map(([id,v])=>({nombre:catName(id),v})).sort((a,b)=>b.v-a.v);
   if(arr.length>6){const rest=arr.slice(5).reduce((s,x)=>s+x.v,0);arr=arr.slice(0,5);arr.push({nombre:'Otros',v:rest})}
@@ -500,7 +580,7 @@ function renderMovimientos(){
   }).sort((a,b)=>b.fecha.localeCompare(a.fecha)||(b.creado||0)-(a.creado||0));
   const tIng=sum(f,'ingreso'),tGas=sum(f,'gasto');
   let html=`<div class="toolbar">
-    <input class="search" id="movQ" placeholder="🔎 Buscar" value="${movF.q}">
+    <input class="search" id="movQ" placeholder="Buscar" value="${movF.q}">
     <select id="movTipo"><option value="todos">Todos</option><option value="ingreso">Ingresos</option><option value="gasto">Gastos</option></select>
   </div>
   <div class="cols3" style="margin-bottom:14px">
@@ -508,7 +588,7 @@ function renderMovimientos(){
     <div class="card mini"><div class="t">Gastos</div><div class="v neg" style="font-size:18px">${fmt(tGas)}</div></div>
     <div class="card mini"><div class="t">Balance</div><div class="v ${tIng-tGas>=0?'pos':'neg'}" style="font-size:18px">${fmt(tIng-tGas)}</div></div>
   </div>`;
-  if(!f.length){html+=`<div class="card"><div class="empty"><div class="big">🧾</div>Sin movimientos.<br><br><button class="btn btn-primary" onclick="openModal()">＋ Registrar</button></div></div>`;}
+  if(!f.length){html+=`<div class="card"><div class="empty"><div style="margin-bottom:8px;color:#c4c4bd">${ic('receipt',38)}</div>Sin movimientos.<br><br><button class="btn btn-primary" onclick="openModal()">＋ Registrar</button></div></div>`;}
   else{
     html+=`<div class="listcard">${f.map(t=>`<div class="mvrow" onclick="openModal('${t.id}')">
       <div class="mvicon ${t.tipo}">${t.tipo==='ingreso'?'↑':'↓'}</div>
@@ -527,10 +607,10 @@ function renderVehiculos(){
   const rows=state.vehiculos.map(v=>{
     const all=state.transacciones.filter(t=>t.vehiculoId===v.id&&t.ambito==='emprendimiento');
     const n=sum(all,'ingreso')-sum(all,'gasto');
-    return `<div class="mitem"><span style="font-size:22px">🚗</span>
+    return `<div class="mitem"><span class="li-ic">${ic('car',22)}</span>
       <div class="grow"><b>${v.nombre}</b><div class="meta">${v.marca} ${v.modelo} ${v.anio} · ${({arriendo:'Arriendo',propio:'Propio',mixto:'Mixto'}[v.tipo])}${v.nota?' · '+v.nota:''}</div>
       <div class="meta">Neto negocio (histórico): <b class="${n>=0?'pos':'neg'}">${fmt(n)}</b></div></div>
-      <button class="iconbtn" onclick="editVeh('${v.id}')">✏️</button><button class="iconbtn" onclick="delVeh('${v.id}')">🗑️</button></div>`;
+      <button class="iconbtn" onclick="editVeh('${v.id}')">${ic('edit',18)}</button><button class="iconbtn" onclick="delVeh('${v.id}')">${ic('trash',18)}</button></div>`;
   }).join('');
   view.innerHTML=`<button class="btn btn-primary btn-block" onclick="editVeh()" style="margin-bottom:14px">＋ Agregar vehículo</button>
     <div class="listcard">${rows||'<div class="empty">Sin vehículos.</div>'}</div>`;
@@ -551,16 +631,93 @@ function delVeh(id){
   state.vehiculos=state.vehiculos.filter(v=>v.id!==id);save();render();
 }
 
+/* ---- Cuentas (saldos manuales) ---- */
+const CTIPOS={banco:{lbl:'Cuenta bancaria',icon:'bank'},efectivo:{lbl:'Efectivo',icon:'cash'},tarjeta:{lbl:'Tarjeta / Prepago',icon:'card'},inversion:{lbl:'Inversión / Ahorro',icon:'trend'},otro:{lbl:'Otro',icon:'box'}};
+function totalCuentas(){return (state.cuentas||[]).reduce((s,c)=>s+(c.saldo||0),0)}
+function renderCuentas(){
+  const back=`<button class="btn btn-ghost btn-block btn-sm backbtn mobile-only" onclick="go('mas')">‹ Volver</button>`;
+  const cuentas=state.cuentas||[];
+  const total=totalCuentas();
+  const efectivo=cuentas.filter(c=>c.tipo==='efectivo').reduce((s,c)=>s+(c.saldo||0),0);
+  const enCuentas=total-efectivo;
+  let list;
+  if(!cuentas.length){
+    list=`<div class="card"><div class="empty"><div style="margin-bottom:8px;color:#c4c4bd">${ic('bank',38)}</div>Aún no agregas cuentas.<br>Registra el dinero que tienes en tus cuentas bancarias y en efectivo.<br><br><button class="btn btn-primary" onclick="openCuenta()">＋ Agregar cuenta</button></div></div>`;
+  }else{
+    list=`<div class="listcard">${cuentas.map(c=>{
+      const t=CTIPOS[c.tipo]||CTIPOS.otro;
+      const act=c.updatedAt?' · actualizado '+fechaCorta(new Date(c.updatedAt).toISOString().slice(0,10)):'';
+      return `<div class="mitem" onclick="openCuenta('${c.id}')" style="cursor:pointer"><span class="li-ic">${ic(t.icon,22)}</span>
+        <div class="grow"><b>${c.nombre}</b><div class="meta">${t.lbl}${c.nota?' · '+c.nota:''}${act}</div></div>
+        <div class="mvamt ${(c.saldo||0)>=0?'':'neg'}">${fmt(c.saldo||0)}</div>
+        <span class="iconbtn">›</span></div>`;
+    }).join('')}</div>`;
+  }
+  view.innerHTML=back+`
+    <div class="card hero">
+      <div class="lbl">Dinero disponible</div>
+      <div class="big ${total>=0?'':'neg'}">${fmt(total)}</div>
+      <div class="split">
+        <div><div class="t">En cuentas</div><div class="v">${fmt(enCuentas)}</div></div>
+        <div><div class="t">Efectivo</div><div class="v">${fmt(efectivo)}</div></div>
+      </div>
+    </div>
+    ${cuentas.length?`<button class="btn btn-primary btn-block" onclick="openCuenta()" style="margin-bottom:14px">＋ Agregar cuenta</button>`:''}
+    ${list}
+    <div class="card"><b>¿Enlazar mis cuentas del banco?</b>
+      <p class="hint">Por ahora los saldos se ingresan a mano: cada vez que cambie tu dinero, toca la cuenta y edita el monto. Conectar la app directamente con el banco es posible pero complejo, y normalmente requiere un servicio externo de pago (ej. Fintoc/Belvo). Esto es una "foto" de cuánto tienes hoy; es independiente de los movimientos de ingresos y gastos.</p></div>`;
+}
+function openCuenta(id){
+  const c=id?(state.cuentas||[]).find(x=>x.id===id):null;
+  $('#cTitle').textContent=c?'Editar cuenta':'Nueva cuenta';
+  $('#cId').value=c?c.id:'';
+  $('#cNombre').value=c?c.nombre:'';
+  $('#cTipo').value=c?c.tipo:'banco';
+  const s=c?(c.saldo||0):0;
+  $('#cSaldo').value=c?((s<0?'-':'')+NUM.format(Math.abs(s))):'';
+  $('#cSaldoHint').textContent=c?fmt(s):'';
+  $('#cNota').value=c?(c.nota||''):'';
+  $('#cDelete').style.display=c?'inline-flex':'none';
+  $('#cuentaOverlay').classList.add('show');
+  if(!c)setTimeout(()=>$('#cNombre').focus(),250);
+}
+function closeCuenta(){$('#cuentaOverlay').classList.remove('show')}
+function parseSaldo(v){const neg=(v||'').trim().startsWith('-');const n=parseInt((v||'').replace(/[^\d]/g,''),10)||0;return neg?-n:n}
+function saveCuenta(){
+  const nombre=$('#cNombre').value.trim();
+  if(!nombre){alert('Ponle un nombre a la cuenta.');$('#cNombre').focus();return}
+  const saldo=parseSaldo($('#cSaldo').value);
+  const id=$('#cId').value;
+  if(!state.cuentas)state.cuentas=[];
+  const data={nombre,tipo:$('#cTipo').value,saldo,nota:$('#cNota').value.trim(),updatedAt:Date.now()};
+  if(id){Object.assign(state.cuentas.find(x=>x.id===id),data)}
+  else{state.cuentas.push({id:uid(),...data})}
+  save();closeCuenta();render();
+}
+function delCuenta(){
+  const id=$('#cId').value;if(!id)return;
+  if(!confirm('¿Eliminar esta cuenta?'))return;
+  state.cuentas=(state.cuentas||[]).filter(c=>c.id!==id);save();closeCuenta();render();
+}
+
 /* ---- Más ---- */
 function renderMas(){
   view.innerHTML=`<div class="listcard menu">
-    <div class="mlink" onclick="go('categorias')"><span class="ic">🏷️</span>Categorías<span class="ar">›</span></div>
-    <div class="mlink" onclick="go('vehiculos')"><span class="ic">🚗</span>Vehículos<span class="ar">›</span></div>
-    <div class="mlink" onclick="go('cuenta')"><span class="ic">☁️</span>Sincronización entre dispositivos<span class="ar">›</span></div>
-    <div class="mlink" onclick="go('respaldo')"><span class="ic">💾</span>Respaldo y exportar<span class="ar">›</span></div>
-    <div class="mlink" onclick="installClicked()"><span class="ic">⬇️</span>Instalar app en este dispositivo<span class="ar">›</span></div>
+    <div class="mlink" onclick="go('cuentas')"><span class="ic">${ic('bank')}</span>Cuentas y efectivo<span class="ar">›</span></div>
+    <div class="mlink" onclick="go('vehiculos')"><span class="ic">${ic('car')}</span>Vehículos<span class="ar">›</span></div>
+    <div class="mlink" onclick="go('ajustes')"><span class="ic">${ic('settings')}</span>Ajustes<span class="ar">›</span></div>
   </div>
   <div class="hint">Flujo de Caja · tus datos se guardan en este dispositivo${curUser?' y se sincronizan en la nube':''}.</div>`;
+}
+function renderAjustes(){
+  view.innerHTML=`<button class="btn btn-ghost btn-block btn-sm backbtn mobile-only" onclick="go('mas')">‹ Volver</button>
+  <div class="listcard menu">
+    <div class="mlink" onclick="go('categorias')"><span class="ic">${ic('tag')}</span>Categorías<span class="ar">›</span></div>
+    <div class="mlink" onclick="go('cuenta')"><span class="ic">${ic('cloud')}</span>Sincronización entre dispositivos<span class="ar">›</span></div>
+    <div class="mlink" onclick="go('respaldo')"><span class="ic">${ic('archive')}</span>Respaldo y exportar<span class="ar">›</span></div>
+    <div class="mlink" onclick="installClicked()"><span class="ic">${ic('download')}</span>Instalar app en este dispositivo<span class="ar">›</span></div>
+  </div>
+  <div class="hint">Categorías, sincronización entre dispositivos y respaldo de tu información.</div>`;
 }
 
 /* ---- Categorías ---- */
@@ -570,18 +727,18 @@ function renderCategorias(){
     return `<div class="card" style="padding:0;overflow:hidden">
       <div style="padding:14px 16px;border-bottom:1px solid var(--hair);display:flex;align-items:center"><b>${titulo}</b>
         <button class="btn btn-ghost btn-sm" style="margin-left:auto;height:32px" onclick="addCat('${tipo}','${ambito}')">＋</button></div>
-      ${cs.map(c=>`<div class="mitem"><span class="swatch" style="background:${color}"></span><div class="grow">${c.nombre}</div><button class="iconbtn" onclick="renCat('${c.id}')">✏️</button><button class="iconbtn" onclick="delCat('${c.id}')">🗑️</button></div>`).join('')||'<div class="empty" style="padding:16px">Sin categorías</div>'}
+      ${cs.map(c=>`<div class="mitem"><span class="swatch" style="background:${color}"></span><div class="grow">${c.nombre}</div><button class="iconbtn" onclick="renCat('${c.id}')">${ic('edit',18)}</button><button class="iconbtn" onclick="delCat('${c.id}')">${ic('trash',18)}</button></div>`).join('')||'<div class="empty" style="padding:16px">Sin categorías</div>'}
     </div>`;
   };
-  view.innerHTML=`<button class="btn btn-ghost btn-block btn-sm backbtn mobile-only" onclick="go('mas')">‹ Volver</button>
+  view.innerHTML=`<button class="btn btn-ghost btn-block btn-sm backbtn mobile-only" onclick="go('ajustes')">‹ Volver</button>
     <div class="cat-cols">
-      <div><div class="sec-title" style="margin:4px 0 10px">💼 Negocio</div>
-        ${group('ingreso','emprendimiento','Ingresos del negocio','#34c759')}
-        ${group('gasto','emprendimiento','Gastos del negocio','#ff3b30')}
-        ${group('gasto','ambos','Gastos de vehículo (ambos ámbitos)','#ff9500')}</div>
-      <div><div class="sec-title" style="margin:4px 0 10px">🏠 Personal</div>
-        ${group('ingreso','personal','Ingresos personales','#34c759')}
-        ${group('gasto','personal','Gastos personales','#ff3b30')}</div>
+      <div><div class="sec-title" style="margin:4px 0 10px">Negocio</div>
+        ${group('ingreso','emprendimiento','Ingresos del negocio','#0f766e')}
+        ${group('gasto','emprendimiento','Gastos del negocio','#bd5b3c')}
+        ${group('gasto','ambos','Gastos de vehículo (ambos ámbitos)','#a87b3e')}</div>
+      <div><div class="sec-title" style="margin:4px 0 10px">Personal</div>
+        ${group('ingreso','personal','Ingresos personales','#0f766e')}
+        ${group('gasto','personal','Gastos personales','#bd5b3c')}</div>
     </div>`;
 }
 function addCat(tipo,ambito){const n=prompt('Nombre de la categoría:');if(!n)return;state.categorias.push({id:uid(),nombre:n.trim(),tipo,ambito});save();render()}
@@ -595,21 +752,21 @@ function delCat(id){
 
 /* ---- Respaldo ---- */
 function renderRespaldo(){
-  view.innerHTML=`<button class="btn btn-ghost btn-block btn-sm backbtn mobile-only" onclick="go('mas')">‹ Volver</button>
+  view.innerHTML=`<button class="btn btn-ghost btn-block btn-sm backbtn mobile-only" onclick="go('ajustes')">‹ Volver</button>
     <div class="card"><div class="sec-title">Tus datos</div>
-      <div class="sec-sub">${state.transacciones.length} movimientos · ${state.vehiculos.length} vehículos · ${state.categorias.length} categorías</div>
+      <div class="sec-sub">${state.transacciones.length} movimientos · ${state.vehiculos.length} vehículos · ${(state.cuentas||[]).length} cuentas · ${state.categorias.length} categorías</div>
       <p class="hint">Aunque uses sincronización, conviene guardar un respaldo de vez en cuando.</p></div>
     <div class="cols2">
-      <div class="card"><b>⬇️ Exportar respaldo (.json)</b><p class="hint">Copia completa para guardar o pasar a otro equipo.</p><button class="btn btn-primary btn-block" style="margin-top:10px" onclick="exportJSON()">Descargar respaldo</button></div>
-      <div class="card"><b>📊 Exportar a Excel/CSV</b><p class="hint">Abre tus movimientos en Excel o Google Sheets.</p><button class="btn btn-ghost btn-block" style="margin-top:10px" onclick="exportCSV()">Descargar CSV</button></div>
-      <div class="card"><b>⬆️ Importar respaldo</b><p class="hint">Restaura desde un archivo .json (reemplaza lo actual).</p><button class="btn btn-ghost btn-block" style="margin-top:10px" onclick="document.getElementById('impFile').click()">Seleccionar archivo</button><input type="file" id="impFile" accept=".json" style="display:none"></div>
-      <div class="card"><b class="neg">🗑️ Borrar todo</b><p class="hint">Elimina todos los datos de este dispositivo.</p><button class="btn btn-danger btn-block" style="margin-top:10px" onclick="wipe()">Borrar y reiniciar</button></div>
+      <div class="card"><b>${ic('download',17)} Exportar respaldo (.json)</b><p class="hint">Copia completa para guardar o pasar a otro equipo.</p><button class="btn btn-primary btn-block" style="margin-top:10px" onclick="exportJSON()">Descargar respaldo</button></div>
+      <div class="card"><b>${ic('file',17)} Exportar a Excel/CSV</b><p class="hint">Abre tus movimientos en Excel o Google Sheets.</p><button class="btn btn-ghost btn-block" style="margin-top:10px" onclick="exportCSV()">Descargar CSV</button></div>
+      <div class="card"><b>${ic('upload',17)} Importar respaldo</b><p class="hint">Restaura desde un archivo .json (reemplaza lo actual).</p><button class="btn btn-ghost btn-block" style="margin-top:10px" onclick="document.getElementById('impFile').click()">Seleccionar archivo</button><input type="file" id="impFile" accept=".json" style="display:none"></div>
+      <div class="card"><b class="neg">${ic('trash',17)} Borrar todo</b><p class="hint">Elimina todos los datos de este dispositivo.</p><button class="btn btn-danger btn-block" style="margin-top:10px" onclick="wipe()">Borrar y reiniciar</button></div>
     </div>`;
   $('#impFile').onchange=importJSON;
 }
 function download(name,content,type){const b=new Blob([content],{type});const u=URL.createObjectURL(b);const a=document.createElement('a');a.href=u;a.download=name;a.click();URL.revokeObjectURL(u)}
 function exportJSON(){download('flujocaja-'+new Date().toISOString().slice(0,10)+'.json',JSON.stringify(state,null,2),'application/json')}
-function importJSON(e){const f=e.target.files[0];if(!f)return;const r=new FileReader();r.onload=()=>{try{const d=JSON.parse(r.result);if(!d.transacciones||!d.vehiculos)throw 0;if(confirm('Reemplazar tus datos actuales?')){d.updatedAt=Date.now();state=d;save();render()}}catch(_){alert('Archivo inválido.')}};r.readAsText(f)}
+function importJSON(e){const f=e.target.files[0];if(!f)return;const r=new FileReader();r.onload=()=>{try{const d=JSON.parse(r.result);if(!d.transacciones||!d.vehiculos)throw 0;if(confirm('Reemplazar tus datos actuales?')){d.updatedAt=Date.now();state=migrate(d);save();render()}}catch(_){alert('Archivo inválido.')}};r.readAsText(f)}
 function exportCSV(){
   const head=['Fecha','Tipo','Ambito','Categoria','Vehiculo','Descripcion','Monto'];
   const rows=state.transacciones.slice().sort((a,b)=>a.fecha.localeCompare(b.fecha)).map(t=>[t.fecha,t.tipo,t.ambito,catName(t.categoriaId),vehName(t.vehiculoId),(t.descripcion||'').replace(/"/g,'""'),t.monto]);
@@ -624,7 +781,7 @@ function parseLooseConfig(txt){
   return JSON.parse(s);
 }
 function renderCuenta(){
-  const back=`<button class="btn btn-ghost btn-block btn-sm backbtn mobile-only" onclick="go('mas')">‹ Volver</button>`;
+  const back=`<button class="btn btn-ghost btn-block btn-sm backbtn mobile-only" onclick="go('ajustes')">‹ Volver</button>`;
   const guide=`<div class="card"><b>¿Cómo activar la sincronización?</b>
     <ol class="steps">
       <li>Entra a <code>console.firebase.google.com</code> con tu cuenta Google y crea un proyecto.</li>
@@ -651,7 +808,7 @@ function renderCuenta(){
       <div class="row-btns" style="margin-top:14px"><button class="btn btn-ghost btn-block" onclick="doAuth('register')">Crear cuenta</button><button class="btn btn-primary btn-block" onclick="doAuth('login')">Entrar</button></div></div>
       <button class="btn btn-ghost btn-block btn-sm" onclick="clearFbConfig()">Cambiar configuración de Firebase</button>`;return;
   }
-  view.innerHTML=back+`<div class="card"><div class="sec-title">✅ Sincronización activa</div>
+  view.innerHTML=back+`<div class="card"><div class="sec-title">Sincronización activa</div>
     <div class="sec-sub">Conectado como <b>${curUser.email}</b></div>
     <p class="hint">Tus datos se guardan en la nube y se actualizan solos en todos los dispositivos donde inicies sesión con este correo. Funciona también sin conexión: se sincroniza al volver a internet.</p>
     <button class="btn btn-ghost btn-block" style="margin-top:12px" onclick="window.fbSync.logout()">Cerrar sesión</button></div>`;
@@ -792,11 +949,15 @@ $('#mMonto').oninput=e=>{const n=parseInt(e.target.value.replace(/[^\d]/g,''),10
 $('#mSave').onclick=saveModal;
 $('#mDelete').onclick=()=>{const id=$('#mId').value;if(id&&confirm('¿Eliminar este movimiento?')){state.transacciones=state.transacciones.filter(t=>t.id!==id);save();closeModal();render()}};
 $('#overlay').onclick=e=>{if(e.target===$('#overlay'))closeModal()};
+$('#cSave').onclick=saveCuenta;
+$('#cDelete').onclick=delCuenta;
+$('#cSaldo').oninput=e=>{const neg=e.target.value.trim().startsWith('-');const n=parseInt(e.target.value.replace(/[^\d]/g,''),10);e.target.value=n?((neg?'-':'')+NUM.format(n)):(neg?'-':'');$('#cSaldoHint').textContent=n?fmt(neg?-n:n):''};
+$('#cuentaOverlay').onclick=e=>{if(e.target===$('#cuentaOverlay'))closeCuenta()};
 $('#iosOverlay').onclick=e=>{if(e.target===$('#iosOverlay'))closeIOS()};
 window.addEventListener('online',()=>pushRemote());
 
 /* ---- inicio ---- */
-load();render();updateInstallUI();updateGate();
+load();render();updateInstallUI();updateGate();injectIcons();
 if('serviceWorker' in navigator){navigator.serviceWorker.register('service-worker.js').catch(()=>{})}
 </script>
 
@@ -877,5 +1038,6 @@ if(!cfg || !cfg.apiKey){
   }
 }
 </script>
-</body>
-</html>
+
+
+</body></html>
