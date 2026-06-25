@@ -90,7 +90,7 @@ export default async function CotizacionDetallePage({
         Cotizaciones
       </Link>
 
-      <PageHeader title={`Cotización n-${cot.numero}`}>
+      <PageHeader title={`Cotización N° ${cot.numero}`}>
         <div className="flex flex-wrap items-center gap-2">
           <a
             href={`/api/cotizaciones/${cot.id}/pdf`}

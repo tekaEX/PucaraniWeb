@@ -111,7 +111,7 @@ function CotizacionDoc({
 
   return (
     <Document
-      title={`Cotización n-${c.numero}`}
+      title={`Cotización N° ${c.numero}`}
       author={empresa?.nombre ?? "Transportes Pucarani"}
     >
       <Page size="A4" style={styles.page}>
@@ -152,7 +152,7 @@ function CotizacionDoc({
           <View style={styles.metaBox}>
             <View style={styles.metaLine}>
               <Text style={styles.metaLabel}>N°</Text>
-              <Text style={styles.metaValue}>n-{c.numero}</Text>
+              <Text style={styles.metaValue}>{c.numero}</Text>
             </View>
             <View style={styles.metaLine}>
               <Text style={styles.metaLabel}>Fecha</Text>

@@ -68,7 +68,7 @@ export default async function CotizacionesPage() {
                         href={`/cotizaciones/${c.id}`}
                         className="font-semibold text-brand hover:underline"
                       >
-                        n-{c.numero}
+                        {c.numero}
                       </Link>
                     </td>
                     <td className="px-4 py-3 text-muted">{formatDate(c.fecha)}</td>

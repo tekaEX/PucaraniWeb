@@ -142,7 +142,7 @@ export function FacturaForm({
               <option value="">— Sin cotización —</option>
               {cotizaciones.map((c) => (
                 <option key={c.id} value={c.id}>
-                  n-{c.numero}
+                  {c.numero}
                 </option>
               ))}
             </Select>

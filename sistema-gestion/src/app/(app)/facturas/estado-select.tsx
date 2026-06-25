@@ -4,10 +4,10 @@ import { actualizarEstadoFactura } from "./actions";
 import { FACTURA_ESTADOS, type FacturaEstado } from "@/types/db";
 
 const clases: Record<FacturaEstado, string> = {
-  en_proceso: "bg-gray-100 text-gray-700 border-gray-300",
-  por_facturar: "bg-blue-50 text-blue-700 border-blue-300",
-  facturada: "bg-amber-100 text-amber-800 border-amber-300",
-  pagada: "bg-green-100 text-green-800 border-green-300",
+  en_proceso: "bg-[#ececef] text-[#6e6e73] border-transparent",
+  por_facturar: "bg-info-bg text-info border-transparent",
+  facturada: "bg-warn-bg text-warn border-transparent",
+  pagada: "bg-ok-bg text-ok border-transparent",
 };
 
 // Selector de estado inline: al cambiarlo, guarda automáticamente.

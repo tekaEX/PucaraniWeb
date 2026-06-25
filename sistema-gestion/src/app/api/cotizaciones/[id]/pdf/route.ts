@@ -19,7 +19,7 @@ export async function GET(
   return new Response(buffer as unknown as BodyInit, {
     headers: {
       "Content-Type": "application/pdf",
-      "Content-Disposition": `inline; filename="cotizacion-n-${data.cotizacion.numero}.pdf"`,
+      "Content-Disposition": `inline; filename="cotizacion-${data.cotizacion.numero}.pdf"`,
     },
   });
 }

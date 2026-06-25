@@ -174,3 +174,47 @@ export const FACTURA_ESTADOS: Record<FacturaEstado, string> = {
   facturada: "Facturada (por pagar)",
   pagada: "Pagada",
 };
+
+// --- Gastos por vehículo / Integración SII ---
+export interface SiiCredencial {
+  id: string;
+  empresa_id: string;
+  rut: string;
+  cert_path: string;
+  cert_password_enc: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export type GastoCategoria = "combustible" | "mantencion" | "seguros" | "otros";
+
+export const GASTO_CATEGORIAS: Record<GastoCategoria, string> = {
+  combustible: "Combustible",
+  mantencion: "Mantención y repuestos",
+  seguros: "Seguros y permisos",
+  otros: "Otros",
+};
+
+export interface GastoVehiculo {
+  id: string;
+  empresa_id: string;
+  vehiculo_id: string | null;
+  categoria: GastoCategoria;
+  descripcion: string | null;
+  origen: "manual" | "sii";
+  patente_detectada: string | null;
+  proveedor_rut: string | null;
+  proveedor_razon_social: string | null;
+  dte_tipo: number | null;
+  folio: number | null;
+  fecha: string;
+  litros: number | null;
+  monto_neto: number;
+  monto_iva: number;
+  monto_total: number;
+  created_at: string;
+}
+
+export type GastoVehiculoConVehiculo = GastoVehiculo & {
+  vehiculo: Pick<Vehiculo, "id" | "patente" | "marca" | "modelo"> | null;
+};

@@ -140,13 +140,13 @@ export default async function DashboardPage() {
   return (
     <div>
       <PageHeader title="Dashboard" description="Resumen de cotizaciones y facturación.">
-        <Link href="/cotizaciones/nueva" className={buttonClass({ size: "sm" })}>
+        <Link href="/cotizaciones/nueva" className={buttonClass()}>
           <Plus className="h-4 w-4" />
           Cotización
         </Link>
         <Link
           href="/facturas/nueva"
-          className={buttonClass({ variant: "secondary", size: "sm" })}
+          className={buttonClass({ variant: "secondary" })}
         >
           <Plus className="h-4 w-4" />
           Factura

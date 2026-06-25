@@ -42,7 +42,7 @@ export function CotizacionPreview({
         <div className="text-sm sm:text-right">
           <div>
             <span className="text-muted">N°: </span>
-            <span className="font-semibold">n-{cot.numero}</span>
+            <span className="font-semibold">{cot.numero}</span>
           </div>
           <div>
             <span className="text-muted">Fecha: </span>
