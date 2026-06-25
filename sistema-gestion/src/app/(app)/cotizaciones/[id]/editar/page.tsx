@@ -42,7 +42,7 @@ export default async function EditarCotizacionPage({
 
   return (
     <div className="max-w-4xl">
-      <PageHeader title={`Editar cotización n-${cotizacion.numero}`} />
+      <PageHeader title={`Editar cotización N° ${cotizacion.numero}`} />
       <CotizacionForm
         action={actualizarCotizacion}
         clientes={clientes ?? []}

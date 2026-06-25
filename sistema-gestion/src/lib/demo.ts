@@ -17,6 +17,7 @@ import type {
   CotizacionConCliente,
   CotizacionCompleta,
   FacturaConRelaciones,
+  GastoVehiculo,
 } from "@/types/db";
 
 export function isDemo(): boolean {
@@ -526,6 +527,86 @@ export function demoFacturaById(id: string): Factura | null {
   void cotizacion;
   return rest;
 }
+
+// --- Gastos por vehículo (manual + SII) ---
+export const demoGastos: GastoVehiculo[] = [
+  {
+    id: "demo-gas-1",
+    empresa_id: "demo-empresa",
+    vehiculo_id: "demo-veh-1",
+    categoria: "combustible",
+    descripcion: "Carga de diésel",
+    origen: "sii",
+    patente_detectada: "JKLM12",
+    proveedor_rut: "99500000-0",
+    proveedor_razon_social: "Copec S.A.",
+    dte_tipo: 33,
+    folio: 880123,
+    fecha: "2026-06-05",
+    litros: 120,
+    monto_neto: 110000,
+    monto_iva: 20900,
+    monto_total: 130900,
+    created_at: now,
+  },
+  {
+    id: "demo-gas-2",
+    empresa_id: "demo-empresa",
+    vehiculo_id: "demo-veh-1",
+    categoria: "mantencion",
+    descripcion: "Cambio de aceite y filtros",
+    origen: "manual",
+    patente_detectada: null,
+    proveedor_rut: null,
+    proveedor_razon_social: "Taller Don Pedro",
+    dte_tipo: null,
+    folio: null,
+    fecha: "2026-06-09",
+    litros: null,
+    monto_neto: 0,
+    monto_iva: 0,
+    monto_total: 85000,
+    created_at: now,
+  },
+  {
+    id: "demo-gas-3",
+    empresa_id: "demo-empresa",
+    vehiculo_id: "demo-veh-2",
+    categoria: "combustible",
+    descripcion: "Carga de diésel",
+    origen: "sii",
+    patente_detectada: "GHPR34",
+    proveedor_rut: "99500000-0",
+    proveedor_razon_social: "Copec S.A.",
+    dte_tipo: 33,
+    folio: 880140,
+    fecha: "2026-06-12",
+    litros: 210,
+    monto_neto: 190000,
+    monto_iva: 36100,
+    monto_total: 226100,
+    created_at: now,
+  },
+  {
+    id: "demo-gas-4",
+    empresa_id: "demo-empresa",
+    vehiculo_id: "demo-veh-2",
+    categoria: "seguros",
+    descripcion: "SOAP 2026",
+    origen: "manual",
+    patente_detectada: null,
+    proveedor_rut: null,
+    proveedor_razon_social: null,
+    dte_tipo: null,
+    folio: null,
+    fecha: "2026-01-15",
+    litros: null,
+    monto_neto: 0,
+    monto_iva: 0,
+    monto_total: 42000,
+    created_at: now,
+  },
+];
 
 export function demoClienteById(id: string): Cliente | null {
   return demoClientes.find((x) => x.id === id) ?? null;

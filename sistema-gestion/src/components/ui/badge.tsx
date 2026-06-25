@@ -10,12 +10,12 @@ import { evaluarVenc } from "@/lib/vencimientos";
 import { formatDate } from "@/lib/format";
 
 const tones = {
-  gray: "bg-gray-100 text-gray-700 border-gray-200",
-  blue: "bg-blue-50 text-blue-700 border-blue-200",
-  green: "bg-green-100 text-green-800 border-green-200",
-  amber: "bg-amber-100 text-amber-800 border-amber-200",
-  red: "bg-red-100 text-red-700 border-red-200",
-  violet: "bg-violet-100 text-violet-800 border-violet-200",
+  gray: { wrap: "bg-[#ececef] text-[#6e6e73]", dot: "#86868b" },
+  blue: { wrap: "bg-info-bg text-info", dot: "var(--info)" },
+  green: { wrap: "bg-ok-bg text-ok", dot: "var(--ok)" },
+  amber: { wrap: "bg-warn-bg text-warn", dot: "var(--warn)" },
+  red: { wrap: "bg-danger-bg text-danger", dot: "var(--danger)" },
+  violet: { wrap: "bg-[#ece8f8] text-[#5b3aa8]", dot: "#5b3aa8" },
 } as const;
 
 type Tone = keyof typeof tones;
@@ -29,14 +29,20 @@ export function Badge({
   className?: string;
   children: React.ReactNode;
 }) {
+  const t = tones[tone];
   return (
     <span
       className={cn(
-        "inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-medium whitespace-nowrap",
-        tones[tone],
+        "inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold whitespace-nowrap",
+        t.wrap,
         className,
       )}
     >
+      <span
+        className="h-1.5 w-1.5 rounded-full"
+        style={{ background: t.dot }}
+        aria-hidden
+      />
       {children}
     </span>
   );

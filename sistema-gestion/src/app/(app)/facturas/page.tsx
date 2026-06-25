@@ -114,7 +114,7 @@ export default async function FacturasPage({
       >
         <Link
           href={`/facturas/informe${informeSuffix}`}
-          className={buttonClass({ variant: "secondary", size: "sm" })}
+          className={buttonClass({ variant: "secondary" })}
         >
           <Eye className="h-4 w-4" />
           Ver informe
@@ -231,7 +231,7 @@ export default async function FacturasPage({
                           href={`/cotizaciones/${f.cotizacion.id}`}
                           className="text-brand hover:underline"
                         >
-                          n-{f.cotizacion.numero}
+                          {f.cotizacion.numero}
                         </Link>
                       ) : (
                         "—"

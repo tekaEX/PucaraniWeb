@@ -44,7 +44,7 @@ export async function GET(
   const title = ws.getCell("B1");
   title.value = "PRESUPUESTO";
   title.font = { bold: true, size: 20, color: { argb: BRAND } };
-  ws.getCell("E1").value = `n-${c.numero}`;
+  ws.getCell("E1").value = `N° ${c.numero}`;
   ws.getCell("E1").font = { bold: true, size: 14 };
   ws.getCell("E1").alignment = { horizontal: "right" };
 
@@ -160,7 +160,7 @@ export async function GET(
     headers: {
       "Content-Type":
         "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-      "Content-Disposition": `attachment; filename="cotizacion-n-${c.numero}.xlsx"`,
+      "Content-Disposition": `attachment; filename="cotizacion-${c.numero}.xlsx"`,
     },
   });
 }

@@ -3,35 +3,61 @@ import { createClient } from "@/lib/supabase/server";
 import { PageHeader } from "@/components/page-header";
 import { Card } from "@/components/ui/card";
 import { buttonClass } from "@/components/ui/button";
-import { Badge, VencimientoBadge } from "@/components/ui/badge";
-import { Plus, Bus, CalendarClock } from "lucide-react";
-import { isDemo, demoVehiculos } from "@/lib/demo";
-import { formatNumber } from "@/lib/format";
+import { Plus, Bus, Settings } from "lucide-react";
+import { isDemo, demoVehiculos, demoGastos } from "@/lib/demo";
 import type { Vehiculo } from "@/types/db";
+import { SincronizarSiiButton } from "./sincronizar-sii";
+import { VehiculoRow } from "./vehiculo-row";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Vehículos" };
 
 export default async function VehiculosPage() {
   let vehiculos: Vehiculo[];
+  const totales = new Map<string, number>();
+
   if (isDemo()) {
     vehiculos = demoVehiculos;
+    for (const g of demoGastos) {
+      if (g.vehiculo_id)
+        totales.set(
+          g.vehiculo_id,
+          (totales.get(g.vehiculo_id) ?? 0) + Number(g.monto_total),
+        );
+    }
   } else {
     const supabase = await createClient();
-    const { data } = await supabase.from("vehiculos").select("*").order("patente");
-    vehiculos = (data ?? []) as Vehiculo[];
+    const [{ data: vData }, { data: gData }] = await Promise.all([
+      supabase.from("vehiculos").select("*").order("patente"),
+      supabase.from("gastos_vehiculo").select("vehiculo_id, monto_total"),
+    ]);
+    vehiculos = (vData ?? []) as Vehiculo[];
+    for (const g of (gData ?? []) as {
+      vehiculo_id: string | null;
+      monto_total: number;
+    }[]) {
+      if (g.vehiculo_id)
+        totales.set(
+          g.vehiculo_id,
+          (totales.get(g.vehiculo_id) ?? 0) + Number(g.monto_total),
+        );
+    }
   }
 
   return (
     <div>
-      <PageHeader title="Vehículos" description="Flota y vencimiento de documentos.">
+      <PageHeader
+        title="Vehículos"
+        description="Flota, gastos por vehículo y vencimiento de documentos."
+      >
         <Link
-          href="/vehiculos/documentos"
+          href="/combustible/configuracion"
           className={buttonClass({ variant: "secondary" })}
         >
-          <CalendarClock className="h-4 w-4" />
-          Actualizar documentos
+          <Settings className="h-4 w-4" />
+          Configurar SII
         </Link>
+        <SincronizarSiiButton />
         <Link href="/vehiculos/nuevo" className={buttonClass()}>
           <Plus className="h-4 w-4" />
           Nuevo vehículo
@@ -59,29 +85,12 @@ export default async function VehiculosPage() {
                   <th className="px-4 py-3 font-medium">Rev. técnica</th>
                   <th className="px-4 py-3 font-medium">SOAP</th>
                   <th className="px-4 py-3 font-medium">Permiso circ.</th>
+                  <th className="px-4 py-3 font-medium text-right">Gastos</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
                 {vehiculos.map((v) => (
-                  <tr key={v.id} className="hover:bg-gray-50">
-                    <td className="px-4 py-3">
-                      <Link href={`/vehiculos/${v.id}`} className="font-semibold text-brand hover:underline">
-                        {v.patente}
-                      </Link>
-                      {!v.activo ? (
-                        <Badge tone="gray" className="ml-2">Inactivo</Badge>
-                      ) : null}
-                    </td>
-                    <td className="px-4 py-3 text-muted">
-                      {[v.marca, v.modelo].filter(Boolean).join(" ") || "—"}
-                      {v.anio ? ` (${v.anio})` : ""}
-                      {v.km_actual != null ? ` · ${formatNumber(v.km_actual)} km` : ""}
-                    </td>
-                    <td className="px-4 py-3 text-center">{v.capacidad ?? "—"}</td>
-                    <td className="px-4 py-3"><VencimientoBadge fecha={v.revision_tecnica_venc} /></td>
-                    <td className="px-4 py-3"><VencimientoBadge fecha={v.soap_venc} /></td>
-                    <td className="px-4 py-3"><VencimientoBadge fecha={v.permiso_circulacion_venc} /></td>
-                  </tr>
+                  <VehiculoRow key={v.id} v={v} total={totales.get(v.id) ?? 0} />
                 ))}
               </tbody>
             </table>

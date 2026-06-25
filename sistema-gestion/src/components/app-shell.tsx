@@ -50,7 +50,7 @@ export function AppShell({
   const SidebarContent = (
     <div className="flex h-full flex-col">
       <div className="flex items-center gap-2.5 px-5 py-5">
-        <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-white/15 ring-1 ring-white/20">
+        <div className="flex h-9 w-9 items-center justify-center rounded-[10px] bg-brand text-brand-foreground">
           <Bus className="h-5 w-5" />
         </div>
         <div className="leading-tight">
@@ -71,8 +71,8 @@ export function AppShell({
               className={cn(
                 "flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
                 active
-                  ? "bg-white/15 text-white"
-                  : "text-white/70 hover:bg-white/10 hover:text-white",
+                  ? "bg-white/10 text-white"
+                  : "text-white/60 hover:bg-white/[0.06] hover:text-white",
               )}
             >
               <Icon className="h-4 w-4" />
@@ -89,7 +89,7 @@ export function AppShell({
         <form action={logout}>
           <button
             type="submit"
-            className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium text-white/70 transition-colors hover:bg-white/10 hover:text-white"
+            className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium text-white/60 transition-colors hover:bg-white/[0.06] hover:text-white"
           >
             <LogOut className="h-4 w-4" />
             Cerrar sesión
@@ -102,12 +102,12 @@ export function AppShell({
   return (
     <div className="min-h-screen lg:grid lg:grid-cols-[16rem_1fr]">
       {/* Sidebar de escritorio */}
-      <aside className="hidden bg-brand-dark text-white lg:block">
+      <aside className="hidden bg-[#1d1d1f] text-white lg:block">
         {SidebarContent}
       </aside>
 
       {/* Barra superior móvil */}
-      <header className="flex items-center justify-between bg-brand-dark px-4 py-3 text-white lg:hidden">
+      <header className="flex items-center justify-between bg-[#1d1d1f] px-4 py-3 text-white lg:hidden">
         <div className="flex items-center gap-2">
           <Bus className="h-5 w-5" />
           <span className="text-sm font-semibold">{empresaNombre}</span>
@@ -124,7 +124,7 @@ export function AppShell({
             className="absolute inset-0 bg-black/40"
             onClick={() => setOpen(false)}
           />
-          <div className="absolute left-0 top-0 h-full w-64 bg-brand-dark text-white shadow-xl">
+          <div className="absolute left-0 top-0 h-full w-64 bg-[#1d1d1f] text-white shadow-xl">
             <button
               onClick={() => setOpen(false)}
               className="absolute right-3 top-4 text-white/70"
