@@ -71,7 +71,7 @@ export async function guardarFactura(
 
   revalidatePath("/facturas");
   revalidatePath("/");
-  redirect(`/facturas/${result.data.id}`);
+  redirect("/facturas");
 }
 
 // Cambia solo el estado de una factura (para registro rápido desde la lista).
