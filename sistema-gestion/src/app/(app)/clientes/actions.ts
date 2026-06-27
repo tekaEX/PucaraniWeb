@@ -6,7 +6,7 @@ import { createClient } from "@/lib/supabase/server";
 import { isDemo } from "@/lib/demo";
 import { s, sReq } from "@/lib/form-helpers";
 
-export type FormState = { error?: string };
+export type FormState = { error?: string; ok?: boolean };
 
 const DEMO_MSG =
   "Modo demostración: conecta Supabase (ver README) para guardar datos reales.";
@@ -45,7 +45,9 @@ export async function guardarCliente(
   }
 
   revalidatePath("/clientes");
-  redirect("/clientes");
+  // Al crear, vuelve a la lista; al editar inline, se queda en el acordeón.
+  if (!id) redirect("/clientes");
+  return { ok: true };
 }
 
 export async function eliminarCliente(formData: FormData) {

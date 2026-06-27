@@ -100,6 +100,7 @@ export interface Chofer {
   nombre: string;
   rut: string | null;
   telefono: string | null;
+  foto_url?: string | null;
   licencia_numero: string | null;
   licencia_clase: string | null;
   licencia_vencimiento: string | null;
@@ -217,4 +218,13 @@ export interface GastoVehiculo {
 
 export type GastoVehiculoConVehiculo = GastoVehiculo & {
   vehiculo: Pick<Vehiculo, "id" | "patente" | "marca" | "modelo"> | null;
+};
+
+// Ingreso (factura pagada) resumido, para mostrar por cliente.
+export type IngresoCliente = {
+  id: string;
+  numero: string | null;
+  fecha: string; // fecha de pago
+  monto: number;
+  cliente_id: string | null;
 };

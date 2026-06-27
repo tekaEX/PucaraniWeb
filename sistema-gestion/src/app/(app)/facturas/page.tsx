@@ -5,27 +5,27 @@ import { Card } from "@/components/ui/card";
 import { Select } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import { buttonClass } from "@/components/ui/button";
-import { EstadoFacturaSelect } from "./estado-select";
-import { Plus, Receipt, Paperclip, Filter, Eye } from "lucide-react";
-import { formatCLP, formatDate } from "@/lib/format";
-import { isDemo, demoClientes, demoFacturas } from "@/lib/demo";
+import { Plus, Receipt, Filter, Eye } from "lucide-react";
+import {
+  isDemo,
+  demoClientes,
+  demoFacturas,
+  demoCotizacionesLite,
+  demoChoferes,
+  demoVehiculos,
+} from "@/lib/demo";
 import {
   FACTURA_ESTADOS,
   type Cliente,
   type FacturaConRelaciones,
   type FacturaEstado,
 } from "@/types/db";
+import { FacturaAccordion } from "./factura-accordion";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Facturas" };
 
 const ESTADOS = Object.keys(FACTURA_ESTADOS) as FacturaEstado[];
-
-function rowTone(estado: FacturaEstado) {
-  if (estado === "pagada") return "bg-green-50";
-  if (estado === "facturada") return "bg-amber-50";
-  return "";
-}
 
 export default async function FacturasPage({
   searchParams,
@@ -41,9 +41,15 @@ export default async function FacturasPage({
 
   let clientes: Cliente[];
   let facturas: FacturaConRelaciones[];
+  let cotizaciones: { id: string; numero: number; cliente_id: string | null; total: number }[];
+  let choferes: { id: string; nombre: string }[];
+  let vehiculos: { id: string; patente: string }[];
 
   if (isDemo()) {
     clientes = demoClientes;
+    cotizaciones = demoCotizacionesLite();
+    choferes = demoChoferes.map((c) => ({ id: c.id, nombre: c.nombre }));
+    vehiculos = demoVehiculos.map((v) => ({ id: v.id, patente: v.patente }));
     facturas = demoFacturas.filter((f) => {
       if (
         sp.estado &&
@@ -63,11 +69,21 @@ export default async function FacturasPage({
     });
   } else {
     const supabase = await createClient();
-    const { data: clientesData } = await supabase
-      .from("clientes")
-      .select("*")
-      .order("nombre");
+    const [
+      { data: clientesData },
+      { data: cotData },
+      { data: choData },
+      { data: vehData },
+    ] = await Promise.all([
+      supabase.from("clientes").select("*").order("nombre"),
+      supabase.from("cotizaciones").select("id,numero,cliente_id,total").order("numero", { ascending: false }),
+      supabase.from("choferes").select("id,nombre").order("nombre"),
+      supabase.from("vehiculos").select("id,patente").order("patente"),
+    ]);
     clientes = (clientesData ?? []) as Cliente[];
+    cotizaciones = cotData ?? [];
+    choferes = choData ?? [];
+    vehiculos = vehData ?? [];
 
     let query = supabase
       .from("facturas")
@@ -84,7 +100,7 @@ export default async function FacturasPage({
     if (sp.mes && /^\d{4}-\d{2}$/.test(sp.mes)) {
       const [y, m] = sp.mes.split("-").map(Number);
       const start = `${sp.mes}-01`;
-      const end = new Date(y, m, 0).toISOString().slice(0, 10); // último día del mes
+      const end = new Date(y, m, 0).toISOString().slice(0, 10);
       query = query.gte("fecha", start).lte("fecha", end);
     }
 
@@ -92,12 +108,6 @@ export default async function FacturasPage({
     facturas = (data ?? []) as FacturaConRelaciones[];
   }
 
-  const totalAPagar = facturas.reduce(
-    (acc, f) => acc + Number(f.valor_a_pagar ?? f.valor_servicio),
-    0,
-  );
-
-  // Filtros actuales para el informe (mismas condiciones que la tabla)
   const informeParams = new URLSearchParams();
   if (sp.estado) informeParams.set("estado", sp.estado);
   if (sp.cliente) informeParams.set("cliente", sp.cliente);
@@ -110,7 +120,7 @@ export default async function FacturasPage({
     <div>
       <PageHeader
         title="Facturas y seguimiento"
-        description="Registra los servicios, su orden de compra y su estado de pago."
+        description="Servicios y estado de pago. Haz clic en la descripción para ver y editar."
       >
         <Link
           href={`/facturas/informe${informeSuffix}`}
@@ -181,94 +191,13 @@ export default async function FacturasPage({
       ) : (
         <Card className="overflow-hidden">
           <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead className="bg-gray-50 text-left text-xs uppercase tracking-wide text-muted">
-                <tr>
-                  <th className="px-3 py-3 font-medium">Fecha</th>
-                  <th className="px-3 py-3 font-medium">Descripción</th>
-                  <th className="px-3 py-3 font-medium">Cliente</th>
-                  <th className="px-3 py-3 font-medium text-center">Buses</th>
-                  <th className="px-3 py-3 font-medium text-right">Valor</th>
-                  <th className="px-3 py-3 font-medium text-right">A pagar</th>
-                  <th className="px-3 py-3 font-medium">OC</th>
-                  <th className="px-3 py-3 font-medium">Coti</th>
-                  <th className="px-3 py-3 font-medium">N° Fact.</th>
-                  <th className="px-3 py-3 font-medium">Estado</th>
-                  <th className="px-3 py-3 font-medium"></th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-border">
-                {facturas.map((f) => (
-                  <tr key={f.id} className={`${rowTone(f.estado)} hover:bg-gray-100/60`}>
-                    <td className="px-3 py-2.5 whitespace-nowrap text-muted">
-                      <Link href={`/facturas/${f.id}`} className="hover:underline">
-                        {formatDate(f.fecha)}
-                      </Link>
-                    </td>
-                    <td className="px-3 py-2.5 max-w-48 truncate">
-                      <Link href={`/facturas/${f.id}`} className="hover:underline">
-                        {f.descripcion ?? "—"}
-                      </Link>
-                    </td>
-                    <td className="px-3 py-2.5 whitespace-nowrap">
-                      {f.cliente?.codigo?.toUpperCase() ?? f.cliente?.nombre ?? "—"}
-                    </td>
-                    <td className="px-3 py-2.5 text-center tabular-nums">
-                      {f.n_buses ?? "—"}
-                    </td>
-                    <td className="px-3 py-2.5 text-right tabular-nums">
-                      {formatCLP(f.valor_servicio)}
-                    </td>
-                    <td className="px-3 py-2.5 text-right tabular-nums font-medium">
-                      {f.valor_a_pagar != null ? formatCLP(f.valor_a_pagar) : "—"}
-                    </td>
-                    <td className="px-3 py-2.5 whitespace-nowrap text-muted">
-                      {f.orden_compra ?? "—"}
-                    </td>
-                    <td className="px-3 py-2.5 whitespace-nowrap">
-                      {f.cotizacion ? (
-                        <Link
-                          href={`/cotizaciones/${f.cotizacion.id}`}
-                          className="text-brand hover:underline"
-                        >
-                          {f.cotizacion.numero}
-                        </Link>
-                      ) : (
-                        "—"
-                      )}
-                    </td>
-                    <td className="px-3 py-2.5 whitespace-nowrap">{f.numero ?? "—"}</td>
-                    <td className="px-3 py-2.5">
-                      <EstadoFacturaSelect id={f.id} estado={f.estado} />
-                    </td>
-                    <td className="px-3 py-2.5">
-                      {f.archivo_url ? (
-                        <a
-                          href={f.archivo_url}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          title="Ver adjunto"
-                          className="text-muted hover:text-brand"
-                        >
-                          <Paperclip className="h-4 w-4" />
-                        </a>
-                      ) : null}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-              <tfoot className="border-t border-border bg-gray-50 font-medium">
-                <tr>
-                  <td colSpan={5} className="px-3 py-2.5 text-right text-muted">
-                    Total a pagar ({facturas.length})
-                  </td>
-                  <td className="px-3 py-2.5 text-right tabular-nums">
-                    {formatCLP(totalAPagar)}
-                  </td>
-                  <td colSpan={5}></td>
-                </tr>
-              </tfoot>
-            </table>
+            <FacturaAccordion
+              facturas={facturas}
+              clientes={clientes}
+              cotizaciones={cotizaciones}
+              choferes={choferes}
+              vehiculos={vehiculos}
+            />
           </div>
         </Card>
       )}

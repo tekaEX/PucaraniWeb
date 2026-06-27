@@ -5,50 +5,43 @@ import { Card } from "@/components/ui/card";
 import { buttonClass } from "@/components/ui/button";
 import { Plus, Bus, Settings } from "lucide-react";
 import { isDemo, demoVehiculos, demoGastos } from "@/lib/demo";
-import type { Vehiculo } from "@/types/db";
+import { getPeriodo, rangoPeriodo, enRango } from "@/lib/periodo";
+import type { Vehiculo, GastoVehiculo } from "@/types/db";
 import { SincronizarSiiButton } from "./sincronizar-sii";
-import { VehiculoRow } from "./vehiculo-row";
+import { VehiculoAccordion } from "./vehiculo-accordion";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Vehículos" };
 
 export default async function VehiculosPage() {
   let vehiculos: Vehiculo[];
-  const totales = new Map<string, number>();
+  let gastos: GastoVehiculo[];
+
+  const periodo = await getPeriodo();
+  const { desde, hasta } = rangoPeriodo(periodo);
 
   if (isDemo()) {
     vehiculos = demoVehiculos;
-    for (const g of demoGastos) {
-      if (g.vehiculo_id)
-        totales.set(
-          g.vehiculo_id,
-          (totales.get(g.vehiculo_id) ?? 0) + Number(g.monto_total),
-        );
-    }
+    gastos = demoGastos.filter((g) => enRango(g.fecha, periodo));
   } else {
     const supabase = await createClient();
     const [{ data: vData }, { data: gData }] = await Promise.all([
       supabase.from("vehiculos").select("*").order("patente"),
-      supabase.from("gastos_vehiculo").select("vehiculo_id, monto_total"),
+      supabase
+        .from("gastos_vehiculo")
+        .select("*")
+        .gte("fecha", desde)
+        .lte("fecha", hasta),
     ]);
     vehiculos = (vData ?? []) as Vehiculo[];
-    for (const g of (gData ?? []) as {
-      vehiculo_id: string | null;
-      monto_total: number;
-    }[]) {
-      if (g.vehiculo_id)
-        totales.set(
-          g.vehiculo_id,
-          (totales.get(g.vehiculo_id) ?? 0) + Number(g.monto_total),
-        );
-    }
+    gastos = (gData ?? []) as GastoVehiculo[];
   }
 
   return (
     <div>
       <PageHeader
         title="Vehículos"
-        description="Flota, gastos por vehículo y vencimiento de documentos."
+        description="Flota, gastos y documentos. Haz clic en uno para ver y editar."
       >
         <Link
           href="/combustible/configuracion"
@@ -76,24 +69,7 @@ export default async function VehiculosPage() {
       ) : (
         <Card className="overflow-hidden">
           <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead className="bg-gray-50 text-left text-xs uppercase tracking-wide text-muted">
-                <tr>
-                  <th className="px-4 py-3 font-medium">Patente</th>
-                  <th className="px-4 py-3 font-medium">Vehículo</th>
-                  <th className="px-4 py-3 font-medium text-center">Cap.</th>
-                  <th className="px-4 py-3 font-medium">Rev. técnica</th>
-                  <th className="px-4 py-3 font-medium">SOAP</th>
-                  <th className="px-4 py-3 font-medium">Permiso circ.</th>
-                  <th className="px-4 py-3 font-medium text-right">Gastos</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-border">
-                {vehiculos.map((v) => (
-                  <VehiculoRow key={v.id} v={v} total={totales.get(v.id) ?? 0} />
-                ))}
-              </tbody>
-            </table>
+            <VehiculoAccordion vehiculos={vehiculos} gastos={gastos} />
           </div>
         </Card>
       )}

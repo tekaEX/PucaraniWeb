@@ -5,6 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   LayoutDashboard,
+  PieChart,
   FileText,
   Receipt,
   Wallet,
@@ -15,30 +16,54 @@ import {
   LogOut,
   Menu,
   X,
+  CalendarDays,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { logout } from "@/app/login/actions";
+import { PeriodoSelector } from "@/components/periodo-selector";
 
-const nav = [
-  { href: "/", label: "Dashboard", icon: LayoutDashboard, exact: true },
-  { href: "/cotizaciones", label: "Cotizaciones", icon: FileText },
-  { href: "/facturas", label: "Facturas", icon: Receipt },
-  { href: "/cobranzas", label: "Cobranzas", icon: Wallet },
-  { href: "/vehiculos", label: "Vehículos", icon: Bus },
-  { href: "/choferes", label: "Choferes", icon: UserRound },
-  { href: "/clientes", label: "Clientes", icon: Users },
-  { href: "/configuracion", label: "Configuración", icon: Settings },
+type NavItem = {
+  href: string;
+  label: string;
+  icon: typeof LayoutDashboard;
+  exact?: boolean;
+};
+
+const grupos: { label?: string; items: NavItem[] }[] = [
+  { items: [{ href: "/", label: "Dashboard", icon: LayoutDashboard, exact: true }] },
+  {
+    label: "Finanzas",
+    items: [
+      { href: "/finanzas", label: "Resumen", icon: PieChart },
+      { href: "/cotizaciones", label: "Cotizaciones", icon: FileText },
+      { href: "/facturas", label: "Facturas", icon: Receipt },
+      { href: "/cobranzas", label: "Cobranzas", icon: Wallet },
+    ],
+  },
+  {
+    label: "Datos",
+    items: [
+      { href: "/vehiculos", label: "Vehículos", icon: Bus },
+      { href: "/choferes", label: "Choferes", icon: UserRound },
+      { href: "/clientes", label: "Clientes", icon: Users },
+    ],
+  },
+  { items: [{ href: "/configuracion", label: "Configuración", icon: Settings }] },
 ];
 
 export function AppShell({
   children,
   userEmail,
   empresaNombre,
+  periodoAnio,
+  periodoMes,
   demo = false,
 }: {
   children: React.ReactNode;
   userEmail: string;
   empresaNombre: string;
+  periodoAnio: number;
+  periodoMes: number | null;
   demo?: boolean;
 }) {
   const pathname = usePathname();
@@ -59,27 +84,36 @@ export function AppShell({
         </div>
       </div>
 
-      <nav className="flex-1 space-y-1 px-3 py-2">
-        {nav.map((item) => {
-          const active = isActive(item.href, item.exact);
-          const Icon = item.icon;
-          return (
-            <Link
-              key={item.href}
-              href={item.href}
-              onClick={() => setOpen(false)}
-              className={cn(
-                "flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
-                active
-                  ? "bg-white/10 text-white"
-                  : "text-white/60 hover:bg-white/[0.06] hover:text-white",
-              )}
-            >
-              <Icon className="h-4 w-4" />
-              {item.label}
-            </Link>
-          );
-        })}
+      <nav className="flex-1 space-y-3 px-3 py-2">
+        {grupos.map((grupo, gi) => (
+          <div key={gi} className="space-y-1">
+            {grupo.label ? (
+              <p className="px-3 pb-1 pt-2 text-[10px] font-semibold uppercase tracking-wider text-white/35">
+                {grupo.label}
+              </p>
+            ) : null}
+            {grupo.items.map((item) => {
+              const active = isActive(item.href, item.exact);
+              const Icon = item.icon;
+              return (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  onClick={() => setOpen(false)}
+                  className={cn(
+                    "flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
+                    active
+                      ? "bg-white/10 text-white"
+                      : "text-white/60 hover:bg-white/[0.06] hover:text-white",
+                  )}
+                >
+                  <Icon className="h-4 w-4" />
+                  {item.label}
+                </Link>
+              );
+            })}
+          </div>
+        ))}
       </nav>
 
       <div className="border-t border-white/10 px-3 py-3">
@@ -137,15 +171,26 @@ export function AppShell({
         </div>
       ) : null}
 
-      <main className="min-w-0 p-4 sm:p-6 lg:p-8">
-        {demo ? (
-          <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-2.5 text-sm text-amber-800">
-            <strong>Modo demostración.</strong> Estás viendo datos de ejemplo. Para
-            guardar datos reales, conecta Supabase (ver{" "}
-            <code className="rounded bg-amber-100 px-1">README.md</code>).
+      <main className="min-w-0">
+        {/* Barra de periodo global (siempre visible) */}
+        <div className="sticky top-0 z-20 flex items-center justify-between gap-3 border-b border-border bg-background/85 px-4 py-2.5 backdrop-blur lg:px-8">
+          <div className="flex items-center gap-2 text-xs text-muted">
+            <CalendarDays className="h-4 w-4 text-brand" />
+            <span className="hidden sm:inline">Periodo</span>
           </div>
-        ) : null}
-        {children}
+          <PeriodoSelector anio={periodoAnio} mes={periodoMes} />
+        </div>
+
+        <div className="p-4 sm:p-6 lg:p-8">
+          {demo ? (
+            <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-2.5 text-sm text-amber-800">
+              <strong>Modo demostración.</strong> Estás viendo datos de ejemplo. Para
+              guardar datos reales, conecta Supabase (ver{" "}
+              <code className="rounded bg-amber-100 px-1">README.md</code>).
+            </div>
+          ) : null}
+          {children}
+        </div>
       </main>
     </div>
   );

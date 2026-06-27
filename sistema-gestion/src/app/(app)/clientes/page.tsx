@@ -4,27 +4,60 @@ import { PageHeader } from "@/components/page-header";
 import { Card } from "@/components/ui/card";
 import { buttonClass } from "@/components/ui/button";
 import { Plus, Users } from "lucide-react";
-import { isDemo, demoClientes } from "@/lib/demo";
-import type { Cliente } from "@/types/db";
+import { isDemo, demoClientes, demoFacturas } from "@/lib/demo";
+import { getPeriodo, rangoPeriodo, enRango } from "@/lib/periodo";
+import { montoFactura, type Cliente, type IngresoCliente } from "@/types/db";
+import { ClienteAccordion } from "./cliente-accordion";
 
 export const dynamic = "force-dynamic";
 
 export default async function ClientesPage() {
   let clientes: Cliente[];
+  let ingresos: IngresoCliente[];
+
+  const periodo = await getPeriodo();
+  const { desde, hasta } = rangoPeriodo(periodo);
+
   if (isDemo()) {
     clientes = demoClientes;
+    ingresos = demoFacturas
+      .filter((f) => f.estado === "pagada" && enRango(f.fecha_pago, periodo))
+      .map((f) => ({
+        id: f.id,
+        numero: f.numero,
+        fecha: f.fecha_pago as string,
+        monto: montoFactura(f),
+        cliente_id: f.cliente_id,
+      }));
   } else {
     const supabase = await createClient();
-    const { data } = await supabase
-      .from("clientes")
-      .select("*")
-      .order("nombre", { ascending: true });
-    clientes = (data ?? []) as Cliente[];
+    /* eslint-disable @typescript-eslint/no-explicit-any */
+    const [{ data: cData }, { data: fData }] = await Promise.all([
+      supabase.from("clientes").select("*").order("nombre", { ascending: true }),
+      supabase
+        .from("facturas")
+        .select("id, numero, fecha_pago, valor_a_pagar, valor_servicio, cliente_id")
+        .eq("estado", "pagada")
+        .gte("fecha_pago", desde)
+        .lte("fecha_pago", hasta),
+    ]);
+    clientes = (cData ?? []) as Cliente[];
+    ingresos = ((fData ?? []) as any[]).map((f) => ({
+      id: f.id,
+      numero: f.numero,
+      fecha: f.fecha_pago,
+      monto: Number(f.valor_a_pagar ?? f.valor_servicio),
+      cliente_id: f.cliente_id,
+    }));
+    /* eslint-enable @typescript-eslint/no-explicit-any */
   }
 
   return (
     <div>
-      <PageHeader title="Clientes" description="Empresas y secciones a las que prestas servicio.">
+      <PageHeader
+        title="Clientes"
+        description="Empresas a las que prestas servicio. Haz clic en una para ver y editar."
+      >
         <Link href="/clientes/nuevo" className={buttonClass()}>
           <Plus className="h-4 w-4" />
           Nuevo cliente
@@ -43,37 +76,7 @@ export default async function ClientesPage() {
       ) : (
         <Card className="overflow-hidden">
           <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead className="bg-gray-50 text-left text-xs uppercase tracking-wide text-muted">
-                <tr>
-                  <th className="px-4 py-3 font-medium">Nombre</th>
-                  <th className="px-4 py-3 font-medium">Código</th>
-                  <th className="px-4 py-3 font-medium">RUT</th>
-                  <th className="px-4 py-3 font-medium">Contacto</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-border">
-                {clientes.map((c) => (
-                  <tr key={c.id} className="hover:bg-gray-50">
-                    <td className="px-4 py-3">
-                      <Link
-                        href={`/clientes/${c.id}`}
-                        className="font-medium text-brand hover:underline"
-                      >
-                        {c.nombre}
-                      </Link>
-                    </td>
-                    <td className="px-4 py-3 uppercase text-muted">
-                      {c.codigo ?? "—"}
-                    </td>
-                    <td className="px-4 py-3 text-muted">{c.rut ?? "—"}</td>
-                    <td className="px-4 py-3 text-muted">
-                      {c.contacto_nombre ?? c.contacto_telefono ?? c.contacto_email ?? "—"}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+            <ClienteAccordion clientes={clientes} ingresos={ingresos} />
           </div>
         </Card>
       )}

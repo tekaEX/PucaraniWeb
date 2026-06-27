@@ -43,7 +43,10 @@ export async function guardarVehiculo(
   if (error) return { error: `No se pudo guardar: ${error.message}` };
 
   revalidatePath("/vehiculos");
-  redirect("/vehiculos");
+  revalidatePath("/");
+  // Al crear vuelve a la lista; al editar inline se queda en el acordeón.
+  if (!id) redirect("/vehiculos");
+  return { ok: true };
 }
 
 // Actualiza solo las fechas de documentos de un vehículo existente.
