@@ -13,7 +13,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="Transportes">
 <meta name="mobile-web-app-capable" content="yes">
-<link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;1,9..40,300&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;1,9..40,300&family=DM+Mono:wght@400;500&family=Caveat:wght@500;600;700&display=swap" rel="stylesheet">
 <link href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/dist/tabler-icons.min.css" rel="stylesheet">
 <style>
 :root {
@@ -36,6 +36,8 @@
   --accent: #F0A800;
   --mono: 'DM Mono', monospace;
   --sans: 'DM Sans', sans-serif;
+  --hand: 'Caveat', 'Segoe Script', cursive;
+  --vale-border: #9c3b30;
   --radius: 10px;
   --radius-sm: 6px;
 }
@@ -216,7 +218,7 @@ main {
 
 .form-row2 {
   display: grid;
-  grid-template-columns: 1fr 1fr 1fr 1fr 140px;
+  grid-template-columns: 1fr 1fr 1fr 140px;
   gap: 12px;
 }
 
@@ -253,45 +255,6 @@ main {
   border-color: var(--blue);
   box-shadow: 0 0 0 3px rgba(27,79,216,.1);
 }
-
-/* ── Tipo toggle ──────────────────────────────────── */
-.tipo-wrap { display: flex; flex-direction: column; gap: 5px; }
-.tipo-wrap label {
-  font-size: 11px;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: .5px;
-  color: var(--text3);
-}
-
-.tipo-toggle {
-  display: flex;
-  height: 38px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  overflow: hidden;
-}
-
-.tipo-btn {
-  flex: 1;
-  border: none;
-  background: var(--bg);
-  color: var(--text2);
-  font-family: var(--sans);
-  font-size: 13px;
-  font-weight: 500;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  transition: background .12s, color .12s;
-}
-
-.tipo-btn + .tipo-btn { border-left: 1px solid var(--border); }
-.tipo-btn:hover { background: var(--surface2); }
-.tipo-btn.active-local { background: var(--blue); color: #fff; }
-.tipo-btn.active-airport { background: var(--green); color: #fff; }
 
 /* ── Add button ───────────────────────────────────── */
 .form-footer { display: flex; justify-content: flex-end; margin-top: 14px; }
@@ -398,21 +361,6 @@ td.monto {
   color: var(--text);
 }
 
-.badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  font-size: 11px;
-  font-weight: 600;
-  padding: 3px 9px;
-  border-radius: 20px;
-  text-transform: uppercase;
-  letter-spacing: .4px;
-}
-
-.badge-local { background: var(--blue-light); color: var(--blue-dark); }
-.badge-airport { background: var(--green-light); color: var(--green-dark); }
-
 .btn-del {
   width: 28px; height: 28px;
   border-radius: var(--radius-sm);
@@ -506,6 +454,9 @@ td.monto {
   .form-row { grid-template-columns: 1fr; }
   .form-row2 { grid-template-columns: 1fr; }
   .tabs-wrap { overflow-x: auto; }
+  .table-footer { flex-wrap: wrap; gap: 12px; }
+  .footer-actions { width: 100%; }
+  .footer-actions .btn-vales, .footer-actions .btn-excel { flex: 1; justify-content: center; }
 }
 
 /* ── Year navigation ─────────────────────────── */
@@ -780,6 +731,130 @@ td.monto {
 }
 .config-item:hover { background: var(--surface2); }
 .config-item i { color: var(--text2); font-size: 17px; width: 20px; }
+.config-sep { height: 1px; background: var(--border); margin: 6px 4px; }
+
+/* ── Tipo badge (dynamic color per service) ──────────── */
+.badge-tipo {
+  display: inline-flex; align-items: center; gap: 5px;
+  font-size: 11px; font-weight: 600; padding: 3px 9px;
+  border-radius: 20px; text-transform: uppercase; letter-spacing: .4px;
+  white-space: nowrap;
+}
+.badge-tipo i { font-size: 12px; }
+.badge-tipo.has-desc { white-space: normal; text-align: left; max-width: 340px; }
+
+/* ── Footer actions + Vales (PDF) button ─────────────── */
+.footer-actions { display: flex; align-items: center; gap: 10px; }
+.btn-vales {
+  display: flex; align-items: center; gap: 8px;
+  padding: 0 20px; height: 40px;
+  border-radius: var(--radius-sm);
+  background: var(--vale-border); color: #fff;
+  border: none; cursor: pointer;
+  font-family: var(--sans); font-size: 14px; font-weight: 500;
+  transition: background .12s, transform .1s;
+}
+.btn-vales:hover { background: #7d2f26; }
+.btn-vales:active { transform: scale(.98); }
+.btn-vales:disabled { opacity: .4; cursor: default; transform: none; }
+
+/* small per-row "print vale" button */
+.btn-vale-row {
+  width: 28px; height: 28px; border-radius: var(--radius-sm);
+  border: 1px solid var(--border); background: transparent;
+  color: var(--text3); cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 14px; transition: background .12s, color .12s, border-color .12s;
+}
+.btn-vale-row:hover { background: var(--blue-light); border-color: #b9c6ea; color: var(--blue-dark); }
+.row-actions { display: flex; gap: 6px; justify-content: flex-end; }
+
+/* ── Vale (receipt) — screen hidden, shown only on print ─ */
+#print-root { display: none; }
+
+.vale {
+  background: #fff;
+  color: #1a1a1a;
+  border: 1px solid #cfcabf;
+  border-radius: 4px;
+  padding: 8mm 7mm 5mm;
+  font-family: var(--sans);
+  position: relative;
+}
+.vale-head { display: flex; gap: 8px; align-items: flex-start; margin-bottom: 6px; }
+.vale-logo { width: 46px; height: 46px; flex-shrink: 0; object-fit: contain; }
+.vale-head-txt { line-height: 1.28; }
+.vale-brand { font-size: 15px; font-weight: 700; letter-spacing: .3px; color: var(--blue); }
+.vale-brand b { color: var(--blue); }
+.vale-sub  { font-size: 11px; font-weight: 700; color: var(--accent); letter-spacing: .5px; }
+.vale-line { font-size: 10.5px; color: #333; font-weight: 600; }
+.vale-line.mail { font-weight: 400; color: #555; }
+.vale-line.city { color: #666; }
+
+.vale-box {
+  border: 2px solid var(--vale-border);
+  border-radius: 4px;
+  padding: 7px 9px 9px;
+  margin-top: 4px;
+}
+.vlabel { font-size: 11px; font-weight: 700; letter-spacing: .3px; color: #222; }
+.hand { font-family: var(--hand); color: #14315e; font-weight: 600; }
+
+.vale-fecha-row, .vale-nombre-row {
+  display: flex; align-items: baseline; gap: 6px; margin-bottom: 6px;
+}
+.vale-fecha { font-size: 18px; }
+.vale-nombre-row { border-bottom: 1px dotted #999; padding-bottom: 3px; }
+.vale-nombre { font-size: 18px; flex: 1; }
+
+.vsrv {
+  display: grid; grid-template-columns: 18px 1fr auto;
+  align-items: center; gap: 7px;
+  padding: 3px 0;
+  border-bottom: 1px dotted #ccc;
+}
+.vcheck {
+  width: 13px; height: 13px; border: 1.5px solid #444; border-radius: 2px;
+  display: inline-flex; align-items: center; justify-content: center;
+  font-family: var(--hand); font-size: 16px; color: var(--vale-border);
+  line-height: 1;
+}
+.vsrv-name { font-size: 11px; font-weight: 600; letter-spacing: .2px; color: #222; }
+.vsrv.on .vsrv-name { color: #000; }
+.vsrv-amt { font-size: 11px; font-weight: 700; color: #222; white-space: nowrap; }
+.vsrv-amt .hand { font-size: 17px; margin-left: 2px; }
+
+.vale-total {
+  display: flex; justify-content: flex-end; align-items: baseline; gap: 6px;
+  margin-top: 7px; font-size: 13px; font-weight: 700;
+}
+.vale-total .hand { font-size: 19px; }
+
+.vale-firmas { display: flex; gap: 16px; margin-top: 16px; }
+.vfirma { flex: 1; text-align: center; }
+.vfirma-name {
+  display: block; min-height: 24px; font-size: 20px;
+  border-bottom: 1px solid #333; padding-bottom: 1px; line-height: 1.1;
+}
+.vfirma-label { font-size: 8.5px; font-weight: 600; letter-spacing: .3px; color: #555; }
+
+.vale-foot {
+  text-align: center; font-size: 8px; color: #888;
+  margin-top: 6px; letter-spacing: .3px;
+}
+
+@media print {
+  @page { size: A4 portrait; margin: 9mm; }
+  html, body { background: #fff !important; }
+  body > *:not(#print-root) { display: none !important; }
+  #print-root {
+    display: grid !important;
+    grid-template-columns: 1fr 1fr;
+    gap: 6mm;
+    align-content: start;
+  }
+  .vale { break-inside: avoid; page-break-inside: avoid; box-shadow: none; }
+}
 </style>
 </head>
 <body>
@@ -810,7 +885,15 @@ td.monto {
       <button class="config-item" onclick="openSettingsModal(); closeConfigMenu();">
         <i class="ti ti-folder"></i> Carpeta de descargas
       </button>
+      <div class="config-sep"></div>
+      <button class="config-item" onclick="exportBackup(); closeConfigMenu();">
+        <i class="ti ti-database-export"></i> Exportar copia de seguridad
+      </button>
+      <button class="config-item" onclick="document.getElementById('backup-file-inp').click(); closeConfigMenu();">
+        <i class="ti ti-database-import"></i> Importar copia de seguridad
+      </button>
     </div>
+    <input type="file" id="backup-file-inp" accept=".json,application/json" style="display:none" onchange="importBackupFile(event)">
   </div>
   <div class="year-nav">
     <button class="year-btn" onclick="changeYear(-1)" title="Año anterior">
@@ -846,28 +929,32 @@ td.monto {
         <label>Fecha</label>
         <input type="date" id="inp-fecha" />
       </div>
-      <div class="tipo-wrap">
+      <div class="field">
         <label>Tipo de servicio</label>
-        <div class="tipo-toggle">
-          <button class="tipo-btn active-local" id="btn-local" onclick="setTipo('local')">
-            <i class="ti ti-building-store" aria-hidden="true"></i> Local
-          </button>
-          <button class="tipo-btn" id="btn-airport" onclick="setTipo('aeropuerto')">
-            <i class="ti ti-plane" aria-hidden="true"></i> Aeropuerto
-          </button>
-        </div>
+        <select id="inp-tipo" onchange="onTipoChange()">
+          <option value="aeropuerto_arica">Aeropuerto → Ciudad Arica</option>
+          <option value="arica_aeropuerto">Ciudad Arica → Aeropuerto</option>
+          <option value="tacna_peru">Tacna – Perú</option>
+          <option value="local" selected>Servicio local</option>
+          <option value="taxi_exclusivo">Taxi exclusivo</option>
+          <option value="taxi_compartido">Taxi compartido</option>
+          <option value="especial">Especial</option>
+        </select>
       </div>
       <div class="field">
         <label>Monto ($)</label>
-        <input type="number" id="inp-monto" placeholder="0" min="0" step="10000" />
+        <input type="number" id="inp-monto" placeholder="0" min="0" step="1000" />
+      </div>
+    </div>
+
+    <div class="form-row-especial" id="row-especial" style="display:none; margin-bottom:12px;">
+      <div class="field">
+        <label>Descripción del servicio (Especial)</label>
+        <input type="text" id="inp-servicio" placeholder="Ej: City tour, traslado a evento, viaje especial…" />
       </div>
     </div>
 
     <div class="form-row2">
-      <div class="field">
-        <label>Descripción del servicio</label>
-        <input type="text" id="inp-servicio" placeholder="Ej: Traslado Terminal Pesquero" />
-      </div>
       <div class="field">
         <label>Nombre</label>
         <input type="text" id="inp-proveedor" placeholder="Ej: Juan Pérez" />
@@ -912,14 +999,22 @@ td.monto {
         <div class="total-label">Total del mes</div>
         <div class="total-val" id="total-val">$0</div>
       </div>
-      <button class="btn-excel" id="btn-dl" onclick="downloadExcelMes()">
-        <i class="ti ti-download" aria-hidden="true"></i> Descargar Excel
-      </button>
+      <div class="footer-actions">
+        <button class="btn-vales" id="btn-vales" onclick="printMesVales()">
+          <i class="ti ti-file-invoice" aria-hidden="true"></i> Vales (PDF)
+        </button>
+        <button class="btn-excel" id="btn-dl" onclick="downloadExcelMes()">
+          <i class="ti ti-download" aria-hidden="true"></i> Descargar Excel
+        </button>
+      </div>
     </div>
   </div>
 </main>
 
 <div class="toast" id="toast"></div>
+
+<!-- Contenedor de impresión de vales (oculto en pantalla, visible sólo al imprimir/PDF) -->
+<div id="print-root" aria-hidden="true"></div>
 
 <!-- Template Modal -->
 <div class="modal-overlay" id="template-overlay" onclick="closeTemplateModal()"></div>
@@ -1042,6 +1137,56 @@ td.monto {
 const MONTHS = ['Enero','Febrero','Marzo','Abril','Mayo','Junio',
                  'Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
 
+// ── Tipos de servicio ─────────────────────────────────────────────────
+// Los 6 primeros coinciden EXACTAMENTE con el talonario físico (vale).
+// 'vale'         = texto tal cual aparece impreso en el vale
+// 'label'        = etiqueta para la interfaz / Excel
+// 'montoDefault' = monto sugerido al elegir el tipo (editable). null = sin precio fijo aún.
+// 'hasDesc'      = requiere descripción escrita (solo "Especial").
+// La clave 'local' se conserva para no romper registros antiguos; los
+// registros antiguos con tipo 'aeropuerto' se mapean a 'aeropuerto_arica'.
+const SERVICE_TYPES = [
+  { key:'aeropuerto_arica', label:'Aeropuerto → Ciudad Arica', vale:'AEROPUERTO CIUDAD ARICA', icon:'ti-plane-arrival',   color:'#1A7A4A', bg:'#E8F7EE', montoDefault:8000 },
+  { key:'arica_aeropuerto', label:'Ciudad Arica → Aeropuerto', vale:'CIUDAD ARICA AEROPUERTO', icon:'ti-plane-departure', color:'#145E38', bg:'#E8F7EE', montoDefault:8000 },
+  { key:'tacna_peru',       label:'Tacna – Perú',              vale:'TACNA-PERU',             icon:'ti-world',           color:'#8E44AD', bg:'#F3E9F8', montoDefault:null },
+  { key:'local',            label:'Servicio local',            vale:'SERVICIO LOCAL',         icon:'ti-building-store',  color:'#1B3FA0', bg:'#E8EDF9', montoDefault:null },
+  { key:'taxi_exclusivo',   label:'Taxi exclusivo',            vale:'TAXI EXCLUSIVO',         icon:'ti-car',             color:'#D35400', bg:'#FBEEE3', montoDefault:null },
+  { key:'taxi_compartido',  label:'Taxi compartido',           vale:'TAXI COMPARTIDO',        icon:'ti-users',           color:'#E67E22', bg:'#FCF1E4', montoDefault:null },
+  { key:'especial',         label:'Especial',                  vale:'ESPECIAL',               icon:'ti-star',            color:'#B8540A', bg:'#FBEEE3', montoDefault:null, hasDesc:true },
+];
+
+// Servicios impresos en el talonario físico (los 6 con casilla). "Especial"
+// NO tiene casilla en el vale: se escribe como línea adicional a mano.
+const VALE_SERVICES = SERVICE_TYPES.filter(t => t.key !== 'especial');
+
+// Alias de compatibilidad para datos guardados con el esquema anterior.
+const TIPO_ALIAS = { aeropuerto: 'aeropuerto_arica' };
+
+function tipoInfo(tipo) {
+  const key = TIPO_ALIAS[tipo] || tipo;
+  return SERVICE_TYPES.find(t => t.key === key)
+      || { key, label: tipo || '—', vale: (tipo || '').toUpperCase(), icon:'ti-tag', color:'#6B6760', bg:'#EFEDE7', montoDefault:null };
+}
+
+function tipoBadge(tipo, desc) {
+  const t = tipoInfo(tipo);
+  // Para "Especial" la descripción va DENTRO de la etiqueta, con el mismo color.
+  const d     = (tipo === 'especial' && desc && String(desc).trim()) ? String(desc).trim() : '';
+  const cls   = 'badge-tipo' + (d ? ' has-desc' : '');
+  const extra = d ? `: ${escapeHtml(d)}` : '';
+  return `<span class="${cls}" style="background:${t.bg};color:${t.color}">`
+       + `<i class="ti ${t.icon}"></i> ${t.label}${extra}</span>`;
+}
+
+// Etiqueta de la columna "Tipo" en el informe: para Especial añade la descripción.
+function tipoReportLabel(r) {
+  if (r.tipo === 'especial') {
+    const d = (r.servicio || '').trim();
+    return d ? `Especial: ${d}` : 'Especial';
+  }
+  return tipoInfo(r.tipo).label;
+}
+
 // Generador de IDs único que funciona en CUALQUIER contexto.
 // crypto.randomUUID() solo existe en HTTPS/localhost, así que usamos
 // un respaldo robusto para que la app nunca falle al agregar datos.
@@ -1057,7 +1202,6 @@ function uid() {
 
 const _now     = new Date();
 let current    = _now.getMonth();
-let tipoSel    = 'local';
 let data       = {};
 let companies  = [];
 let drivers    = [];
@@ -1189,6 +1333,12 @@ async function loadDrivers() {
 // ── Helpers ───────────────────────────────────────────────────────────
 function fmt(n) { return '$' + Math.round(Number(n)).toLocaleString('es-CL'); }
 
+function escapeHtml(s) {
+  return String(s == null ? '' : s)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+
 function fmtFecha(iso) {
   if (!iso) return '—';
   const [y,m,d] = iso.split('-');
@@ -1211,10 +1361,30 @@ function driverColor(name) {
   return C[Math.abs(h) % C.length];
 }
 
-function setTipo(t) {
-  tipoSel = t;
-  document.getElementById('btn-local').className   = 'tipo-btn' + (t==='local'      ? ' active-local'   : '');
-  document.getElementById('btn-airport').className = 'tipo-btn' + (t==='aeropuerto' ? ' active-airport' : '');
+function populateTipoDropdown() {
+  const sel = document.getElementById('inp-tipo');
+  if (!sel) return;
+  const cur = sel.value;
+  sel.innerHTML = SERVICE_TYPES.map(t => `<option value="${t.key}">${t.label}</option>`).join('');
+  sel.value = (cur && SERVICE_TYPES.find(t => t.key === cur)) ? cur : 'local';
+}
+
+// Pone en el campo Monto el precio por defecto del tipo actual (o lo vacía).
+function applyMontoDefault() {
+  const info  = tipoInfo(document.getElementById('inp-tipo').value);
+  const monto = document.getElementById('inp-monto');
+  monto.value = (info.montoDefault != null) ? info.montoDefault : '';
+}
+
+// Al cambiar el tipo: ajusta el monto sugerido y muestra la descripción
+// solo cuando el tipo es "Especial".
+function onTipoChange() {
+  const tipo   = document.getElementById('inp-tipo').value;
+  const rowEsp = document.getElementById('row-especial');
+  const esEsp  = (tipo === 'especial');
+  if (rowEsp) rowEsp.style.display = esEsp ? '' : 'none';
+  applyMontoDefault();
+  if (esEsp) setTimeout(() => document.getElementById('inp-servicio').focus(), 0);
 }
 
 function showToast(msg) {
@@ -1435,15 +1605,12 @@ function renderTable() {
     area.innerHTML = `<table>
       <thead><tr>
         <th>Fecha</th><th>Tipo</th><th>Empresa</th><th>Chofer</th>
-        <th>Descripción</th><th>Nombre</th>
+        <th>Nombre</th>
         <th class="right">Monto</th><th></th>
       </tr></thead>
       <tbody>${sorted.map(r => `<tr>
         <td class="fecha">${fmtFecha(r.fecha)}</td>
-        <td>${r.tipo==='local'
-          ? '<span class="badge badge-local"><i class="ti ti-building-store"></i> Local</span>'
-          : '<span class="badge badge-airport"><i class="ti ti-plane"></i> Aeropuerto</span>'
-        }</td>
+        <td>${tipoBadge(r.tipo, r.servicio)}</td>
         <td>${r.empresa
           ? `<span class="badge-empresa"><span class="co-dot" style="background:${companyColor(r.empresa)}"></span>${r.empresa}</span>`
           : '<span style="color:var(--text3)">—</span>'
@@ -1452,12 +1619,16 @@ function renderTable() {
           ? `<span class="badge-chofer" style="background:${driverColor(r.chofer)}"><i class="ti ti-steering-wheel"></i>${r.chofer}</span>`
           : '<span style="color:var(--text3)">—</span>'
         }</td>
-        <td>${r.servicio}</td>
         <td style="color:var(--text2)">${r.proveedor||'—'}</td>
         <td class="monto">${fmt(r.monto)}</td>
-        <td><button class="btn-del" onclick="deleteRow('${r.id}')" title="Eliminar">
-          <i class="ti ti-trash"></i>
-        </button></td>
+        <td><div class="row-actions">
+          <button class="btn-vale-row" onclick="printOneVale('${r.id}')" title="Imprimir vale / PDF">
+            <i class="ti ti-file-invoice"></i>
+          </button>
+          <button class="btn-del" onclick="deleteRow('${r.id}')" title="Eliminar">
+            <i class="ti ti-trash"></i>
+          </button>
+        </div></td>
       </tr>`).join('')}
       </tbody></table>`;
   }
@@ -1478,6 +1649,8 @@ function updateStats() {
   const filt  = document.getElementById('dl-empresa')?.value||'';
   const count = filt ? cur.filter(r=>r.empresaId===filt).length : cur.length;
   document.getElementById('btn-dl').disabled = count === 0;
+  const bv = document.getElementById('btn-vales');
+  if (bv) bv.disabled = count === 0;
 }
 
 function setMonth(i) { current = i; renderTabs(); renderTable(); }
@@ -1485,7 +1658,10 @@ function setMonth(i) { current = i; renderTabs(); renderTable(); }
 // ── Add / delete service ──────────────────────────────────────────────
 async function addService() {
   const fecha     = document.getElementById('inp-fecha').value;
-  const s         = document.getElementById('inp-servicio').value.trim();
+  const tipoSel   = document.getElementById('inp-tipo').value || 'local';
+  const esEsp     = (tipoSel === 'especial');
+  // La descripción solo aplica al tipo "Especial".
+  const s         = esEsp ? document.getElementById('inp-servicio').value.trim() : '';
   const p         = document.getElementById('inp-proveedor').value.trim();
   const v         = parseFloat(document.getElementById('inp-monto').value);
   const empresaId = document.getElementById('inp-empresa').value;
@@ -1493,8 +1669,8 @@ async function addService() {
   const choferId  = document.getElementById('inp-chofer').value;
   const chofer    = choferId ? (drivers.find(d=>d.id===choferId)||{name:''}).name : '';
 
-  if (!fecha) { document.getElementById('inp-fecha').focus();    showToast('Selecciona una fecha');    return; }
-  if (!s)     { document.getElementById('inp-servicio').focus(); showToast('Ingresa una descripción'); return; }
+  if (!fecha) { document.getElementById('inp-fecha').focus(); showToast('Selecciona una fecha'); return; }
+  if (esEsp && !s) { document.getElementById('inp-servicio').focus(); showToast('Ingresa la descripción del servicio especial'); return; }
   if (isNaN(v)||v<0) { document.getElementById('inp-monto').focus(); showToast('Ingresa un monto válido'); return; }
 
   const rec = { id: uid(), year: activeYear, month: MONTHS[current],
@@ -1506,8 +1682,8 @@ async function addService() {
 
   document.getElementById('inp-servicio').value = '';
   document.getElementById('inp-proveedor').value = '';
-  document.getElementById('inp-monto').value = '';
-  document.getElementById('inp-servicio').focus();
+  applyMontoDefault();
+  document.getElementById('inp-proveedor').focus();
   showToast('Servicio agregado');
   renderTabs(); renderTable();
 }
@@ -1562,16 +1738,206 @@ async function downloadExcelMes() {
       headers,
       ...dataRows,
       [],
-      ['','','','','','TOTAL', total]
+      ['','','','','TOTAL', total]
     ];
     const ws = XLSX.utils.aoa_to_sheet(wsData);
-    ws['!cols'] = [{wch:12},{wch:13},{wch:22},{wch:22},{wch:32},{wch:24},{wch:14}];
+    ws['!cols'] = [{wch:12},{wch:28},{wch:22},{wch:22},{wch:24},{wch:14}];
     XLSX.utils.book_append_sheet(wb, ws, mes);
     uint8 = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
   }
 
   const saved = await saveExcelFile(filename, uint8);
   showToast(saved ? 'Guardado en: ' + saved : 'Descargado: ' + filename);
+}
+
+
+// ── Vales (recibos) → PDF vía impresión del navegador ─────────────────
+// Logo dentro de /gestion/ para que funcione offline (precacheado por el SW).
+const VALE_LOGO = 'pucarani-logo.png';
+
+// Monto sin el signo $ (el "$" ya está impreso en el vale).
+function valeAmount(n) {
+  const v = Number(n);
+  if (!v || v < 0) return '';
+  return v.toLocaleString('es-CL');
+}
+
+// Devuelve las filas actualmente visibles (mes activo + filtro de empresa),
+// ordenadas por fecha — mismo criterio que la descarga de Excel.
+function currentDisplayedRows() {
+  const m           = MONTHS[current];
+  const empresaFilt = document.getElementById('dl-empresa')?.value || '';
+  const allRows     = data[m] || [];
+  const rows        = empresaFilt ? allRows.filter(r => r.empresaId === empresaFilt) : allRows;
+  return [...rows].sort((a,b) => (a.fecha||'').localeCompare(b.fecha||''));
+}
+
+// Genera el HTML de un vale relleno con los datos de un servicio.
+function renderVale(r) {
+  const info   = tipoInfo(r.tipo);
+  const monto  = valeAmount(r.monto);
+  const nombre = escapeHtml((r.proveedor || '').trim());
+  const chofer = escapeHtml((r.chofer || '').trim());
+
+  const esEsp = (info.key === 'especial');
+  // Las 6 casillas impresas del talonario.
+  let rows = VALE_SERVICES.map(t => {
+    const on = t.key === info.key;
+    return `<div class="vsrv${on ? ' on' : ''}">
+        <span class="vcheck">${on ? '✗' : ''}</span>
+        <span class="vsrv-name">${t.vale}</span>
+        <span class="vsrv-amt">$ <span class="hand">${on ? monto : ''}</span></span>
+      </div>`;
+  }).join('');
+  // "Especial" no tiene casilla en el talonario: se agrega como línea escrita a mano.
+  if (esEsp) {
+    rows += `<div class="vsrv on">
+        <span class="vcheck">✗</span>
+        <span class="vsrv-name">ESPECIAL: <span class="hand" style="font-size:16px">${escapeHtml((r.servicio||'').trim())}</span></span>
+        <span class="vsrv-amt">$ <span class="hand">${monto}</span></span>
+      </div>`;
+  }
+
+  return `<div class="vale">
+    <div class="vale-head">
+      <img class="vale-logo" src="${VALE_LOGO}" alt="">
+      <div class="vale-head-txt">
+        <div class="vale-brand">TRANSPORTES <b>PUCARANI</b></div>
+        <div class="vale-sub">TURISMO PUCARANI</div>
+        <div class="vale-line">CEL: 995430273 • 991622929</div>
+        <div class="vale-line">Web: pucarani.cl</div>
+        <div class="vale-line mail">ninotranspores@hotmail.com</div>
+        <div class="vale-line city">Arica - Chile</div>
+      </div>
+    </div>
+    <div class="vale-box">
+      <div class="vale-fecha-row">
+        <span class="vlabel">FECHA:</span>
+        <span class="hand vale-fecha">${fmtFecha(r.fecha)}</span>
+      </div>
+      <div class="vale-nombre-row">
+        <span class="vlabel">NOMBRE:</span>
+        <span class="hand vale-nombre">${nombre}</span>
+      </div>
+      <div class="vale-services">${rows}</div>
+      <div class="vale-total"><span>TOTAL $</span> <span class="hand">${monto}</span></div>
+      <div class="vale-firmas">
+        <div class="vfirma">
+          <span class="hand vfirma-name">${chofer}</span>
+          <span class="vfirma-label">FIRMA CONDUCTOR</span>
+        </div>
+        <div class="vfirma">
+          <span class="hand vfirma-name"></span>
+          <span class="vfirma-label">FIRMA PASAJERO</span>
+        </div>
+      </div>
+    </div>
+    <div class="vale-foot">GRAFICOLOR • Celular: +56 9 94888863 • Arica</div>
+  </div>`;
+}
+
+// Rellena el contenedor de impresión y abre el diálogo (Guardar como PDF).
+let _prevDocTitle = null;
+function printVales(rows, titleHint) {
+  if (!rows || !rows.length) { showToast('Sin vales para imprimir'); return; }
+  const root = document.getElementById('print-root');
+  root.innerHTML = rows.map(renderVale).join('');
+
+  _prevDocTitle = document.title;
+  if (titleHint) document.title = titleHint;
+
+  const cleanup = () => {
+    if (_prevDocTitle !== null) { document.title = _prevDocTitle; _prevDocTitle = null; }
+    root.innerHTML = '';
+    window.removeEventListener('afterprint', cleanup);
+  };
+  window.addEventListener('afterprint', cleanup);
+
+  // Espera a que el logo cargue para que aparezca en el PDF.
+  const imgs = Array.from(root.querySelectorAll('img'));
+  Promise.all(imgs.map(img => img.complete
+      ? Promise.resolve()
+      : new Promise(res => { img.onload = img.onerror = res; })))
+    .then(() => setTimeout(() => window.print(), 60));
+}
+
+// Botón del pie: todos los vales del mes visible.
+function printMesVales() {
+  const rows = currentDisplayedRows();
+  if (!rows.length) { showToast('Sin servicios para generar vales'); return; }
+  printVales(rows, `Vales_${MONTHS[current]}_${activeYear}`);
+}
+
+// Botón por fila: un solo vale.
+function printOneVale(id) {
+  const r = (data[MONTHS[current]] || []).find(x => x.id === id);
+  if (!r) { showToast('Servicio no encontrado'); return; }
+  const safe = (r.proveedor || 'servicio').normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[^a-zA-Z0-9]+/g,'_');
+  printVales([r], `Vale_${safe}_${r.fecha || ''}`);
+}
+
+
+// ── Copia de seguridad (respaldo) ─────────────────────────────────────
+// Los datos viven SOLO en el navegador (IndexedDB). El respaldo permite
+// guardarlos en un archivo y restaurarlos en cualquier dispositivo, para
+// que nunca se pierdan (borrar caché, cambiar de equipo, etc.).
+async function exportBackup() {
+  try {
+    const [servicios, empresas, choferes] = await Promise.all([
+      dbGetAll('servicios'), dbGetAll('empresas'), dbGetAll('choferes')
+    ]);
+    const backup = {
+      app: 'gestion-pucarani', version: 1,
+      exportedAt: new Date().toISOString(),
+      data: { servicios, empresas, choferes }
+    };
+    const blob = new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json' });
+    const d = new Date();
+    const stamp = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+    const filename = `Respaldo_Pucarani_${stamp}.json`;
+    const url = URL.createObjectURL(blob);
+    const a = Object.assign(document.createElement('a'), { href: url, download: filename });
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+    showToast(`Respaldo exportado (${servicios.length} servicios)`);
+  } catch (e) {
+    console.error('Backup export error:', e);
+    showToast('No se pudo exportar el respaldo');
+  }
+}
+
+// Importa/restaura un respaldo. FUSIONA por id (no borra nada existente):
+// si el registro ya existe lo actualiza, si no, lo agrega.
+function importBackupFile(e) {
+  const file = e.target.files[0];
+  if (!file) { return; }
+  const reader = new FileReader();
+  reader.onload = async () => {
+    try {
+      const parsed = JSON.parse(reader.result);
+      const d  = parsed && parsed.data ? parsed.data : parsed;
+      const sv = Array.isArray(d.servicios) ? d.servicios : [];
+      const em = Array.isArray(d.empresas)  ? d.empresas  : [];
+      const ch = Array.isArray(d.choferes)  ? d.choferes  : [];
+      if (!sv.length && !em.length && !ch.length) throw new Error('vacío');
+
+      let n = 0;
+      for (const r of em) { if (r && r.id) { await dbPut('empresas',  r); n++; } }
+      for (const r of ch) { if (r && r.id) { await dbPut('choferes',  r); n++; } }
+      for (const r of sv) { if (r && r.id) { await dbPut('servicios', r); n++; } }
+
+      await loadCompanies(); await loadDrivers(); await loadData();
+      populateEmpresaDropdowns(); populateDriverDropdown();
+      renderTabs(); renderTable();
+      showToast(`Respaldo importado (${n} registros)`);
+    } catch (err) {
+      console.error('Backup import error:', err);
+      showToast('Archivo de respaldo inválido');
+    }
+    e.target.value = '';
+  };
+  reader.onerror = () => { showToast('No se pudo leer el archivo'); e.target.value = ''; };
+  reader.readAsText(file);
 }
 
 
@@ -1671,13 +2037,12 @@ function buildExcelData(rows, mes, year, empresaNom) {
     const d = new Date();
     return `${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}/${d.getFullYear()}`;
   })();
-  const headers = ['Fecha','Tipo','Empresa','Chofer','Descripción','Nombre','Monto ($)'];
+  const headers = ['Fecha','Tipo','Empresa','Chofer','Nombre','Monto ($)'];
   const dataRows = sorted.map(r => [
     fmtFecha(r.fecha),
-    r.tipo === 'local' ? 'Local' : 'Aeropuerto',
+    tipoReportLabel(r),
     r.empresa || '',
     r.chofer || '',
-    r.servicio,
     r.proveedor || '',
     Number(r.monto)
   ]);
@@ -1749,7 +2114,7 @@ async function fillTemplateXML(uint8, mes, year, empresa, rows) {
     totalEmpty: null, totalLabel: tplDatosStyle, totalMoney: tplDatosStyle
   };
 
-  const COLS = 'ABCDEFG';
+  const COLS = 'ABCDEF';
   const esc = s => String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
   // styles[i] is the cellXf index for column i; numCols flags which are numeric
   const mkRow = (r, vals, styles, numCols) =>
@@ -1759,9 +2124,9 @@ async function fillTemplateXML(uint8, mes, year, empresa, rows) {
       return `<c r="${COLS[i]}${r}"${s}${isNum?'':' t="str"'}><v>${isNum?Number(v):esc(v)}</v></c>`;
     }).join('')}</row>`;
 
-  // Header row (reuses our injected header style for all 7 columns)
-  const headers   = ['Fecha','Tipo','Empresa','Chofer','Descripción','Nombre','Monto ($)'];
-  const hdrStyles = Array(7).fill(S.header);
+  // Header row (reuses our injected header style for all 6 columns)
+  const headers   = ['Fecha','Tipo','Empresa','Chofer','Nombre','Monto ($)'];
+  const hdrStyles = Array(6).fill(S.header);
   const hdrRow    = mkRow(datosRowNum, headers, hdrStyles, null);
 
   // Data rows with zebra striping; Monto column uses currency format
@@ -1769,26 +2134,26 @@ async function fillTemplateXML(uint8, mes, year, empresa, rows) {
     const even = i % 2 === 0;
     const cellSty = even ? S.cellA : S.cellB;
     const moneySty = even ? S.moneyA : S.moneyB;
-    const styles = [cellSty,cellSty,cellSty,cellSty,cellSty,cellSty,moneySty];
-    const numCols = [false,false,false,false,false,false,true];
+    const styles = [cellSty,cellSty,cellSty,cellSty,cellSty,moneySty];
+    const numCols = [false,false,false,false,false,true];
     return mkRow(datosRowNum+1+i, [
       fmtFecha(r.fecha),
-      r.tipo === 'local' ? 'Local' : 'Aeropuerto',
-      r.empresa || '', r.chofer || '', r.servicio, r.proveedor || '', Number(r.monto)
+      tipoReportLabel(r),
+      r.empresa || '', r.chofer || '', r.proveedor || '', Number(r.monto)
     ], styles, numCols);
   }).join('');
 
   // TOTAL row: bold label + bold currency, highlighted
   const totalRowNum = datosRowNum + 1 + rows.length;
-  const totalVals   = ['','','','','','TOTAL', rows.reduce((s,r)=>s+Number(r.monto),0)];
+  const totalVals   = ['','','','','TOTAL', rows.reduce((s,r)=>s+Number(r.monto),0)];
   const totalStyles = [S.totalEmpty,S.totalEmpty,S.totalEmpty,
-                       S.totalEmpty,S.totalEmpty,S.totalLabel,S.totalMoney];
-  const totalNum    = [false,false,false,false,false,false,true];
+                       S.totalEmpty,S.totalLabel,S.totalMoney];
+  const totalNum    = [false,false,false,false,false,true];
   const totalXml    = mkRow(totalRowNum, totalVals, totalStyles, totalNum);
 
   xml = xml
     .replace(datosMatch[0], hdrRow + dataXml + totalXml)
-    .replace(/<dimension ref="[^"]*"\/>/, `<dimension ref="A1:G${totalRowNum}"/>`)
+    .replace(/<dimension ref="[^"]*"\/>/, `<dimension ref="A1:F${totalRowNum}"/>`)
     .replace(/<ignoredErrors>[\s\S]*?<\/ignoredErrors>/, '');
 
   zip.file(sheetPath, xml);
@@ -1917,6 +2282,12 @@ document.getElementById('inp-driver').addEventListener('keydown',   e => { if (e
   const mm = String(_now.getMonth()+1).padStart(2,'0');
   document.getElementById('inp-fecha').value = `${activeYear}-${mm}-${dd}`;
 
+  // Pide almacenamiento persistente: reduce el riesgo de que el navegador
+  // borre los datos automáticamente al liberar espacio.
+  if (navigator.storage && navigator.storage.persist) {
+    try { await navigator.storage.persist(); } catch (e) {}
+  }
+
   idb = await openDB();
   await loadFolderHandle();
   await loadTemplate();
@@ -1925,6 +2296,8 @@ document.getElementById('inp-driver').addEventListener('keydown',   e => { if (e
   await loadData();
   populateEmpresaDropdowns();
   populateDriverDropdown();
+  populateTipoDropdown();
+  onTipoChange();
   renderTabs();
   renderTable();
 })();

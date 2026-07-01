@@ -2,7 +2,7 @@
 // Diseñado para vivir en una SUBCARPETA (ej: /gestion/) sin interferir
 // con la página de presentación que está en la raíz del dominio.
 
-const CACHE_VERSION = 'pucarani-gestion-v2';
+const CACHE_VERSION = 'pucarani-gestion-v7';
 
 // El "scope" es la carpeta donde está este SW (ej: /gestion/).
 const SCOPE = self.registration.scope; // ej: https://transportespucarani.cl/gestion/
@@ -17,6 +17,7 @@ const APP_SHELL = [
   './xlsx.full.min.js',
   './icon-192.png',
   './icon-512.png',
+  './pucarani-logo.png',
 ];
 
 // Recursos que SIEMPRE deben buscarse en la red primero (para que las
