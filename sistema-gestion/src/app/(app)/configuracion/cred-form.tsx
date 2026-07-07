@@ -1,11 +1,11 @@
 "use client";
 
 import { useActionState } from "react";
-import { guardarCredencialesSii, type FormState } from "../actions";
+import { guardarCredencialesSii, type FormState } from "./actions";
 import { Input } from "@/components/ui/input";
 import { Field } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
-import { ShieldCheck } from "lucide-react";
+import { ShieldCheck, CheckCircle2 } from "lucide-react";
 
 export function CredForm({ rut, tieneCert }: { rut: string; tieneCert: boolean }) {
   const [state, formAction, pending] = useActionState<FormState, FormData>(
@@ -17,10 +17,10 @@ export function CredForm({ rut, tieneCert }: { rut: string; tieneCert: boolean }
     <form action={formAction} className="space-y-5">
       <Field
         label="RUT de la empresa"
-        htmlFor="rut"
+        htmlFor="sii_rut"
         hint="RUT del contribuyente ante el SII (ej. 76.123.456-7)."
       >
-        <Input id="rut" name="rut" defaultValue={rut} placeholder="76.123.456-7" required />
+        <Input id="sii_rut" name="rut" defaultValue={rut} placeholder="76.123.456-7" required />
       </Field>
 
       <Field
@@ -43,7 +43,7 @@ export function CredForm({ rut, tieneCert }: { rut: string; tieneCert: boolean }
 
       <Field
         label="Clave del certificado"
-        htmlFor="password"
+        htmlFor="sii_password"
         hint={
           tieneCert
             ? "Déjala en blanco para conservar la clave actual."
@@ -51,7 +51,7 @@ export function CredForm({ rut, tieneCert }: { rut: string; tieneCert: boolean }
         }
       >
         <Input
-          id="password"
+          id="sii_password"
           name="password"
           type="password"
           placeholder="••••••••"
@@ -60,8 +60,14 @@ export function CredForm({ rut, tieneCert }: { rut: string; tieneCert: boolean }
       </Field>
 
       {state.error ? <p className="text-sm text-danger">{state.error}</p> : null}
+      {state.ok ? (
+        <p className="flex items-center gap-2 text-sm text-ok">
+          <CheckCircle2 className="h-4 w-4" />
+          Credenciales guardadas.
+        </p>
+      ) : null}
 
-      {tieneCert ? (
+      {tieneCert && !state.ok ? (
         <p className="flex items-center gap-2 text-sm text-ok">
           <ShieldCheck className="h-4 w-4" />
           Hay credenciales configuradas.

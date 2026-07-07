@@ -3,11 +3,10 @@ import { createClient } from "@/lib/supabase/server";
 import { PageHeader } from "@/components/page-header";
 import { Card } from "@/components/ui/card";
 import { buttonClass } from "@/components/ui/button";
-import { Plus, Bus, Settings } from "lucide-react";
+import { Plus, Bus } from "lucide-react";
 import { isDemo, demoVehiculos, demoGastos } from "@/lib/demo";
 import { getPeriodo, rangoPeriodo, enRango } from "@/lib/periodo";
 import type { Vehiculo, GastoVehiculo } from "@/types/db";
-import { SincronizarSiiButton } from "./sincronizar-sii";
 import { VehiculoAccordion } from "./vehiculo-accordion";
 
 export const dynamic = "force-dynamic";
@@ -43,14 +42,6 @@ export default async function VehiculosPage() {
         title="Vehículos"
         description="Flota, gastos y documentos. Haz clic en uno para ver y editar."
       >
-        <Link
-          href="/combustible/configuracion"
-          className={buttonClass({ variant: "secondary" })}
-        >
-          <Settings className="h-4 w-4" />
-          Configurar SII
-        </Link>
-        <SincronizarSiiButton />
         <Link href="/vehiculos/nuevo" className={buttonClass()}>
           <Plus className="h-4 w-4" />
           Nuevo vehículo
