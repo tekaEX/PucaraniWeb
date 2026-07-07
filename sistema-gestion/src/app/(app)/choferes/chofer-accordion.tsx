@@ -35,7 +35,7 @@ export function ChoferAccordion({ choferes }: { choferes: Chofer[] }) {
                 <td className="px-4 py-3">
                   <div className="flex items-center gap-3">
                     <ChoferAvatar src={c.foto_url} name={c.nombre} size={32} />
-                    <span className="font-medium text-foreground">{c.nombre}</span>
+                    <span className="font-semibold text-foreground">{c.nombre}</span>
                   </div>
                 </td>
                 <td className="px-4 py-3 text-muted">{c.rut ?? "—"}</td>

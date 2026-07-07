@@ -49,32 +49,6 @@ export async function guardarVehiculo(
   return { ok: true };
 }
 
-// Actualiza solo las fechas de documentos de un vehículo existente.
-export async function actualizarDocumentos(
-  _prev: FormState,
-  formData: FormData,
-): Promise<FormState> {
-  if (isDemo()) return { error: DEMO_MSG };
-
-  const id = sReq(formData.get("id"));
-  if (!id) return { error: "Falta el vehículo." };
-
-  const values = {
-    revision_tecnica_venc: s(formData.get("revision_tecnica_venc")),
-    soap_venc: s(formData.get("soap_venc")),
-    permiso_circulacion_venc: s(formData.get("permiso_circulacion_venc")),
-  };
-
-  const supabase = await createClient();
-  const { error } = await supabase.from("vehiculos").update(values).eq("id", id);
-  if (error) return { error: `No se pudo guardar: ${error.message}` };
-
-  revalidatePath("/vehiculos");
-  revalidatePath("/vehiculos/documentos");
-  revalidatePath("/");
-  return { ok: true };
-}
-
 export async function eliminarVehiculo(formData: FormData) {
   if (isDemo()) redirect("/vehiculos");
   const id = sReq(formData.get("id"));

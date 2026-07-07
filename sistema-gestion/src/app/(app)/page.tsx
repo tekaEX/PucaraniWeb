@@ -4,6 +4,7 @@ import { PageHeader } from "@/components/page-header";
 import { Card, CardBody, CardHeader, CardTitle } from "@/components/ui/card";
 import { buttonClass } from "@/components/ui/button";
 import { FacturaBadge } from "@/components/ui/badge";
+import { Kpi } from "@/components/ui/kpi";
 import { formatCLP, formatDate } from "@/lib/format";
 import {
   FileText,
@@ -13,50 +14,73 @@ import {
   CircleDollarSign,
   CheckCircle2,
   TrendingUp,
-  Coins,
-  Wallet,
+  TrendingDown,
   AlertTriangle,
 } from "lucide-react";
 import {
   isDemo,
   demoCotizaciones,
   demoFacturas,
+  demoGastos,
   demoChoferes,
   demoVehiculos,
 } from "@/lib/demo";
 import { construirAlertas } from "@/lib/vencimientos";
 import {
-  costoTotalFactura,
+  getPeriodo,
+  rangoPeriodo,
+  periodoAnterior,
+  enRango,
+  etiquetaPeriodo,
+  etiquetaCorta,
+  type Periodo,
+} from "@/lib/periodo";
+import {
+  montoFactura,
   type Factura,
   type FacturaConRelaciones,
   type FacturaEstado,
+  type GastoVehiculo,
   type Chofer,
   type Vehiculo,
 } from "@/types/db";
 
 export const dynamic = "force-dynamic";
 
-function monto(f: Factura) {
-  return Number(f.valor_a_pagar ?? f.valor_servicio);
-}
-
+// Tinte de fila sutil según estado (mismo criterio del sistema de diseño).
 function rowTone(estado: FacturaEstado) {
-  if (estado === "pagada") return "bg-green-50";
-  if (estado === "facturada") return "bg-amber-50";
+  if (estado === "facturada") return "bg-[#fffdf8]";
+  if (estado === "por_facturar") return "bg-[#fcfdff]";
   return "";
 }
 
+function delta(actual: number, anterior: number): number | null {
+  if (!anterior) return null;
+  return Math.round(((actual - anterior) / anterior) * 100);
+}
+
 export default async function DashboardPage() {
-  let cotizaciones: { total: number }[];
+  const periodo = await getPeriodo();
+  const prev = periodoAnterior(periodo);
+  const { desde, hasta } = rangoPeriodo(periodo);
+  const { desde: prevDesde } = rangoPeriodo(prev);
+
+  let cotPeriodo: { total: number }[];
   let facturas: Factura[];
+  let gastos: GastoVehiculo[];
   let recientes: FacturaConRelaciones[];
   let choferes: Chofer[];
   let vehiculos: Vehiculo[];
 
   if (isDemo()) {
-    cotizaciones = demoCotizaciones.map((c) => ({ total: c.total }));
+    cotPeriodo = demoCotizaciones
+      .filter((c) => enRango(c.fecha, periodo))
+      .map((c) => ({ total: c.total }));
     facturas = demoFacturas;
-    recientes = demoFacturas.slice(0, 8);
+    gastos = demoGastos;
+    recientes = demoFacturas
+      .filter((f) => enRango(f.fecha, periodo))
+      .slice(0, 8);
     choferes = demoChoferes;
     vehiculos = demoVehiculos;
   } else {
@@ -64,82 +88,81 @@ export default async function DashboardPage() {
     const [
       { data: cotData },
       { data: factData },
+      { data: gastosData },
       { data: recientesData },
       { data: choData },
       { data: vehData },
     ] = await Promise.all([
-      supabase.from("cotizaciones").select("total"),
+      supabase
+        .from("cotizaciones")
+        .select("total")
+        .gte("fecha", desde)
+        .lte("fecha", hasta),
       supabase.from("facturas").select("*"),
+      supabase
+        .from("gastos_vehiculo")
+        .select("*")
+        .gte("fecha", prevDesde)
+        .lte("fecha", hasta),
       supabase
         .from("facturas")
         .select("*, cliente:clientes(id,nombre,codigo), cotizacion:cotizaciones(id,numero)")
+        .gte("fecha", desde)
+        .lte("fecha", hasta)
         .order("fecha", { ascending: false })
         .limit(8),
       supabase.from("choferes").select("*"),
       supabase.from("vehiculos").select("*"),
     ]);
-    cotizaciones = cotData ?? [];
+    cotPeriodo = cotData ?? [];
     facturas = (factData ?? []) as Factura[];
+    gastos = (gastosData ?? []) as GastoVehiculo[];
     recientes = (recientesData ?? []) as FacturaConRelaciones[];
     choferes = (choData ?? []) as Chofer[];
     vehiculos = (vehData ?? []) as Vehiculo[];
   }
 
-  const totalCotizado = cotizaciones.reduce((a, c) => a + Number(c.total), 0);
-  const pendienteFacturar = facturas
-    .filter((f) => f.estado === "en_proceso" || f.estado === "por_facturar")
-    .reduce((a, f) => a + monto(f), 0);
-  const porCobrar = facturas
-    .filter((f) => f.estado === "facturada")
-    .reduce((a, f) => a + monto(f), 0);
-  const pagado = facturas
-    .filter((f) => f.estado === "pagada")
-    .reduce((a, f) => a + monto(f), 0);
-
-  // Rentabilidad (sobre servicios ya facturados o pagados)
-  const facturados = facturas.filter(
-    (f) => f.estado === "facturada" || f.estado === "pagada",
+  // Fila 1 — todo referido al periodo global (pagadas por fecha de pago,
+  // el resto por fecha del servicio).
+  const totalCotizado = cotPeriodo.reduce((a, c) => a + Number(c.total), 0);
+  const pendientes = facturas.filter(
+    (f) =>
+      (f.estado === "en_proceso" || f.estado === "por_facturar") &&
+      enRango(f.fecha, periodo),
   );
-  const ingresos = facturados.reduce((a, f) => a + monto(f), 0);
-  const costos = facturados.reduce((a, f) => a + costoTotalFactura(f), 0);
+  const pendienteFacturar = pendientes.reduce((a, f) => a + montoFactura(f), 0);
+  const porCobrarArr = facturas.filter(
+    (f) => f.estado === "facturada" && enRango(f.fecha, periodo),
+  );
+  const porCobrar = porCobrarArr.reduce((a, f) => a + montoFactura(f), 0);
+
+  const pagadasEn = (p: Periodo) =>
+    facturas.filter((f) => f.estado === "pagada" && enRango(f.fecha_pago, p));
+  const pagadasPeriodo = pagadasEn(periodo);
+  const ingresos = pagadasPeriodo.reduce((a, f) => a + montoFactura(f), 0);
+  const ingresosPrev = pagadasEn(prev).reduce((a, f) => a + montoFactura(f), 0);
+
+  // Fila 2 — mismas definiciones que Finanzas: cobrado vs gastos del periodo
+  const gastosPeriodo = gastos.filter((g) => enRango(g.fecha, periodo));
+  const costos = gastosPeriodo.reduce((a, g) => a + Number(g.monto_total), 0);
+  const costosPrev = gastos
+    .filter((g) => enRango(g.fecha, prev))
+    .reduce((a, g) => a + Number(g.monto_total), 0);
   const utilidad = ingresos - costos;
+  const margen = ingresos > 0 ? Math.round((utilidad / ingresos) * 100) : null;
+
+  const dIngresos = delta(ingresos, ingresosPrev);
+  const dCostos = delta(costos, costosPrev);
+  const vs = etiquetaCorta(prev);
 
   const alertas = construirAlertas(choferes, vehiculos);
 
-  const kpis = [
-    {
-      label: "Cotizaciones",
-      value: formatCLP(totalCotizado),
-      sub: `${cotizaciones.length} emitidas`,
-      icon: FileText,
-      tone: "text-brand",
-    },
-    {
-      label: "Pendiente de facturar",
-      value: formatCLP(pendienteFacturar),
-      sub: "En proceso / por facturar",
-      icon: Clock,
-      tone: "text-gray-600",
-    },
-    {
-      label: "Por cobrar",
-      value: formatCLP(porCobrar),
-      sub: "Facturado, por pagar",
-      icon: CircleDollarSign,
-      tone: "text-amber-600",
-    },
-    {
-      label: "Pagado",
-      value: formatCLP(pagado),
-      sub: "Cobrado",
-      icon: CheckCircle2,
-      tone: "text-green-600",
-    },
-  ];
-
   return (
     <div>
-      <PageHeader title="Dashboard" description="Resumen de cotizaciones y facturación.">
+      <PageHeader
+        title="Dashboard"
+        description={`Resumen del negocio · ${etiquetaPeriodo(periodo)}`}
+      >
         <Link href="/cotizaciones/nueva" className={buttonClass()}>
           <Plus className="h-4 w-4" />
           Cotización
@@ -153,64 +176,79 @@ export default async function DashboardPage() {
         </Link>
       </PageHeader>
 
+      {/* Fila 1 — KPIs */}
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        {kpis.map((k) => {
-          const Icon = k.icon;
-          return (
-            <Card key={k.label}>
-              <CardBody>
-                <div className="flex items-center justify-between">
-                  <span className="text-sm text-muted">{k.label}</span>
-                  <Icon className={`h-5 w-5 ${k.tone}`} />
-                </div>
-                <div className="mt-2 text-2xl font-semibold tabular-nums">
-                  {k.value}
-                </div>
-                <div className="mt-1 text-xs text-muted">{k.sub}</div>
-              </CardBody>
-            </Card>
-          );
-        })}
+        <Kpi
+          label="Cotizaciones"
+          value={formatCLP(totalCotizado)}
+          sub={`${cotPeriodo.length} emitida${cotPeriodo.length === 1 ? "" : "s"}`}
+          icon={FileText}
+          tint="bg-brand-soft text-brand"
+        />
+        <Kpi
+          label="Pendiente de facturar"
+          value={formatCLP(pendienteFacturar)}
+          sub={`${pendientes.length} servicio${pendientes.length === 1 ? "" : "s"}`}
+          icon={Clock}
+          tint="bg-info-bg text-info"
+        />
+        <Kpi
+          label="Por cobrar"
+          value={formatCLP(porCobrar)}
+          valueClass="text-warn"
+          sub={`${porCobrarArr.length} factura${porCobrarArr.length === 1 ? "" : "s"}`}
+          icon={CircleDollarSign}
+          tint="bg-warn-bg text-warn"
+        />
+        <Kpi
+          label="Pagado"
+          value={formatCLP(ingresos)}
+          valueClass="text-ok"
+          sub={etiquetaPeriodo(periodo).toLowerCase()}
+          icon={CheckCircle2}
+          tint="bg-ok-bg text-ok"
+        />
       </div>
 
+      {/* Fila 2 — mismas cifras que Finanzas */}
       <div className="mt-4 grid gap-4 sm:grid-cols-3">
-        <Card>
-          <CardBody>
-            <div className="flex items-center justify-between">
-              <span className="text-sm text-muted">Ingresos (facturados)</span>
-              <TrendingUp className="h-5 w-5 text-brand" />
-            </div>
-            <div className="mt-2 text-2xl font-semibold tabular-nums">
-              {formatCLP(ingresos)}
-            </div>
-          </CardBody>
-        </Card>
-        <Card>
-          <CardBody>
-            <div className="flex items-center justify-between">
-              <span className="text-sm text-muted">Costos</span>
-              <Coins className="h-5 w-5 text-gray-600" />
-            </div>
-            <div className="mt-2 text-2xl font-semibold tabular-nums">
-              {formatCLP(costos)}
-            </div>
-          </CardBody>
-        </Card>
-        <Card>
-          <CardBody>
-            <div className="flex items-center justify-between">
-              <span className="text-sm text-muted">Utilidad</span>
-              <Wallet className="h-5 w-5 text-green-600" />
-            </div>
-            <div
-              className={`mt-2 text-2xl font-semibold tabular-nums ${
-                utilidad < 0 ? "text-red-600" : "text-green-700"
-              }`}
-            >
-              {formatCLP(utilidad)}
-            </div>
-          </CardBody>
-        </Card>
+        <Kpi
+          label="Ingresos"
+          value={formatCLP(ingresos)}
+          sub={
+            dIngresos !== null
+              ? `${dIngresos >= 0 ? "+" : ""}${dIngresos}% vs. ${vs}`
+              : `${pagadasPeriodo.length} factura${pagadasPeriodo.length === 1 ? "" : "s"} pagada${pagadasPeriodo.length === 1 ? "" : "s"}`
+          }
+          subClass={
+            dIngresos !== null
+              ? dIngresos >= 0
+                ? "text-ok"
+                : "text-danger"
+              : "text-muted"
+          }
+          icon={TrendingUp}
+          tint="bg-ok-bg text-ok"
+        />
+        <Kpi
+          label="Costos"
+          value={formatCLP(costos)}
+          sub={
+            dCostos !== null
+              ? `${dCostos >= 0 ? "+" : ""}${dCostos}% vs. ${vs}`
+              : `${gastosPeriodo.length} gasto${gastosPeriodo.length === 1 ? "" : "s"}`
+          }
+          icon={TrendingDown}
+          tint="bg-[#ececef] text-[#6e6e73]"
+        />
+        <Kpi
+          label="Utilidad"
+          value={formatCLP(utilidad)}
+          valueClass={utilidad < 0 ? "text-danger" : "text-ok"}
+          sub={margen !== null ? `margen ${margen}%` : "Ingresos − costos"}
+          icon={utilidad < 0 ? TrendingDown : TrendingUp}
+          tint={utilidad < 0 ? "bg-danger-bg text-danger" : "bg-ok-bg text-ok"}
+        />
       </div>
 
       <Card className="mt-6">
@@ -223,7 +261,7 @@ export default async function DashboardPage() {
         <CardBody>
           {alertas.length === 0 ? (
             <p className="flex items-center gap-2 text-sm text-muted">
-              <CheckCircle2 className="h-4 w-4 text-green-600" />
+              <CheckCircle2 className="h-4 w-4 text-ok" />
               Toda la documentación está al día.
             </p>
           ) : (
@@ -235,13 +273,13 @@ export default async function DashboardPage() {
                 >
                   <div className="flex items-center gap-2 text-sm">
                     <AlertTriangle
-                      className={`h-4 w-4 ${a.estado === "vencido" ? "text-red-600" : "text-amber-600"}`}
+                      className={`h-4 w-4 ${a.estado === "vencido" ? "text-danger" : "text-warn"}`}
                     />
                     <span className="font-medium">{a.nombre}</span>
                     <span className="text-muted">· {a.documento}</span>
                   </div>
                   <span
-                    className={`text-xs font-medium ${a.estado === "vencido" ? "text-red-600" : "text-amber-600"}`}
+                    className={`text-xs font-medium ${a.estado === "vencido" ? "text-danger" : "text-warn"}`}
                   >
                     {a.estado === "vencido"
                       ? `Vencido hace ${Math.abs(a.dias)} día(s)`
@@ -287,9 +325,7 @@ export default async function DashboardPage() {
                 {recientes.map((f) => (
                   <tr key={f.id} className={`${rowTone(f.estado)} hover:bg-gray-100/60`}>
                     <td className="px-4 py-2.5 whitespace-nowrap text-muted">
-                      <Link href={`/facturas/${f.id}`} className="hover:underline">
-                        {formatDate(f.fecha)}
-                      </Link>
+                      {formatDate(f.fecha)}
                     </td>
                     <td className="px-4 py-2.5 max-w-xs truncate">
                       {f.descripcion ?? "—"}
@@ -298,7 +334,7 @@ export default async function DashboardPage() {
                       {f.cliente?.nombre ?? "—"}
                     </td>
                     <td className="px-4 py-2.5 text-right tabular-nums font-medium">
-                      {formatCLP(monto(f))}
+                      {formatCLP(montoFactura(f))}
                     </td>
                     <td className="px-4 py-2.5">
                       <FacturaBadge estado={f.estado} />

@@ -7,6 +7,7 @@ import {
   eliminarGasto,
   type FormState,
 } from "./actions";
+import { ConfirmForm } from "@/components/ui/confirm-form";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
@@ -107,7 +108,10 @@ export function VehiculoPanel({
             ""
           )}
         </span>
-        <form action={eliminarVehiculo}>
+        <ConfirmForm
+          action={eliminarVehiculo}
+          mensaje={`¿Eliminar el vehículo ${vehiculo.patente} y sus gastos? Esta acción no se puede deshacer.`}
+        >
           <input type="hidden" name="id" value={vehiculo.id} />
           <button
             type="submit"
@@ -116,7 +120,7 @@ export function VehiculoPanel({
             <Trash2 className="h-4 w-4" />
             Eliminar
           </button>
-        </form>
+        </ConfirmForm>
       </div>
 
       <div className="grid items-start gap-5 lg:grid-cols-2">
@@ -263,7 +267,10 @@ export function VehiculoPanel({
                         {formatCLP(Number(gx.monto_total))}
                       </td>
                       <td className="px-2 py-2 text-right">
-                        <form action={eliminarGasto}>
+                        <ConfirmForm
+                          action={eliminarGasto}
+                          mensaje="¿Eliminar este gasto?"
+                        >
                           <input type="hidden" name="id" value={gx.id} />
                           <input type="hidden" name="vehiculo_id" value={vehiculo.id} />
                           <button
@@ -273,7 +280,7 @@ export function VehiculoPanel({
                           >
                             <Trash2 className="h-4 w-4" />
                           </button>
-                        </form>
+                        </ConfirmForm>
                       </td>
                     </tr>
                   ))}

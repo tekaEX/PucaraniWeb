@@ -2,6 +2,7 @@
 
 import { useActionState, useEffect, useRef, useState } from "react";
 import { guardarCliente, eliminarCliente, type FormState } from "./actions";
+import { ConfirmForm } from "@/components/ui/confirm-form";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { InitialsAvatar } from "@/components/ui/avatar";
@@ -102,7 +103,10 @@ export function ClientePanel({
         </form>
 
         <div className="flex flex-col items-end gap-2">
-          <form action={eliminarCliente}>
+          <ConfirmForm
+            action={eliminarCliente}
+            mensaje={`¿Eliminar a ${cliente.nombre}? Esta acción no se puede deshacer.`}
+          >
             <input type="hidden" name="id" value={cliente.id} />
             <button
               type="submit"
@@ -111,7 +115,7 @@ export function ClientePanel({
               <Trash2 className="h-4 w-4" />
               Eliminar
             </button>
-          </form>
+          </ConfirmForm>
           <span className="flex h-4 items-center gap-1.5 text-xs text-muted">
             {pending ? (
               <>

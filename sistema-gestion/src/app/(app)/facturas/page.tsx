@@ -20,6 +20,7 @@ import {
   type FacturaConRelaciones,
   type FacturaEstado,
 } from "@/types/db";
+import { getPeriodo, rangoPeriodo, enRango } from "@/lib/periodo";
 import { FacturaAccordion } from "./factura-accordion";
 
 export const dynamic = "force-dynamic";
@@ -34,10 +35,11 @@ export default async function FacturasPage({
     estado?: string;
     cliente?: string;
     q?: string;
-    mes?: string;
   }>;
 }) {
   const sp = await searchParams;
+  const periodo = await getPeriodo();
+  const { desde, hasta } = rangoPeriodo(periodo);
 
   let clientes: Cliente[];
   let facturas: FacturaConRelaciones[];
@@ -63,8 +65,7 @@ export default async function FacturasPage({
         !(f.descripcion ?? "").toLowerCase().includes(sp.q.toLowerCase())
       )
         return false;
-      if (sp.mes && /^\d{4}-\d{2}$/.test(sp.mes) && !f.fecha.startsWith(sp.mes))
-        return false;
+      if (!enRango(f.fecha, periodo)) return false;
       return true;
     });
   } else {
@@ -97,12 +98,8 @@ export default async function FacturasPage({
     }
     if (sp.cliente) query = query.eq("cliente_id", sp.cliente);
     if (sp.q) query = query.ilike("descripcion", `%${sp.q}%`);
-    if (sp.mes && /^\d{4}-\d{2}$/.test(sp.mes)) {
-      const [y, m] = sp.mes.split("-").map(Number);
-      const start = `${sp.mes}-01`;
-      const end = new Date(y, m, 0).toISOString().slice(0, 10);
-      query = query.gte("fecha", start).lte("fecha", end);
-    }
+    // El periodo global (selector de arriba) define el rango de fechas.
+    query = query.gte("fecha", desde).lte("fecha", hasta);
 
     const { data } = await query;
     facturas = (data ?? []) as FacturaConRelaciones[];
@@ -111,7 +108,12 @@ export default async function FacturasPage({
   const informeParams = new URLSearchParams();
   if (sp.estado) informeParams.set("estado", sp.estado);
   if (sp.cliente) informeParams.set("cliente", sp.cliente);
-  if (sp.mes) informeParams.set("mes", sp.mes);
+  if (periodo.mes !== null) {
+    informeParams.set(
+      "mes",
+      `${periodo.anio}-${String(periodo.mes).padStart(2, "0")}`,
+    );
+  }
   if (sp.q) informeParams.set("q", sp.q);
   const informeQs = informeParams.toString();
   const informeSuffix = informeQs ? `?${informeQs}` : "";
@@ -120,7 +122,7 @@ export default async function FacturasPage({
     <div>
       <PageHeader
         title="Facturas y seguimiento"
-        description="Servicios y estado de pago. Haz clic en la descripción para ver y editar."
+        description="Servicios y estado de pago. Haz clic en una para ver y editar."
       >
         <Link
           href={`/facturas/informe${informeSuffix}`}
@@ -159,10 +161,6 @@ export default async function FacturasPage({
               ))}
             </Select>
           </div>
-          <div>
-            <label className="mb-1 block text-xs font-medium text-muted">Mes</label>
-            <Input type="month" name="mes" defaultValue={sp.mes ?? ""} className="w-40" />
-          </div>
           <div className="min-w-44 flex-1">
             <label className="mb-1 block text-xs font-medium text-muted">Buscar</label>
             <Input name="q" defaultValue={sp.q ?? ""} placeholder="Descripción…" />
@@ -171,7 +169,7 @@ export default async function FacturasPage({
             <Filter className="h-4 w-4" />
             Filtrar
           </button>
-          {sp.estado || sp.cliente || sp.mes || sp.q ? (
+          {sp.estado || sp.cliente || sp.q ? (
             <Link href="/facturas" className={buttonClass({ variant: "ghost" })}>
               Limpiar
             </Link>
