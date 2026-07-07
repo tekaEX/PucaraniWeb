@@ -1,11 +1,13 @@
-import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { PageHeader } from "@/components/page-header";
-import { Card, CardBody } from "@/components/ui/card";
+import { Card } from "@/components/ui/card";
+import { Kpi } from "@/components/ui/kpi";
 import { CircleDollarSign, AlertTriangle, CheckCircle2 } from "lucide-react";
 import { formatCLP } from "@/lib/format";
 import { isDemo, demoFacturas } from "@/lib/demo";
+import { getPeriodo, enRango, etiquetaPeriodo } from "@/lib/periodo";
 import { montoFactura, type FacturaConRelaciones } from "@/types/db";
+import { CobranzaAccordion, type CobranzaCliente } from "./cobranza-accordion";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Cobranzas" };
@@ -20,16 +22,9 @@ function diasDesde(fecha: string): number {
   return Math.round((hoy.getTime() - d.getTime()) / 86400000);
 }
 
-type Agg = {
-  clienteId: string;
-  nombre: string;
-  pendienteFacturar: number;
-  porCobrar: number;
-  vencido: number;
-  pagado: number;
-};
-
 export default async function CobranzasPage() {
+  const periodo = await getPeriodo();
+
   let facturas: FacturaConRelaciones[];
   if (isDemo()) {
     facturas = demoFacturas;
@@ -42,7 +37,15 @@ export default async function CobranzasPage() {
     facturas = (data ?? []) as FacturaConRelaciones[];
   }
 
-  const map = new Map<string, Agg>();
+  // Periodo global: las pagadas cuentan por fecha de pago; el resto por
+  // fecha del servicio.
+  facturas = facturas.filter((f) =>
+    f.estado === "pagada"
+      ? enRango(f.fecha_pago, periodo)
+      : enRango(f.fecha, periodo),
+  );
+
+  const map = new Map<string, CobranzaCliente>();
   for (const f of facturas) {
     const key = f.cliente?.id ?? "sin-cliente";
     const nombre = f.cliente?.nombre ?? "Sin cliente";
@@ -54,9 +57,11 @@ export default async function CobranzasPage() {
         porCobrar: 0,
         vencido: 0,
         pagado: 0,
+        facturas: [],
       });
     }
     const a = map.get(key)!;
+    a.facturas.push(f);
     const monto = montoFactura(f);
     if (f.estado === "pagada") a.pagado += monto;
     else if (f.estado === "facturada") {
@@ -76,46 +81,34 @@ export default async function CobranzasPage() {
     <div>
       <PageHeader
         title="Cobranzas"
-        description="Cuánto te debe cada empresa y qué está vencido."
+        description={`Cuánto te debe cada empresa · ${etiquetaPeriodo(periodo)}. Haz clic en una para ver su estado de cuenta.`}
       />
 
       <div className="mb-6 grid gap-4 sm:grid-cols-3">
-        <Card>
-          <CardBody>
-            <div className="flex items-center justify-between">
-              <span className="text-sm text-muted">Por cobrar</span>
-              <CircleDollarSign className="h-5 w-5 text-amber-600" />
-            </div>
-            <div className="mt-2 text-2xl font-semibold tabular-nums">
-              {formatCLP(totPorCobrar)}
-            </div>
-            <div className="mt-1 text-xs text-muted">Facturado, sin pago</div>
-          </CardBody>
-        </Card>
-        <Card>
-          <CardBody>
-            <div className="flex items-center justify-between">
-              <span className="text-sm text-muted">Vencido</span>
-              <AlertTriangle className="h-5 w-5 text-red-600" />
-            </div>
-            <div className="mt-2 text-2xl font-semibold tabular-nums text-red-600">
-              {formatCLP(totVencido)}
-            </div>
-            <div className="mt-1 text-xs text-muted">+{DIAS_VENCE} días sin pago</div>
-          </CardBody>
-        </Card>
-        <Card>
-          <CardBody>
-            <div className="flex items-center justify-between">
-              <span className="text-sm text-muted">Pagado (histórico)</span>
-              <CheckCircle2 className="h-5 w-5 text-green-600" />
-            </div>
-            <div className="mt-2 text-2xl font-semibold tabular-nums">
-              {formatCLP(totPagado)}
-            </div>
-            <div className="mt-1 text-xs text-muted">Total cobrado</div>
-          </CardBody>
-        </Card>
+        <Kpi
+          label="Por cobrar"
+          value={formatCLP(totPorCobrar)}
+          valueClass="text-warn"
+          sub="Facturado, sin pago"
+          icon={CircleDollarSign}
+          tint="bg-warn-bg text-warn"
+        />
+        <Kpi
+          label="Vencido"
+          value={formatCLP(totVencido)}
+          valueClass={totVencido ? "text-danger" : ""}
+          sub={`+${DIAS_VENCE} días sin pago`}
+          icon={AlertTriangle}
+          tint="bg-danger-bg text-danger"
+        />
+        <Kpi
+          label="Pagado"
+          value={formatCLP(totPagado)}
+          valueClass={totPagado ? "text-ok" : ""}
+          sub={etiquetaPeriodo(periodo).toLowerCase()}
+          icon={CheckCircle2}
+          tint="bg-ok-bg text-ok"
+        />
       </div>
 
       {filas.length === 0 ? (
@@ -125,48 +118,7 @@ export default async function CobranzasPage() {
       ) : (
         <Card className="overflow-hidden">
           <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead className="bg-gray-50 text-left text-xs uppercase tracking-wide text-muted">
-                <tr>
-                  <th className="px-4 py-3 font-medium">Cliente</th>
-                  <th className="px-4 py-3 font-medium text-right">Por facturar</th>
-                  <th className="px-4 py-3 font-medium text-right">Por cobrar</th>
-                  <th className="px-4 py-3 font-medium text-right">Vencido</th>
-                  <th className="px-4 py-3 font-medium text-right">Pagado</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-border">
-                {filas.map((f) => (
-                  <tr key={f.clienteId} className="hover:bg-gray-50">
-                    <td className="px-4 py-3 font-medium">
-                      {f.clienteId === "sin-cliente" ? (
-                        f.nombre
-                      ) : (
-                        <Link href={`/cobranzas/${f.clienteId}`} className="text-brand hover:underline">
-                          {f.nombre}
-                        </Link>
-                      )}
-                    </td>
-                    <td className="px-4 py-3 text-right tabular-nums text-muted">
-                      {f.pendienteFacturar ? formatCLP(f.pendienteFacturar) : "—"}
-                    </td>
-                    <td className="px-4 py-3 text-right tabular-nums font-medium">
-                      {f.porCobrar ? formatCLP(f.porCobrar) : "—"}
-                    </td>
-                    <td className="px-4 py-3 text-right tabular-nums">
-                      {f.vencido ? (
-                        <span className="text-red-600 font-medium">{formatCLP(f.vencido)}</span>
-                      ) : (
-                        "—"
-                      )}
-                    </td>
-                    <td className="px-4 py-3 text-right tabular-nums text-muted">
-                      {f.pagado ? formatCLP(f.pagado) : "—"}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+            <CobranzaAccordion filas={filas} />
           </div>
         </Card>
       )}

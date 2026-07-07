@@ -48,7 +48,6 @@ const grupos: { label?: string; items: NavItem[] }[] = [
       { href: "/clientes", label: "Clientes", icon: Users },
     ],
   },
-  { items: [{ href: "/configuracion", label: "Configuración", icon: Settings }] },
 ];
 
 export function AppShell({
@@ -84,7 +83,7 @@ export function AppShell({
         </div>
       </div>
 
-      <nav className="flex-1 space-y-3 px-3 py-2">
+      <nav className="flex-1 space-y-3 overflow-y-auto px-3 py-2">
         {grupos.map((grupo, gi) => (
           <div key={gi} className="space-y-1">
             {grupo.label ? (
@@ -116,8 +115,21 @@ export function AppShell({
         ))}
       </nav>
 
-      <div className="border-t border-white/10 px-3 py-3">
-        <div className="px-2 pb-2 text-xs text-white/60 truncate" title={userEmail}>
+      <div className="space-y-1 border-t border-white/10 px-3 py-3">
+        <Link
+          href="/configuracion"
+          onClick={() => setOpen(false)}
+          className={cn(
+            "flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
+            isActive("/configuracion")
+              ? "bg-white/10 text-white"
+              : "text-white/60 hover:bg-white/[0.06] hover:text-white",
+          )}
+        >
+          <Settings className="h-4 w-4" />
+          Configuración
+        </Link>
+        <div className="px-2 py-1 text-xs text-white/60 truncate" title={userEmail}>
           {userEmail}
         </div>
         <form action={logout}>
@@ -135,8 +147,8 @@ export function AppShell({
 
   return (
     <div className="min-h-screen lg:grid lg:grid-cols-[16rem_1fr]">
-      {/* Sidebar de escritorio */}
-      <aside className="hidden bg-[#1d1d1f] text-white lg:block">
+      {/* Sidebar de escritorio: fijo; solo scrollea el contenido */}
+      <aside className="hidden bg-[#1d1d1f] text-white lg:sticky lg:top-0 lg:block lg:h-screen">
         {SidebarContent}
       </aside>
 
@@ -184,9 +196,8 @@ export function AppShell({
         <div className="p-4 sm:p-6 lg:p-8">
           {demo ? (
             <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-2.5 text-sm text-amber-800">
-              <strong>Modo demostración.</strong> Estás viendo datos de ejemplo. Para
-              guardar datos reales, conecta Supabase (ver{" "}
-              <code className="rounded bg-amber-100 px-1">README.md</code>).
+              <strong>Modo demostración.</strong> Estás viendo datos de ejemplo —
+              explora con libertad, los cambios no se guardan.
             </div>
           ) : null}
           {children}

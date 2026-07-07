@@ -6,6 +6,7 @@ import { ChevronDown, Paperclip, Trash2 } from "lucide-react";
 import { EstadoFacturaSelect } from "./estado-select";
 import { FacturaForm } from "./factura-form";
 import { guardarFactura, eliminarFactura } from "./actions";
+import { ConfirmForm } from "@/components/ui/confirm-form";
 import { formatCLP, formatDate } from "@/lib/format";
 import type { FacturaConRelaciones, FacturaEstado } from "@/types/db";
 
@@ -19,9 +20,10 @@ type CotizacionOpt = {
 type ChoferOpt = { id: string; nombre: string };
 type VehiculoOpt = { id: string; patente: string };
 
+// Tinte de fila sutil según estado (mismo criterio del sistema de diseño).
 function rowTone(estado: FacturaEstado) {
-  if (estado === "pagada") return "bg-green-50";
-  if (estado === "facturada") return "bg-amber-50";
+  if (estado === "facturada") return "bg-[#fffdf8]";
+  if (estado === "por_facturar") return "bg-[#fcfdff]";
   return "";
 }
 
@@ -63,6 +65,7 @@ export function FacturaAccordion({
           <th className="px-3 py-3 font-medium">N° Fact.</th>
           <th className="px-3 py-3 font-medium">Estado</th>
           <th className="px-3 py-3 font-medium"></th>
+          <th className="px-3 py-3 font-medium"></th>
         </tr>
       </thead>
       <tbody className="divide-y divide-border">
@@ -70,20 +73,17 @@ export function FacturaAccordion({
           const open = openId === f.id;
           return (
             <Fragment key={f.id}>
-              <tr className={`${rowTone(f.estado)} ${open ? "bg-gray-100/60" : ""}`}>
+              <tr
+                onClick={() => setOpenId(open ? null : f.id)}
+                className={`cursor-pointer ${rowTone(f.estado)} ${open ? "bg-gray-100/60" : "hover:bg-gray-100/60"}`}
+              >
                 <td className="px-3 py-2.5 whitespace-nowrap text-muted">
                   {formatDate(f.fecha)}
                 </td>
                 <td className="max-w-48 px-3 py-2.5">
-                  <button
-                    onClick={() => setOpenId(open ? null : f.id)}
-                    className="inline-flex max-w-full items-center gap-1.5 text-left font-medium text-brand hover:underline"
-                  >
-                    <span className="truncate">{f.descripcion ?? "—"}</span>
-                    <ChevronDown
-                      className={`h-3.5 w-3.5 shrink-0 transition-transform ${open ? "rotate-180" : ""}`}
-                    />
-                  </button>
+                  <span className="block truncate font-semibold text-foreground">
+                    {f.descripcion ?? "—"}
+                  </span>
                 </td>
                 <td className="px-3 py-2.5 whitespace-nowrap">
                   {f.cliente?.codigo?.toUpperCase() ?? f.cliente?.nombre ?? "—"}
@@ -100,7 +100,10 @@ export function FacturaAccordion({
                 <td className="px-3 py-2.5 whitespace-nowrap text-muted">
                   {f.orden_compra ?? "—"}
                 </td>
-                <td className="px-3 py-2.5 whitespace-nowrap">
+                <td
+                  className="px-3 py-2.5 whitespace-nowrap"
+                  onClick={(e) => e.stopPropagation()}
+                >
                   {f.cotizacion ? (
                     <Link
                       href={`/cotizaciones/${f.cotizacion.id}`}
@@ -113,10 +116,10 @@ export function FacturaAccordion({
                   )}
                 </td>
                 <td className="px-3 py-2.5 whitespace-nowrap">{f.numero ?? "—"}</td>
-                <td className="px-3 py-2.5">
+                <td className="px-3 py-2.5" onClick={(e) => e.stopPropagation()}>
                   <EstadoFacturaSelect id={f.id} estado={f.estado} />
                 </td>
-                <td className="px-3 py-2.5">
+                <td className="px-3 py-2.5" onClick={(e) => e.stopPropagation()}>
                   {f.archivo_url ? (
                     <a
                       href={f.archivo_url}
@@ -129,13 +132,21 @@ export function FacturaAccordion({
                     </a>
                   ) : null}
                 </td>
+                <td className="px-3 py-2.5 text-right">
+                  <ChevronDown
+                    className={`h-4 w-4 text-muted transition-transform ${open ? "rotate-180" : ""}`}
+                  />
+                </td>
               </tr>
 
               {open ? (
                 <tr>
-                  <td colSpan={11} className="bg-gray-50/50 px-3 py-5">
+                  <td colSpan={12} className="bg-gray-50/50 px-3 py-5">
                     <div className="mb-3 flex justify-end">
-                      <form action={eliminarFactura}>
+                      <ConfirmForm
+                        action={eliminarFactura}
+                        mensaje="¿Eliminar esta factura? Esta acción no se puede deshacer."
+                      >
                         <input type="hidden" name="id" value={f.id} />
                         <button
                           type="submit"
@@ -144,7 +155,7 @@ export function FacturaAccordion({
                           <Trash2 className="h-4 w-4" />
                           Eliminar
                         </button>
-                      </form>
+                      </ConfirmForm>
                     </div>
                     <FacturaForm
                       action={guardarFactura}
@@ -169,7 +180,7 @@ export function FacturaAccordion({
           <td className="px-3 py-2.5 text-right tabular-nums">
             {formatCLP(totalAPagar)}
           </td>
-          <td colSpan={5}></td>
+          <td colSpan={6}></td>
         </tr>
       </tfoot>
     </table>

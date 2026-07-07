@@ -300,7 +300,7 @@ export function FacturaForm({
           </div>
           <div className="flex justify-between font-semibold">
             <span>Utilidad</span>
-            <span className={`tabular-nums ${utilidad < 0 ? "text-red-600" : "text-green-700"}`}>
+            <span className={`tabular-nums ${utilidad < 0 ? "text-danger" : "text-ok"}`}>
               {formatCLP(utilidad)}
             </span>
           </div>

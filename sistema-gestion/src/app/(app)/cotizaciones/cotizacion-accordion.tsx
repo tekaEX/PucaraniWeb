@@ -14,6 +14,7 @@ import { CotizacionBadge, FacturaBadge } from "@/components/ui/badge";
 import { buttonClass } from "@/components/ui/button";
 import { CotizacionPreview } from "./cotizacion-preview";
 import { eliminarCotizacion } from "./actions";
+import { ConfirmForm } from "@/components/ui/confirm-form";
 import { formatCLP, formatDate } from "@/lib/format";
 import type {
   Cotizacion,
@@ -60,6 +61,7 @@ export function CotizacionAccordion({
           <th className="px-4 py-3 font-medium">Detalle</th>
           <th className="px-4 py-3 font-medium text-right">Total</th>
           <th className="px-4 py-3 font-medium">Estado</th>
+          <th className="px-4 py-3"></th>
         </tr>
       </thead>
       <tbody className="divide-y divide-border">
@@ -71,15 +73,10 @@ export function CotizacionAccordion({
             <Fragment key={c.id}>
               <tr
                 onClick={() => setOpenId(open ? null : c.id)}
-                className={`cursor-pointer ${open ? "bg-gray-100/60" : "hover:bg-gray-50"}`}
+                className={`cursor-pointer ${open ? "bg-gray-100/60" : "hover:bg-gray-100/60"}`}
               >
                 <td className="px-4 py-3">
-                  <span className="inline-flex items-center gap-1.5 font-semibold text-brand">
-                    {c.numero}
-                    <ChevronDown
-                      className={`h-3.5 w-3.5 transition-transform ${open ? "rotate-180" : ""}`}
-                    />
-                  </span>
+                  <span className="font-semibold text-foreground">{c.numero}</span>
                 </td>
                 <td className="px-4 py-3 text-muted">{formatDate(c.fecha)}</td>
                 <td className="px-4 py-3">{c.cliente?.nombre ?? "—"}</td>
@@ -92,11 +89,16 @@ export function CotizacionAccordion({
                 <td className="px-4 py-3">
                   <CotizacionBadge estado={c.estado} />
                 </td>
+                <td className="px-4 py-3 text-right">
+                  <ChevronDown
+                    className={`h-4 w-4 text-muted transition-transform ${open ? "rotate-180" : ""}`}
+                  />
+                </td>
               </tr>
 
               {open ? (
                 <tr>
-                  <td colSpan={6} className="bg-gray-50/50 px-4 py-5">
+                  <td colSpan={7} className="bg-gray-50/50 px-4 py-5">
                     <div className="mb-4 flex flex-wrap items-center gap-2">
                       <a
                         href={`/api/cotizaciones/${c.id}/pdf`}
@@ -126,7 +128,11 @@ export function CotizacionAccordion({
                         <Receipt className="h-4 w-4" />
                         Crear factura
                       </Link>
-                      <form action={eliminarCotizacion} className="ml-auto">
+                      <ConfirmForm
+                        action={eliminarCotizacion}
+                        mensaje={`¿Eliminar la cotización N° ${c.numero}? Esta acción no se puede deshacer.`}
+                        className="ml-auto"
+                      >
                         <input type="hidden" name="id" value={c.id} />
                         <button
                           type="submit"
@@ -135,7 +141,7 @@ export function CotizacionAccordion({
                           <Trash2 className="h-4 w-4" />
                           Eliminar
                         </button>
-                      </form>
+                      </ConfirmForm>
                     </div>
 
                     <CotizacionPreview empresa={empresa} cot={c} items={items} />

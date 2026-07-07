@@ -2,6 +2,7 @@
 
 import { useActionState, useEffect, useRef, useState } from "react";
 import { guardarChofer, eliminarChofer, type FormState } from "./actions";
+import { ConfirmForm } from "@/components/ui/confirm-form";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { VencimientoBadge } from "@/components/ui/badge";
@@ -94,7 +95,10 @@ export function ChoferPanel({ chofer }: { chofer: Chofer }) {
         </form>
 
         <div className="flex flex-col items-end gap-2">
-          <form action={eliminarChofer}>
+          <ConfirmForm
+            action={eliminarChofer}
+            mensaje={`¿Eliminar a ${chofer.nombre}? Esta acción no se puede deshacer.`}
+          >
             <input type="hidden" name="id" value={chofer.id} />
             <button
               type="submit"
@@ -103,7 +107,7 @@ export function ChoferPanel({ chofer }: { chofer: Chofer }) {
               <Trash2 className="h-4 w-4" />
               Eliminar
             </button>
-          </form>
+          </ConfirmForm>
           <span className="flex h-4 items-center gap-1.5 text-xs text-muted">
             {pending ? (
               <>

@@ -5,6 +5,7 @@ import { Card } from "@/components/ui/card";
 import { buttonClass } from "@/components/ui/button";
 import { Plus, FileText } from "lucide-react";
 import { isDemo, demoCotizaciones, demoFacturas, demoEmpresa } from "@/lib/demo";
+import { getPeriodo, rangoPeriodo, enRango } from "@/lib/periodo";
 import type { Empresa, Factura } from "@/types/db";
 import { CotizacionAccordion, type CotRow } from "./cotizacion-accordion";
 
@@ -16,8 +17,14 @@ export default async function CotizacionesPage() {
   let empresa: Empresa | null;
   let facturas: Factura[];
 
+  // El periodo global (selector de arriba) define el rango de fechas.
+  const periodo = await getPeriodo();
+  const { desde, hasta } = rangoPeriodo(periodo);
+
   if (isDemo()) {
-    cotizaciones = demoCotizaciones as unknown as CotRow[];
+    cotizaciones = (demoCotizaciones as unknown as CotRow[]).filter((c) =>
+      enRango(c.fecha, periodo),
+    );
     empresa = demoEmpresa;
     facturas = demoFacturas;
   } else {
@@ -26,6 +33,8 @@ export default async function CotizacionesPage() {
       supabase
         .from("cotizaciones")
         .select("*, cliente:clientes(id,nombre,codigo), items:cotizacion_items(*)")
+        .gte("fecha", desde)
+        .lte("fecha", hasta)
         .order("numero", { ascending: false }),
       supabase
         .from("empresa")
@@ -44,7 +53,7 @@ export default async function CotizacionesPage() {
     <div>
       <PageHeader
         title="Cotizaciones"
-        description="Presupuestos numerados. Haz clic en el N° para ver el detalle."
+        description="Presupuestos numerados. Haz clic en una para ver el detalle."
       >
         <Link href="/cotizaciones/nueva" className={buttonClass()}>
           <Plus className="h-4 w-4" />
