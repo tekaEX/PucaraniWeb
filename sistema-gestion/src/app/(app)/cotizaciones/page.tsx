@@ -4,9 +4,9 @@ import { PageHeader } from "@/components/page-header";
 import { Card } from "@/components/ui/card";
 import { buttonClass } from "@/components/ui/button";
 import { Plus, FileText } from "lucide-react";
-import { isDemo, demoCotizaciones, demoFacturas, demoEmpresa } from "@/lib/demo";
+import { isDemo, demoCotizaciones, demoViajes, demoEmpresa } from "@/lib/demo";
 import { getPeriodo, rangoPeriodo, enRango } from "@/lib/periodo";
-import type { Empresa, Factura } from "@/types/db";
+import type { Empresa, Viaje } from "@/types/db";
 import { CotizacionAccordion, type CotRow } from "./cotizacion-accordion";
 
 export const dynamic = "force-dynamic";
@@ -15,7 +15,7 @@ export const metadata = { title: "Cotizaciones" };
 export default async function CotizacionesPage() {
   let cotizaciones: CotRow[];
   let empresa: Empresa | null;
-  let facturas: Factura[];
+  let viajes: Viaje[];
 
   // El periodo global (selector de arriba) define el rango de fechas.
   const periodo = await getPeriodo();
@@ -26,10 +26,10 @@ export default async function CotizacionesPage() {
       enRango(c.fecha, periodo),
     );
     empresa = demoEmpresa;
-    facturas = demoFacturas;
+    viajes = demoViajes;
   } else {
     const supabase = await createClient();
-    const [{ data: cData }, { data: emp }, { data: fData }] = await Promise.all([
+    const [{ data: cData }, { data: emp }, { data: vData }] = await Promise.all([
       supabase
         .from("cotizaciones")
         .select("*, cliente:clientes(id,nombre,codigo), items:cotizacion_items(*)")
@@ -42,11 +42,11 @@ export default async function CotizacionesPage() {
         .order("created_at", { ascending: true })
         .limit(1)
         .maybeSingle(),
-      supabase.from("facturas").select("*"),
+      supabase.from("viajes").select("*").not("cotizacion_id", "is", null),
     ]);
     cotizaciones = (cData ?? []) as CotRow[];
     empresa = (emp as Empresa) ?? null;
-    facturas = (fData ?? []) as Factura[];
+    viajes = (vData ?? []) as Viaje[];
   }
 
   return (
@@ -76,7 +76,7 @@ export default async function CotizacionesPage() {
             <CotizacionAccordion
               cotizaciones={cotizaciones}
               empresa={empresa}
-              facturas={facturas}
+              viajes={viajes}
             />
           </div>
         </Card>

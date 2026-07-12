@@ -1,8 +1,7 @@
 import ExcelJS from "exceljs";
-import { getFacturasInforme } from "@/lib/queries";
+import { getViajesInforme } from "@/lib/queries";
 import { loadLogo } from "@/lib/logo";
 import { formatDate } from "@/lib/format";
-import { FACTURA_ESTADOS } from "@/types/db";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -11,13 +10,13 @@ const BRAND = "FF1D4E89";
 
 export async function GET(req: Request) {
   const url = new URL(req.url);
-  const data = await getFacturasInforme({
+  const data = await getViajesInforme({
     estado: url.searchParams.get("estado") ?? undefined,
     cliente: url.searchParams.get("cliente") ?? undefined,
     mes: url.searchParams.get("mes") ?? undefined,
     q: url.searchParams.get("q") ?? undefined,
   });
-  const { empresa, facturas, periodoLabel, empresaLabel, total } = data;
+  const { empresa, viajes, periodoLabel, empresaLabel, total } = data;
 
   const wb = new ExcelJS.Workbook();
   wb.creator = empresa?.nombre ?? "Transportes Pucarani";
@@ -29,7 +28,7 @@ export async function GET(req: Request) {
     { width: 40 }, // Descripción
     { width: 12 }, // N° Factura
     { width: 16 }, // OC
-    { width: 20 }, // Estado
+    { width: 22 }, // Estado
     { width: 14 }, // Monto
   ];
 
@@ -65,14 +64,14 @@ export async function GET(req: Request) {
   });
 
   let r = headRow + 1;
-  for (const f of facturas) {
-    ws.getCell(r, 1).value = formatDate(f.fecha);
-    ws.getCell(r, 2).value = f.cliente?.nombre ?? "—";
-    ws.getCell(r, 3).value = f.descripcion ?? "—";
-    ws.getCell(r, 4).value = f.numero ?? "";
-    ws.getCell(r, 5).value = f.orden_compra ?? "";
-    ws.getCell(r, 6).value = FACTURA_ESTADOS[f.estado];
-    ws.getCell(r, 7).value = Number(f.valor_a_pagar ?? f.valor_servicio);
+  for (const v of viajes) {
+    ws.getCell(r, 1).value = formatDate(v.fecha_inicio);
+    ws.getCell(r, 2).value = v.clienteNombre;
+    ws.getCell(r, 3).value = v.descripcion;
+    ws.getCell(r, 4).value = v.folio ?? "";
+    ws.getCell(r, 5).value = v.orden_compra ?? "";
+    ws.getCell(r, 6).value = v.estadoLabel;
+    ws.getCell(r, 7).value = Number(v.valor);
     ws.getCell(r, 7).numFmt = '"$"#,##0';
     r++;
   }

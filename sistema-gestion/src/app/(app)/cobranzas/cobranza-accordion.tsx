@@ -1,11 +1,12 @@
 "use client";
 
 import { Fragment, useState } from "react";
+import Link from "next/link";
 import { ChevronDown } from "lucide-react";
 import { InitialsAvatar } from "@/components/ui/avatar";
 import { FacturaBadge } from "@/components/ui/badge";
 import { formatCLP, formatDate } from "@/lib/format";
-import { montoFactura, type FacturaConRelaciones } from "@/types/db";
+import { facturaEstadoDerivado, type FacturaConRelaciones } from "@/types/db";
 
 const DIAS_VENCE = 30;
 
@@ -17,6 +18,13 @@ function diasDesde(fecha: string): number {
   return Math.round((hoy.getTime() - d.getTime()) / 86400000);
 }
 
+export type ViajePendiente = {
+  id: string;
+  fecha_inicio: string;
+  descripcion: string;
+  valor: number;
+};
+
 export type CobranzaCliente = {
   clienteId: string;
   nombre: string;
@@ -25,6 +33,7 @@ export type CobranzaCliente = {
   vencido: number;
   pagado: number;
   facturas: FacturaConRelaciones[];
+  viajesPendientes: ViajePendiente[];
 };
 
 export function CobranzaAccordion({ filas }: { filas: CobranzaCliente[] }) {
@@ -85,66 +94,100 @@ export function CobranzaAccordion({ filas }: { filas: CobranzaCliente[] }) {
               {open ? (
                 <tr>
                   <td colSpan={6} className="bg-gray-50/50 px-4 py-5">
+                    {f.viajesPendientes.length > 0 ? (
+                      <>
+                        <p className="mb-2 text-sm font-semibold">
+                          Viajes por facturar
+                        </p>
+                        <div className="mb-4 overflow-x-auto rounded-xl border border-border bg-white">
+                          <table className="w-full text-sm">
+                            <tbody className="divide-y divide-border">
+                              {f.viajesPendientes.map((v) => (
+                                <tr key={v.id}>
+                                  <td className="w-28 whitespace-nowrap px-4 py-2.5 text-muted">
+                                    {formatDate(v.fecha_inicio)}
+                                  </td>
+                                  <td className="px-4 py-2.5">
+                                    <Link href={`/viajes/${v.id}`} className="hover:underline">
+                                      {v.descripcion}
+                                    </Link>
+                                  </td>
+                                  <td className="px-4 py-2.5 text-right tabular-nums font-medium">
+                                    {formatCLP(v.valor)}
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      </>
+                    ) : null}
+
                     <p className="mb-2 text-sm font-semibold">Estado de cuenta</p>
-                    <div className="overflow-x-auto rounded-xl border border-border bg-white">
-                      <table className="w-full text-sm">
-                        <thead className="bg-gray-50 text-left text-xs uppercase tracking-wide text-muted">
-                          <tr>
-                            <th className="px-4 py-2.5 font-medium">Fecha</th>
-                            <th className="px-4 py-2.5 font-medium">Descripción</th>
-                            <th className="px-4 py-2.5 font-medium">N° Fact.</th>
-                            <th className="px-4 py-2.5 font-medium">OC</th>
-                            <th className="px-4 py-2.5 font-medium text-right">Monto</th>
-                            <th className="px-4 py-2.5 font-medium">Estado</th>
-                            <th className="px-4 py-2.5 font-medium text-right">
-                              Antigüedad
-                            </th>
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y divide-border">
-                          {f.facturas.map((fx) => {
-                            const dias = diasDesde(fx.fecha);
-                            const vencida =
-                              fx.estado === "facturada" && dias > DIAS_VENCE;
-                            return (
-                              <tr key={fx.id}>
-                                <td className="px-4 py-2.5 whitespace-nowrap text-muted">
-                                  {formatDate(fx.fecha)}
-                                </td>
-                                <td className="max-w-48 truncate px-4 py-2.5">
-                                  {fx.descripcion ?? "—"}
-                                </td>
-                                <td className="px-4 py-2.5">{fx.numero ?? "—"}</td>
-                                <td className="px-4 py-2.5 text-muted">
-                                  {fx.orden_compra ?? "—"}
-                                </td>
-                                <td className="px-4 py-2.5 text-right tabular-nums font-medium">
-                                  {formatCLP(montoFactura(fx))}
-                                </td>
-                                <td className="px-4 py-2.5">
-                                  <FacturaBadge estado={fx.estado} />
-                                </td>
-                                <td className="px-4 py-2.5 text-right tabular-nums">
-                                  {fx.estado === "facturada" ? (
-                                    <span
-                                      className={
-                                        vencida
-                                          ? "font-medium text-danger"
-                                          : "text-muted"
-                                      }
-                                    >
-                                      {dias} día{dias === 1 ? "" : "s"}
-                                    </span>
-                                  ) : (
-                                    "—"
-                                  )}
-                                </td>
-                              </tr>
-                            );
-                          })}
-                        </tbody>
-                      </table>
-                    </div>
+                    {f.facturas.length === 0 ? (
+                      <p className="text-sm text-muted">Sin facturas en el periodo.</p>
+                    ) : (
+                      <div className="overflow-x-auto rounded-xl border border-border bg-white">
+                        <table className="w-full text-sm">
+                          <thead className="bg-gray-50 text-left text-xs uppercase tracking-wide text-muted">
+                            <tr>
+                              <th className="px-4 py-2.5 font-medium">Emisión</th>
+                              <th className="px-4 py-2.5 font-medium">Folio</th>
+                              <th className="px-4 py-2.5 font-medium">Viajes incluidos</th>
+                              <th className="px-4 py-2.5 font-medium text-right">Monto</th>
+                              <th className="px-4 py-2.5 font-medium">Estado</th>
+                              <th className="px-4 py-2.5 font-medium text-right">
+                                Antigüedad
+                              </th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-border">
+                            {f.facturas.map((fx) => {
+                              const derivado = facturaEstadoDerivado(fx);
+                              const dias = fx.fecha_emision ? diasDesde(fx.fecha_emision) : null;
+                              const vencida =
+                                derivado === "por_cobrar" && dias !== null && dias > DIAS_VENCE;
+                              return (
+                                <tr key={fx.id}>
+                                  <td className="px-4 py-2.5 whitespace-nowrap text-muted">
+                                    {fx.fecha_emision ? formatDate(fx.fecha_emision) : "—"}
+                                  </td>
+                                  <td className="px-4 py-2.5">
+                                    <Link href={`/facturas/${fx.id}`} className="hover:underline">
+                                      {fx.folio ?? "Borrador"}
+                                    </Link>
+                                  </td>
+                                  <td className="max-w-48 truncate px-4 py-2.5">
+                                    {fx.viajes.length === 0
+                                      ? "—"
+                                      : fx.viajes.map((v) => v.descripcion).join(" · ")}
+                                  </td>
+                                  <td className="px-4 py-2.5 text-right tabular-nums font-medium">
+                                    {formatCLP(Number(fx.total))}
+                                  </td>
+                                  <td className="px-4 py-2.5">
+                                    <FacturaBadge estado={derivado} />
+                                  </td>
+                                  <td className="px-4 py-2.5 text-right tabular-nums">
+                                    {derivado === "por_cobrar" && dias !== null ? (
+                                      <span
+                                        className={
+                                          vencida ? "font-medium text-danger" : "text-muted"
+                                        }
+                                      >
+                                        {dias} día{dias === 1 ? "" : "s"}
+                                      </span>
+                                    ) : (
+                                      "—"
+                                    )}
+                                  </td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
                   </td>
                 </tr>
               ) : null}

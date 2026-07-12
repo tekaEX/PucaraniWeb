@@ -7,10 +7,10 @@ import {
   FileDown,
   Sheet,
   Pencil,
-  Receipt,
+  Route,
   Trash2,
 } from "lucide-react";
-import { CotizacionBadge, FacturaBadge } from "@/components/ui/badge";
+import { CotizacionBadge, ViajeBadge } from "@/components/ui/badge";
 import { buttonClass } from "@/components/ui/button";
 import { CotizacionPreview } from "./cotizacion-preview";
 import { eliminarCotizacion } from "./actions";
@@ -20,7 +20,7 @@ import type {
   Cotizacion,
   CotizacionItem,
   Cliente,
-  Factura,
+  Viaje,
   Empresa,
 } from "@/types/db";
 
@@ -32,24 +32,24 @@ export type CotRow = Cotizacion & {
 export function CotizacionAccordion({
   cotizaciones,
   empresa,
-  facturas,
+  viajes,
 }: {
   cotizaciones: CotRow[];
   empresa: Empresa | null;
-  facturas: Factura[];
+  viajes: Viaje[];
 }) {
   const [openId, setOpenId] = useState<string | null>(null);
 
-  const facturasPorCot = useMemo(() => {
-    const m = new Map<string, Factura[]>();
-    for (const f of facturas) {
-      if (!f.cotizacion_id) continue;
-      const arr = m.get(f.cotizacion_id) ?? [];
-      arr.push(f);
-      m.set(f.cotizacion_id, arr);
+  const viajesPorCot = useMemo(() => {
+    const m = new Map<string, Viaje[]>();
+    for (const v of viajes) {
+      if (!v.cotizacion_id) continue;
+      const arr = m.get(v.cotizacion_id) ?? [];
+      arr.push(v);
+      m.set(v.cotizacion_id, arr);
     }
     return m;
-  }, [facturas]);
+  }, [viajes]);
 
   return (
     <table className="w-full text-sm">
@@ -68,7 +68,7 @@ export function CotizacionAccordion({
         {cotizaciones.map((c) => {
           const open = openId === c.id;
           const items = [...(c.items ?? [])].sort((a, b) => a.orden - b.orden);
-          const cotFacturas = facturasPorCot.get(c.id) ?? [];
+          const cotViajes = viajesPorCot.get(c.id) ?? [];
           return (
             <Fragment key={c.id}>
               <tr
@@ -122,11 +122,11 @@ export function CotizacionAccordion({
                         Editar
                       </Link>
                       <Link
-                        href={`/facturas/nueva?cotizacion=${c.id}`}
+                        href={`/viajes/nueva?cotizacion=${c.id}`}
                         className={buttonClass({ size: "sm" })}
                       >
-                        <Receipt className="h-4 w-4" />
-                        Crear factura
+                        <Route className="h-4 w-4" />
+                        Registrar viaje
                       </Link>
                       <ConfirmForm
                         action={eliminarCotizacion}
@@ -146,29 +146,26 @@ export function CotizacionAccordion({
 
                     <CotizacionPreview empresa={empresa} cot={c} items={items} />
 
-                    {cotFacturas.length > 0 ? (
+                    {cotViajes.length > 0 ? (
                       <div className="mt-4">
                         <p className="mb-2 text-sm font-semibold">
-                          Facturas de esta cotización
+                          Viajes de esta cotización
                         </p>
                         <ul className="divide-y divide-border rounded-xl border border-border bg-white">
-                          {cotFacturas.map((f) => (
+                          {cotViajes.map((v) => (
                             <li
-                              key={f.id}
+                              key={v.id}
                               className="flex items-center justify-between px-4 py-2 text-sm"
                             >
                               <Link
-                                href={`/facturas/${f.id}`}
+                                href={`/viajes/${v.id}`}
                                 className="font-medium text-brand hover:underline"
                               >
-                                {f.numero ? `Factura ${f.numero}` : "Sin número"} ·{" "}
-                                {formatDate(f.fecha)}
+                                {v.descripcion} · {formatDate(v.fecha_inicio)}
                               </Link>
                               <span className="flex items-center gap-3">
-                                <span className="tabular-nums">
-                                  {formatCLP(f.valor_a_pagar ?? f.valor_servicio)}
-                                </span>
-                                <FacturaBadge estado={f.estado} />
+                                <span className="tabular-nums">{formatCLP(v.valor)}</span>
+                                <ViajeBadge viaje={v} />
                               </span>
                             </li>
                           ))}

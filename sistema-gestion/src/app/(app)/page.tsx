@@ -3,12 +3,12 @@ import { createClient } from "@/lib/supabase/server";
 import { PageHeader } from "@/components/page-header";
 import { Card, CardBody, CardHeader, CardTitle } from "@/components/ui/card";
 import { buttonClass } from "@/components/ui/button";
-import { FacturaBadge } from "@/components/ui/badge";
+import { ViajeBadge } from "@/components/ui/badge";
 import { Kpi } from "@/components/ui/kpi";
 import { formatCLP, formatDate } from "@/lib/format";
 import {
   FileText,
-  Receipt,
+  Route,
   Plus,
   Clock,
   CircleDollarSign,
@@ -20,6 +20,7 @@ import {
 import {
   isDemo,
   demoCotizaciones,
+  demoViajes,
   demoFacturas,
   demoGastos,
   demoChoferes,
@@ -36,23 +37,18 @@ import {
   type Periodo,
 } from "@/lib/periodo";
 import {
-  montoFactura,
+  viajePorFacturar,
+  costoTotalViaje,
+  facturaPagada,
   type Factura,
-  type FacturaConRelaciones,
-  type FacturaEstado,
+  type Viaje,
+  type ViajeConRelaciones,
   type GastoVehiculo,
   type Chofer,
   type Vehiculo,
 } from "@/types/db";
 
 export const dynamic = "force-dynamic";
-
-// Tinte de fila sutil según estado (mismo criterio del sistema de diseño).
-function rowTone(estado: FacturaEstado) {
-  if (estado === "facturada") return "bg-[#fffdf8]";
-  if (estado === "por_facturar") return "bg-[#fcfdff]";
-  return "";
-}
 
 function delta(actual: number, anterior: number): number | null {
   if (!anterior) return null;
@@ -63,12 +59,12 @@ export default async function DashboardPage() {
   const periodo = await getPeriodo();
   const prev = periodoAnterior(periodo);
   const { desde, hasta } = rangoPeriodo(periodo);
-  const { desde: prevDesde } = rangoPeriodo(prev);
 
   let cotPeriodo: { total: number }[];
+  let viajes: Viaje[];
   let facturas: Factura[];
   let gastos: GastoVehiculo[];
-  let recientes: FacturaConRelaciones[];
+  let recientes: ViajeConRelaciones[];
   let choferes: Chofer[];
   let vehiculos: Vehiculo[];
 
@@ -76,17 +72,17 @@ export default async function DashboardPage() {
     cotPeriodo = demoCotizaciones
       .filter((c) => enRango(c.fecha, periodo))
       .map((c) => ({ total: c.total }));
+    viajes = demoViajes;
     facturas = demoFacturas;
     gastos = demoGastos;
-    recientes = demoFacturas
-      .filter((f) => enRango(f.fecha, periodo))
-      .slice(0, 8);
+    recientes = demoViajes.filter((v) => enRango(v.fecha_inicio, periodo)).slice(0, 8);
     choferes = demoChoferes;
     vehiculos = demoVehiculos;
   } else {
     const supabase = await createClient();
     const [
       { data: cotData },
+      { data: viajesData },
       { data: factData },
       { data: gastosData },
       { data: recientesData },
@@ -98,56 +94,65 @@ export default async function DashboardPage() {
         .select("total")
         .gte("fecha", desde)
         .lte("fecha", hasta),
+      supabase.from("viajes").select("*"),
       supabase.from("facturas").select("*"),
       supabase
         .from("gastos_vehiculo")
         .select("*")
-        .gte("fecha", prevDesde)
+        .gte("fecha", rangoPeriodo(prev).desde)
         .lte("fecha", hasta),
       supabase
-        .from("facturas")
-        .select("*, cliente:clientes(id,nombre,codigo), cotizacion:cotizaciones(id,numero)")
-        .gte("fecha", desde)
-        .lte("fecha", hasta)
-        .order("fecha", { ascending: false })
+        .from("viajes")
+        .select("*, cliente:clientes(id,nombre,codigo), factura:facturas(id,folio,tipo_dte,estado,fecha_pago), asignaciones:viaje_asignaciones(id,viaje_id,chofer_id,vehiculo_id,fecha,notas,created_at, chofer:choferes(id,nombre), vehiculo:vehiculos(id,patente))")
+        .gte("fecha_inicio", desde)
+        .lte("fecha_inicio", hasta)
+        .order("fecha_inicio", { ascending: false })
         .limit(8),
       supabase.from("choferes").select("*"),
       supabase.from("vehiculos").select("*"),
     ]);
     cotPeriodo = cotData ?? [];
+    viajes = (viajesData ?? []) as Viaje[];
     facturas = (factData ?? []) as Factura[];
     gastos = (gastosData ?? []) as GastoVehiculo[];
-    recientes = (recientesData ?? []) as FacturaConRelaciones[];
+    recientes = (recientesData ?? []) as ViajeConRelaciones[];
     choferes = (choData ?? []) as Chofer[];
     vehiculos = (vehData ?? []) as Vehiculo[];
   }
 
-  // Fila 1 — todo referido al periodo global (pagadas por fecha de pago,
-  // el resto por fecha del servicio).
+  // Fila 1 — KPIs del periodo. Todos los estados son DERIVADOS:
+  // "por facturar" = viaje realizado sin factura; "por cobrar" = emitida sin
+  // fecha de pago; "pagado" = fecha de pago dentro del periodo.
   const totalCotizado = cotPeriodo.reduce((a, c) => a + Number(c.total), 0);
-  const pendientes = facturas.filter(
-    (f) =>
-      (f.estado === "en_proceso" || f.estado === "por_facturar") &&
-      enRango(f.fecha, periodo),
+
+  const pendientes = viajes.filter(
+    (v) => viajePorFacturar(v) && enRango(v.fecha_inicio, periodo),
   );
-  const pendienteFacturar = pendientes.reduce((a, f) => a + montoFactura(f), 0);
+  const pendienteFacturar = pendientes.reduce((a, v) => a + Number(v.valor), 0);
+
   const porCobrarArr = facturas.filter(
-    (f) => f.estado === "facturada" && enRango(f.fecha, periodo),
+    (f) => f.estado === "emitida" && !facturaPagada(f) && enRango(f.fecha_emision, periodo),
   );
-  const porCobrar = porCobrarArr.reduce((a, f) => a + montoFactura(f), 0);
+  const porCobrar = porCobrarArr.reduce((a, f) => a + Number(f.total), 0);
 
   const pagadasEn = (p: Periodo) =>
-    facturas.filter((f) => f.estado === "pagada" && enRango(f.fecha_pago, p));
+    facturas.filter((f) => f.estado === "emitida" && enRango(f.fecha_pago, p));
   const pagadasPeriodo = pagadasEn(periodo);
-  const ingresos = pagadasPeriodo.reduce((a, f) => a + montoFactura(f), 0);
-  const ingresosPrev = pagadasEn(prev).reduce((a, f) => a + montoFactura(f), 0);
+  const ingresos = pagadasPeriodo.reduce((a, f) => a + Number(f.total), 0);
+  const ingresosPrev = pagadasEn(prev).reduce((a, f) => a + Number(f.total), 0);
 
-  // Fila 2 — mismas definiciones que Finanzas: cobrado vs gastos del periodo
+  // Fila 2 — mismas definiciones que Finanzas: cobrado vs egresos del periodo
+  // (gastos de flota + costos directos de los viajes: peajes, viáticos, etc.)
+  const costosViajesEn = (p: Periodo) =>
+    viajes
+      .filter((v) => v.estado !== "cancelado" && enRango(v.fecha_inicio, p))
+      .reduce((a, v) => a + costoTotalViaje(v), 0);
   const gastosPeriodo = gastos.filter((g) => enRango(g.fecha, periodo));
-  const costos = gastosPeriodo.reduce((a, g) => a + Number(g.monto_total), 0);
-  const costosPrev = gastos
-    .filter((g) => enRango(g.fecha, prev))
-    .reduce((a, g) => a + Number(g.monto_total), 0);
+  const costos =
+    gastosPeriodo.reduce((a, g) => a + Number(g.monto_total), 0) + costosViajesEn(periodo);
+  const costosPrev =
+    gastos.filter((g) => enRango(g.fecha, prev)).reduce((a, g) => a + Number(g.monto_total), 0) +
+    costosViajesEn(prev);
   const utilidad = ingresos - costos;
   const margen = ingresos > 0 ? Math.round((utilidad / ingresos) * 100) : null;
 
@@ -167,12 +172,9 @@ export default async function DashboardPage() {
           <Plus className="h-4 w-4" />
           Cotización
         </Link>
-        <Link
-          href="/facturas/nueva"
-          className={buttonClass({ variant: "secondary" })}
-        >
+        <Link href="/viajes/nueva" className={buttonClass({ variant: "secondary" })}>
           <Plus className="h-4 w-4" />
-          Factura
+          Viaje
         </Link>
       </PageHeader>
 
@@ -186,9 +188,9 @@ export default async function DashboardPage() {
           tint="bg-brand-soft text-brand"
         />
         <Kpi
-          label="Pendiente de facturar"
+          label="Por facturar"
           value={formatCLP(pendienteFacturar)}
-          sub={`${pendientes.length} servicio${pendientes.length === 1 ? "" : "s"}`}
+          sub={`${pendientes.length} viaje${pendientes.length === 1 ? "" : "s"} realizado${pendientes.length === 1 ? "" : "s"}`}
           icon={Clock}
           tint="bg-info-bg text-info"
         />
@@ -196,7 +198,7 @@ export default async function DashboardPage() {
           label="Por cobrar"
           value={formatCLP(porCobrar)}
           valueClass="text-warn"
-          sub={`${porCobrarArr.length} factura${porCobrarArr.length === 1 ? "" : "s"}`}
+          sub={`${porCobrarArr.length} factura${porCobrarArr.length === 1 ? "" : "s"} emitida${porCobrarArr.length === 1 ? "" : "s"}`}
           icon={CircleDollarSign}
           tint="bg-warn-bg text-warn"
         />
@@ -221,11 +223,7 @@ export default async function DashboardPage() {
               : `${pagadasPeriodo.length} factura${pagadasPeriodo.length === 1 ? "" : "s"} pagada${pagadasPeriodo.length === 1 ? "" : "s"}`
           }
           subClass={
-            dIngresos !== null
-              ? dIngresos >= 0
-                ? "text-ok"
-                : "text-danger"
-              : "text-muted"
+            dIngresos !== null ? (dIngresos >= 0 ? "text-ok" : "text-danger") : "text-muted"
           }
           icon={TrendingUp}
           tint="bg-ok-bg text-ok"
@@ -236,7 +234,7 @@ export default async function DashboardPage() {
           sub={
             dCostos !== null
               ? `${dCostos >= 0 ? "+" : ""}${dCostos}% vs. ${vs}`
-              : `${gastosPeriodo.length} gasto${gastosPeriodo.length === 1 ? "" : "s"}`
+              : "Flota + costos de viajes"
           }
           icon={TrendingDown}
           tint="bg-[#ececef] text-[#6e6e73]"
@@ -294,19 +292,16 @@ export default async function DashboardPage() {
 
       <Card className="mt-6 overflow-hidden">
         <CardHeader>
-          <CardTitle>Últimos servicios</CardTitle>
-          <Link
-            href="/facturas"
-            className="text-sm font-medium text-brand hover:underline"
-          >
+          <CardTitle>Últimos viajes</CardTitle>
+          <Link href="/viajes" className="text-sm font-medium text-brand hover:underline">
             Ver todo
           </Link>
         </CardHeader>
         {recientes.length === 0 ? (
           <CardBody>
             <p className="flex flex-col items-center gap-3 py-8 text-center text-sm text-muted">
-              <Receipt className="h-7 w-7" />
-              Aún no hay facturas registradas.
+              <Route className="h-7 w-7" />
+              Aún no hay viajes registrados en este periodo.
             </p>
           </CardBody>
         ) : (
@@ -317,27 +312,27 @@ export default async function DashboardPage() {
                   <th className="px-4 py-3 font-medium">Fecha</th>
                   <th className="px-4 py-3 font-medium">Descripción</th>
                   <th className="px-4 py-3 font-medium">Cliente</th>
-                  <th className="px-4 py-3 font-medium text-right">Monto</th>
+                  <th className="px-4 py-3 font-medium text-right">Valor</th>
                   <th className="px-4 py-3 font-medium">Estado</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
-                {recientes.map((f) => (
-                  <tr key={f.id} className={`${rowTone(f.estado)} hover:bg-gray-100/60`}>
+                {recientes.map((v) => (
+                  <tr key={v.id} className="hover:bg-gray-100/60">
                     <td className="px-4 py-2.5 whitespace-nowrap text-muted">
-                      {formatDate(f.fecha)}
+                      {formatDate(v.fecha_inicio)}
                     </td>
                     <td className="px-4 py-2.5 max-w-xs truncate">
-                      {f.descripcion ?? "—"}
+                      <Link href={`/viajes/${v.id}`} className="hover:underline">
+                        {v.descripcion}
+                      </Link>
                     </td>
-                    <td className="px-4 py-2.5">
-                      {f.cliente?.nombre ?? "—"}
-                    </td>
+                    <td className="px-4 py-2.5">{v.cliente?.nombre ?? "—"}</td>
                     <td className="px-4 py-2.5 text-right tabular-nums font-medium">
-                      {formatCLP(montoFactura(f))}
+                      {formatCLP(v.valor)}
                     </td>
                     <td className="px-4 py-2.5">
-                      <FacturaBadge estado={f.estado} />
+                      <ViajeBadge viaje={v} />
                     </td>
                   </tr>
                 ))}

@@ -2,9 +2,12 @@ import * as React from "react";
 import { cn } from "@/lib/utils";
 import {
   COTIZACION_ESTADOS,
-  FACTURA_ESTADOS,
+  FACTURA_ESTADOS_DERIVADOS,
+  VIAJE_ESTADOS,
+  viajePorFacturar,
   type CotizacionEstado,
-  type FacturaEstado,
+  type FacturaEstadoDerivado,
+  type Viaje,
 } from "@/types/db";
 import { evaluarVenc } from "@/lib/vencimientos";
 import { formatDate } from "@/lib/format";
@@ -48,15 +51,23 @@ export function Badge({
   );
 }
 
-const facturaTone: Record<FacturaEstado, Tone> = {
-  en_proceso: "gray",
-  por_facturar: "blue",
-  facturada: "amber",
+const facturaTone: Record<FacturaEstadoDerivado, Tone> = {
+  borrador: "gray",
+  por_cobrar: "amber",
   pagada: "green",
+  anulada: "red",
 };
 
-export function FacturaBadge({ estado }: { estado: FacturaEstado }) {
-  return <Badge tone={facturaTone[estado]}>{FACTURA_ESTADOS[estado]}</Badge>;
+export function FacturaBadge({ estado }: { estado: FacturaEstadoDerivado }) {
+  return <Badge tone={facturaTone[estado]}>{FACTURA_ESTADOS_DERIVADOS[estado]}</Badge>;
+}
+
+// El sub-estado de un viaje realizado se deriva de su factura.
+export function ViajeBadge({ viaje }: { viaje: Pick<Viaje, "estado" | "factura_id"> }) {
+  if (viaje.estado === "cancelado") return <Badge tone="gray">{VIAJE_ESTADOS.cancelado}</Badge>;
+  if (viaje.estado === "programado") return <Badge tone="blue">{VIAJE_ESTADOS.programado}</Badge>;
+  if (viajePorFacturar(viaje)) return <Badge tone="amber">Por facturar</Badge>;
+  return <Badge tone="green">{VIAJE_ESTADOS.realizado}</Badge>;
 }
 
 const cotizacionTone: Record<CotizacionEstado, Tone> = {

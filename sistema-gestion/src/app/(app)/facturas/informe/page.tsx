@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { getFacturasInforme } from "@/lib/queries";
+import { getViajesInforme } from "@/lib/queries";
 import { InformePreview } from "../informe-preview";
 import { PageHeader } from "@/components/page-header";
 import { buttonClass } from "@/components/ui/button";
@@ -19,7 +19,7 @@ export default async function InformePreviewPage({
   }>;
 }) {
   const sp = await searchParams;
-  const data = await getFacturasInforme({
+  const data = await getViajesInforme({
     estado: sp.estado,
     cliente: sp.cliente,
     mes: sp.mes,

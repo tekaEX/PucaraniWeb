@@ -17,6 +17,7 @@ import {
   Menu,
   X,
   CalendarDays,
+  Route,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { logout } from "@/app/login/actions";
@@ -32,10 +33,16 @@ type NavItem = {
 const grupos: { label?: string; items: NavItem[] }[] = [
   { items: [{ href: "/", label: "Dashboard", icon: LayoutDashboard, exact: true }] },
   {
+    label: "Operación",
+    items: [
+      { href: "/cotizaciones", label: "Cotizaciones", icon: FileText },
+      { href: "/viajes", label: "Viajes", icon: Route },
+    ],
+  },
+  {
     label: "Finanzas",
     items: [
       { href: "/finanzas", label: "Resumen", icon: PieChart },
-      { href: "/cotizaciones", label: "Cotizaciones", icon: FileText },
       { href: "/facturas", label: "Facturas", icon: Receipt },
       { href: "/cobranzas", label: "Cobranzas", icon: Wallet },
     ],

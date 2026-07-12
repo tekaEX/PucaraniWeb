@@ -1,10 +1,9 @@
 import { formatCLP, formatDate } from "@/lib/format";
-import { FACTURA_ESTADOS, montoFactura } from "@/types/db";
-import type { FacturasInforme } from "@/lib/queries";
+import type { ViajesInforme } from "@/lib/queries";
 
 // Vista previa del informe, con el mismo aspecto que el PDF/Excel.
-export function InformePreview({ data }: { data: FacturasInforme }) {
-  const { empresa, facturas, periodoLabel, empresaLabel, total } = data;
+export function InformePreview({ data }: { data: ViajesInforme }) {
+  const { empresa, viajes, periodoLabel, empresaLabel, total } = data;
   const logo = empresa?.logo_url || "/logo.png";
   const empresaLine = [empresa?.direccion, empresa?.ciudad]
     .filter(Boolean)
@@ -51,20 +50,20 @@ export function InformePreview({ data }: { data: FacturasInforme }) {
             </tr>
           </thead>
           <tbody className="divide-y divide-border">
-            {facturas.map((f, i) => (
-              <tr key={f.id} className={i % 2 ? "bg-gray-50" : ""}>
-                <td className="whitespace-nowrap px-3 py-2">{formatDate(f.fecha)}</td>
-                <td className="px-3 py-2">{f.cliente?.nombre ?? "—"}</td>
-                <td className="px-3 py-2">{f.descripcion ?? "—"}</td>
-                <td className="px-3 py-2">{f.numero ?? "—"}</td>
-                <td className="whitespace-nowrap px-3 py-2 text-muted">{f.orden_compra ?? "—"}</td>
-                <td className="whitespace-nowrap px-3 py-2">{FACTURA_ESTADOS[f.estado]}</td>
+            {viajes.map((v, i) => (
+              <tr key={v.id} className={i % 2 ? "bg-gray-50" : ""}>
+                <td className="whitespace-nowrap px-3 py-2">{formatDate(v.fecha_inicio)}</td>
+                <td className="px-3 py-2">{v.clienteNombre}</td>
+                <td className="px-3 py-2">{v.descripcion}</td>
+                <td className="px-3 py-2">{v.folio ?? "—"}</td>
+                <td className="whitespace-nowrap px-3 py-2 text-muted">{v.orden_compra ?? "—"}</td>
+                <td className="whitespace-nowrap px-3 py-2">{v.estadoLabel}</td>
                 <td className="px-3 py-2 text-right tabular-nums">
-                  {formatCLP(montoFactura(f))}
+                  {formatCLP(v.valor)}
                 </td>
               </tr>
             ))}
-            {facturas.length === 0 ? (
+            {viajes.length === 0 ? (
               <tr>
                 <td colSpan={7} className="px-3 py-6 text-center text-muted">
                   No hay servicios con esos filtros.
@@ -82,7 +81,7 @@ export function InformePreview({ data }: { data: FacturasInforme }) {
           {formatCLP(total)}
         </span>
       </div>
-      <p className="mt-1 text-xs text-muted">{facturas.length} servicio(s).</p>
+      <p className="mt-1 text-xs text-muted">{viajes.length} servicio(s).</p>
     </div>
   );
 }

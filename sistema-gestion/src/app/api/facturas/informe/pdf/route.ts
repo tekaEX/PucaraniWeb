@@ -1,4 +1,4 @@
-import { getFacturasInforme } from "@/lib/queries";
+import { getViajesInforme } from "@/lib/queries";
 import { renderInformePDF } from "@/lib/pdf/informe-pdf";
 import { loadLogo } from "@/lib/logo";
 
@@ -7,7 +7,7 @@ export const dynamic = "force-dynamic";
 
 export async function GET(req: Request) {
   const url = new URL(req.url);
-  const data = await getFacturasInforme({
+  const data = await getViajesInforme({
     estado: url.searchParams.get("estado") ?? undefined,
     cliente: url.searchParams.get("cliente") ?? undefined,
     mes: url.searchParams.get("mes") ?? undefined,

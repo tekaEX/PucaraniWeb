@@ -11,92 +11,77 @@ import { Field } from "@/components/ui/label";
 import { Button, buttonClass } from "@/components/ui/button";
 import { Card, CardBody, CardHeader, CardTitle } from "@/components/ui/card";
 import { Save, Upload, Paperclip, FileText } from "lucide-react";
-import { toInputDate, todayInput, formatCLP } from "@/lib/format";
-import { FACTURA_ESTADOS } from "@/types/db";
-import type { Factura } from "@/types/db";
+import { toInputDate, todayInput, formatCLP, formatDate } from "@/lib/format";
+import { TIPOS_DTE } from "@/types/db";
+import type { FacturaConRelaciones, FacturaEstado } from "@/types/db";
 
 type ClienteOpt = { id: string; nombre: string; codigo: string | null };
-type CotizacionOpt = {
+export type ViajeOpt = {
   id: string;
-  numero: number;
-  cliente_id: string | null;
-  total: number;
+  cliente_id: string;
+  descripcion: string;
+  fecha_inicio: string;
+  valor: number;
 };
-type ChoferOpt = { id: string; nombre: string };
-type VehiculoOpt = { id: string; patente: string };
 
 function toNum(v: string): number {
   const n = Number(String(v).replace(/\./g, "").replace(",", "."));
   return Number.isFinite(n) ? n : 0;
 }
 
+const IVA_RATE = 0.19;
+
 export function FacturaForm({
-  action,
   clientes,
-  cotizaciones,
-  choferes,
-  vehiculos,
+  viajesDisponibles,
   factura,
-  defaults,
 }: {
-  action?: (prev: FormState, fd: FormData) => Promise<FormState>;
   clientes: ClienteOpt[];
-  cotizaciones: CotizacionOpt[];
-  choferes: ChoferOpt[];
-  vehiculos: VehiculoOpt[];
-  factura?: Factura;
-  defaults?: {
-    cotizacion_id?: string;
-    cliente_id?: string;
-    valor_servicio?: number;
-    descripcion?: string;
-  };
+  /** Viajes por facturar (más los ya incluidos en esta factura, si edita). */
+  viajesDisponibles: ViajeOpt[];
+  factura?: FacturaConRelaciones;
 }) {
   const [state, formAction, pending] = useActionState<FormState, FormData>(
-    action ?? guardarFactura,
+    guardarFactura,
     {},
   );
 
-  const [cotizacionId, setCotizacionId] = useState(
-    factura?.cotizacion_id ?? defaults?.cotizacion_id ?? "",
+  const [clienteId, setClienteId] = useState(factura?.cliente_id ?? "");
+  const [seleccion, setSeleccion] = useState<string[]>(
+    factura?.viajes.map((v) => v.id) ?? [],
   );
-  const [clienteId, setClienteId] = useState(
-    factura?.cliente_id ?? defaults?.cliente_id ?? "",
+  const [tipoDte, setTipoDte] = useState(String(factura?.tipo_dte ?? 34));
+  const [estado, setEstado] = useState<FacturaEstado>(factura?.estado ?? "borrador");
+  // "" = usar la suma de los viajes seleccionados.
+  const [totalManual, setTotalManual] = useState(
+    factura ? String(factura.total) : "",
   );
-  const [valorServicio, setValorServicio] = useState(
-    String(factura?.valor_servicio ?? defaults?.valor_servicio ?? ""),
-  );
-  const [valorAPagar, setValorAPagar] = useState(
-    factura?.valor_a_pagar != null ? String(factura.valor_a_pagar) : "",
-  );
-  const [costos, setCostos] = useState({
-    combustible: factura?.costo_combustible ? String(factura.costo_combustible) : "",
-    peajes: factura?.costo_peajes ? String(factura.costo_peajes) : "",
-    viaticos: factura?.costo_viaticos ? String(factura.costo_viaticos) : "",
-    otros: factura?.costo_otros ? String(factura.costo_otros) : "",
-  });
-  const [archivoUrl, setArchivoUrl] = useState(factura?.archivo_url ?? "");
-
-  const ingreso = toNum(valorAPagar) || toNum(valorServicio);
-  const costoTotal =
-    toNum(costos.combustible) +
-    toNum(costos.peajes) +
-    toNum(costos.viaticos) +
-    toNum(costos.otros);
-  const utilidad = ingreso - costoTotal;
+  const [archivoPath, setArchivoPath] = useState(factura?.archivo_path ?? "");
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState("");
   const fileRef = useRef<HTMLInputElement>(null);
 
-  function onCotizacionChange(value: string) {
-    setCotizacionId(value);
-    const cot = cotizaciones.find((c) => c.id === value);
-    if (cot) {
-      if (cot.cliente_id) setClienteId(cot.cliente_id);
-      if (!valorServicio || valorServicio === "0") {
-        setValorServicio(String(cot.total));
-      }
-    }
+  const visibles = viajesDisponibles.filter((v) => v.cliente_id === clienteId);
+  const seleccionVisible = seleccion.filter((id) => visibles.some((v) => v.id === id));
+  const suma = visibles
+    .filter((v) => seleccionVisible.includes(v.id))
+    .reduce((acc, v) => acc + Number(v.valor), 0);
+
+  const total = totalManual.trim() !== "" ? toNum(totalManual) : suma;
+  const esAfecta = tipoDte === "33";
+  const neto = esAfecta ? Math.round(total / (1 + IVA_RATE)) : total;
+  const iva = esAfecta ? total - neto : 0;
+
+  function onClienteChange(value: string) {
+    setClienteId(value);
+    // Los viajes de otro cliente no pueden quedar seleccionados.
+    setSeleccion((sel) =>
+      sel.filter((id) => viajesDisponibles.some((v) => v.id === id && v.cliente_id === value)),
+    );
+  }
+
+  function toggleViaje(id: string) {
+    setSeleccion((sel) => (sel.includes(id) ? sel.filter((x) => x !== id) : [...sel, id]));
   }
 
   async function handleFile(e: React.ChangeEvent<HTMLInputElement>) {
@@ -112,8 +97,8 @@ export function FacturaForm({
         .from("adjuntos")
         .upload(path, file, { upsert: true });
       if (error) throw error;
-      const { data } = supabase.storage.from("adjuntos").getPublicUrl(path);
-      setArchivoUrl(data.publicUrl);
+      // El bucket es privado: guardamos la RUTA y abrimos con URL firmada.
+      setArchivoPath(path);
     } catch (err) {
       setUploadError(err instanceof Error ? err.message : "No se pudo subir el archivo.");
     } finally {
@@ -121,40 +106,42 @@ export function FacturaForm({
     }
   }
 
+  async function verAdjunto() {
+    if (!archivoPath) return;
+    const supabase = createClient();
+    const { data, error } = await supabase.storage
+      .from("adjuntos")
+      .createSignedUrl(archivoPath, 60 * 60);
+    if (error || !data?.signedUrl) {
+      setUploadError("No se pudo abrir el adjunto.");
+      return;
+    }
+    window.open(data.signedUrl, "_blank", "noopener,noreferrer");
+  }
+
   return (
     <form action={formAction} className="space-y-6">
       {factura ? <input type="hidden" name="id" value={factura.id} /> : null}
-      <input type="hidden" name="cotizacion_id" value={cotizacionId} />
       <input type="hidden" name="cliente_id" value={clienteId} />
-      <input type="hidden" name="archivo_url" value={archivoUrl} />
+      <input type="hidden" name="viajes" value={JSON.stringify(seleccionVisible)} />
+      <input type="hidden" name="neto" value={neto} />
+      <input type="hidden" name="iva" value={iva} />
+      <input type="hidden" name="total" value={total} />
+      <input type="hidden" name="archivo_path" value={archivoPath} />
 
       <Card>
         <CardHeader>
-          <CardTitle>Datos del servicio</CardTitle>
+          <CardTitle>Documento</CardTitle>
         </CardHeader>
         <CardBody className="grid gap-4 sm:grid-cols-2">
-          <Field label="Cotización asociada" htmlFor="cotizacion_select" className="sm:col-span-2">
-            <Select
-              id="cotizacion_select"
-              value={cotizacionId}
-              onChange={(e) => onCotizacionChange(e.target.value)}
-            >
-              <option value="">— Sin cotización —</option>
-              {cotizaciones.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.numero}
-                </option>
-              ))}
-            </Select>
-          </Field>
-
-          <Field label="Cliente" htmlFor="cliente_select">
+          <Field label="Cliente (receptor)" htmlFor="cliente_select">
             <Select
               id="cliente_select"
               value={clienteId}
-              onChange={(e) => setClienteId(e.target.value)}
+              onChange={(e) => onClienteChange(e.target.value)}
+              required
             >
-              <option value="">— Sin cliente —</option>
+              <option value="">— Elegir cliente —</option>
               {clientes.map((c) => (
                 <option key={c.id} value={c.id}>
                   {c.nombre}
@@ -163,178 +150,148 @@ export function FacturaForm({
               ))}
             </Select>
           </Field>
-          <Field label="Fecha del servicio" htmlFor="fecha">
-            <Input
-              id="fecha"
-              name="fecha"
-              type="date"
-              defaultValue={factura ? toInputDate(factura.fecha) : todayInput()}
-            />
-          </Field>
-
-          <Field label="Descripción" htmlFor="descripcion" className="sm:col-span-2">
-            <Input
-              id="descripcion"
-              name="descripcion"
-              defaultValue={factura?.descripcion ?? defaults?.descripcion ?? ""}
-              placeholder="Conozca su puerto"
-            />
-          </Field>
-
-          <Field label="Chofer" htmlFor="chofer_id">
-            <Select id="chofer_id" name="chofer_id" defaultValue={factura?.chofer_id ?? ""}>
-              <option value="">— Sin asignar —</option>
-              {choferes.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.nombre}
-                </option>
-              ))}
-            </Select>
-          </Field>
-          <Field label="Vehículo" htmlFor="vehiculo_id">
-            <Select id="vehiculo_id" name="vehiculo_id" defaultValue={factura?.vehiculo_id ?? ""}>
-              <option value="">— Sin asignar —</option>
-              {vehiculos.map((v) => (
-                <option key={v.id} value={v.id}>
-                  {v.patente}
+          <Field label="Tipo de documento" htmlFor="tipo_dte">
+            <Select
+              id="tipo_dte"
+              name="tipo_dte"
+              value={tipoDte}
+              onChange={(e) => setTipoDte(e.target.value)}
+            >
+              {Object.entries(TIPOS_DTE).map(([value, label]) => (
+                <option key={value} value={value}>
+                  {value} — {label}
                 </option>
               ))}
             </Select>
           </Field>
 
-          <Field label="N° de buses" htmlFor="n_buses">
-            <Input
-              id="n_buses"
-              name="n_buses"
-              type="number"
-              min={0}
-              defaultValue={factura?.n_buses ?? 1}
-            />
+          <Field label="Estado" htmlFor="estado">
+            <Select
+              id="estado"
+              name="estado"
+              value={estado}
+              onChange={(e) => setEstado(e.target.value as FacturaEstado)}
+            >
+              <option value="borrador">Borrador</option>
+              <option value="emitida">Emitida</option>
+              {factura ? <option value="anulada">Anulada</option> : null}
+            </Select>
           </Field>
-          <Field label="Orden de compra (OC)" htmlFor="orden_compra">
-            <Input
-              id="orden_compra"
-              name="orden_compra"
-              defaultValue={factura?.orden_compra ?? ""}
-              placeholder="4800021834"
-            />
-          </Field>
-
-          <Field label="Valor del servicio" htmlFor="valor_servicio">
-            <Input
-              id="valor_servicio"
-              name="valor_servicio"
-              inputMode="numeric"
-              value={valorServicio}
-              onChange={(e) => setValorServicio(e.target.value)}
-              placeholder="100000"
-            />
-          </Field>
-          <Field label="Valor a pagar" htmlFor="valor_a_pagar" hint="Déjalo vacío si es igual al valor del servicio.">
-            <Input
-              id="valor_a_pagar"
-              name="valor_a_pagar"
-              inputMode="numeric"
-              value={valorAPagar}
-              onChange={(e) => setValorAPagar(e.target.value)}
-              placeholder="60000"
-            />
-          </Field>
+          <div className="grid grid-cols-2 gap-4">
+            <Field label="Folio (N°)" htmlFor="folio" className="mb-0">
+              <Input
+                id="folio"
+                name="folio"
+                inputMode="numeric"
+                defaultValue={factura?.folio ?? ""}
+                placeholder="465"
+                required={estado === "emitida"}
+              />
+            </Field>
+            <Field label="Fecha de emisión" htmlFor="fecha_emision" className="mb-0">
+              <Input
+                id="fecha_emision"
+                name="fecha_emision"
+                type="date"
+                defaultValue={
+                  factura?.fecha_emision
+                    ? toInputDate(factura.fecha_emision)
+                    : estado === "emitida"
+                      ? todayInput()
+                      : ""
+                }
+                required={estado === "emitida"}
+              />
+            </Field>
+          </div>
         </CardBody>
       </Card>
 
       <Card>
         <CardHeader>
-          <CardTitle>Costos del viaje y utilidad</CardTitle>
+          <CardTitle>Viajes incluidos</CardTitle>
         </CardHeader>
-        <CardBody className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          <Field label="Combustible" htmlFor="costo_combustible" className="mb-0">
-            <Input
-              id="costo_combustible"
-              name="costo_combustible"
-              inputMode="numeric"
-              value={costos.combustible}
-              onChange={(e) => setCostos({ ...costos, combustible: e.target.value })}
-              placeholder="0"
-            />
-          </Field>
-          <Field label="Peajes" htmlFor="costo_peajes" className="mb-0">
-            <Input
-              id="costo_peajes"
-              name="costo_peajes"
-              inputMode="numeric"
-              value={costos.peajes}
-              onChange={(e) => setCostos({ ...costos, peajes: e.target.value })}
-              placeholder="0"
-            />
-          </Field>
-          <Field label="Viáticos" htmlFor="costo_viaticos" className="mb-0">
-            <Input
-              id="costo_viaticos"
-              name="costo_viaticos"
-              inputMode="numeric"
-              value={costos.viaticos}
-              onChange={(e) => setCostos({ ...costos, viaticos: e.target.value })}
-              placeholder="0"
-            />
-          </Field>
-          <Field label="Otros" htmlFor="costo_otros" className="mb-0">
-            <Input
-              id="costo_otros"
-              name="costo_otros"
-              inputMode="numeric"
-              value={costos.otros}
-              onChange={(e) => setCostos({ ...costos, otros: e.target.value })}
-              placeholder="0"
-            />
-          </Field>
+        <CardBody className="space-y-2">
+          {!clienteId ? (
+            <p className="text-sm text-muted">Elige primero el cliente para ver sus viajes por facturar.</p>
+          ) : visibles.length === 0 ? (
+            <p className="text-sm text-muted">
+              Este cliente no tiene viajes por facturar.{" "}
+              <Link href="/viajes/nueva" className="text-brand hover:underline">
+                Registra un viaje
+              </Link>{" "}
+              y márcalo como realizado.
+            </p>
+          ) : (
+            <div className="divide-y divide-border rounded-lg border border-border">
+              {visibles.map((v) => (
+                <label
+                  key={v.id}
+                  className="flex cursor-pointer items-center gap-3 px-3 py-2.5 text-sm hover:bg-background/60"
+                >
+                  <input
+                    type="checkbox"
+                    checked={seleccionVisible.includes(v.id)}
+                    onChange={() => toggleViaje(v.id)}
+                    className="h-4 w-4 accent-[var(--brand)]"
+                  />
+                  <span className="w-24 shrink-0 text-muted">{formatDate(v.fecha_inicio)}</span>
+                  <span className="flex-1">{v.descripcion}</span>
+                  <span className="tabular-nums">{formatCLP(v.valor)}</span>
+                </label>
+              ))}
+            </div>
+          )}
+          <p className="text-xs text-muted">
+            Seleccionados: {seleccionVisible.length} · Suma: {formatCLP(suma)}
+          </p>
         </CardBody>
-        <div className="grid gap-2 border-t border-border px-5 py-4 text-sm sm:grid-cols-3">
-          <div className="flex justify-between">
-            <span className="text-muted">Ingreso</span>
-            <span className="tabular-nums">{formatCLP(ingreso)}</span>
-          </div>
-          <div className="flex justify-between">
-            <span className="text-muted">Costos</span>
-            <span className="tabular-nums">{formatCLP(costoTotal)}</span>
-          </div>
-          <div className="flex justify-between font-semibold">
-            <span>Utilidad</span>
-            <span className={`tabular-nums ${utilidad < 0 ? "text-danger" : "text-ok"}`}>
-              {formatCLP(utilidad)}
-            </span>
-          </div>
-        </div>
       </Card>
 
       <Card>
         <CardHeader>
-          <CardTitle>Facturación y estado</CardTitle>
+          <CardTitle>Montos y cobranza</CardTitle>
         </CardHeader>
         <CardBody className="grid gap-4 sm:grid-cols-2">
-          <Field label="N° de factura" htmlFor="numero">
+          <Field
+            label="Total del documento"
+            htmlFor="total_manual"
+            hint="Déjalo vacío para usar la suma de los viajes seleccionados."
+          >
             <Input
-              id="numero"
-              name="numero"
-              defaultValue={factura?.numero ?? ""}
-              placeholder="465"
+              id="total_manual"
+              inputMode="numeric"
+              value={totalManual}
+              onChange={(e) => setTotalManual(e.target.value)}
+              placeholder={suma > 0 ? String(suma) : "0"}
             />
           </Field>
-          <Field label="Estado" htmlFor="estado">
-            <Select id="estado" name="estado" defaultValue={factura?.estado ?? "en_proceso"}>
-              {Object.entries(FACTURA_ESTADOS).map(([value, label]) => (
-                <option key={value} value={value}>
-                  {label}
-                </option>
-              ))}
-            </Select>
-          </Field>
-          <Field label="Fecha de pago" htmlFor="fecha_pago" hint="Se completa sola al marcar como pagada.">
+          <div className="grid grid-cols-3 gap-2 self-end text-sm">
+            <div>
+              <p className="text-xs text-muted">{esAfecta ? "Neto" : "Exento"}</p>
+              <p className="tabular-nums font-medium">{formatCLP(neto)}</p>
+            </div>
+            <div>
+              <p className="text-xs text-muted">IVA</p>
+              <p className="tabular-nums font-medium">{formatCLP(iva)}</p>
+            </div>
+            <div>
+              <p className="text-xs text-muted">Total</p>
+              <p className="tabular-nums font-semibold">{formatCLP(total)}</p>
+            </div>
+          </div>
+
+          <Field
+            label="Fecha de pago"
+            htmlFor="fecha_pago"
+            hint="Se registra cuando el cliente paga; déjala vacía si sigue pendiente."
+          >
             <Input
               id="fecha_pago"
               name="fecha_pago"
               type="date"
               defaultValue={factura?.fecha_pago ? toInputDate(factura.fecha_pago) : ""}
+              disabled={estado === "borrador"}
             />
           </Field>
 
@@ -358,16 +315,15 @@ export function FacturaForm({
                 <Upload className="h-4 w-4" />
                 {uploading ? "Subiendo…" : "Adjuntar"}
               </Button>
-              {archivoUrl ? (
-                <a
-                  href={archivoUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
+              {archivoPath ? (
+                <button
+                  type="button"
+                  onClick={verAdjunto}
                   className="inline-flex items-center gap-1 text-sm text-brand hover:underline"
                 >
                   <FileText className="h-4 w-4" />
                   Ver adjunto
-                </a>
+                </button>
               ) : (
                 <span className="inline-flex items-center gap-1 text-sm text-muted">
                   <Paperclip className="h-4 w-4" />

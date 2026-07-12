@@ -4,25 +4,21 @@ import { Card, CardBody, CardHeader, CardTitle } from "@/components/ui/card";
 import { Kpi } from "@/components/ui/kpi";
 import { formatCLP } from "@/lib/format";
 import { getPeriodo, rangoPeriodo, etiquetaPeriodo, enRango } from "@/lib/periodo";
-import {
-  isDemo,
-  demoFacturas,
-  demoGastos,
-  demoVehiculos,
-} from "@/lib/demo";
+import { isDemo, demoFacturas, demoViajes, demoGastos, demoVehiculos } from "@/lib/demo";
 import {
   GASTO_CATEGORIAS,
-  montoFactura,
+  costoTotalViaje,
   type GastoCategoria,
   type GastoVehiculo,
 } from "@/types/db";
-import { ArrowDownLeft, ArrowUpRight } from "lucide-react";
+import { ArrowDownLeft, ArrowUpRight, Route } from "lucide-react";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Finanzas" };
 
 type Ingreso = { monto: number; cliente: string };
 type Mov = { fecha: string; monto: number };
+type ViajeCosto = { fecha_inicio: string; estado: string; costo: number };
 
 const MES_CORTO = [
   "ene", "feb", "mar", "abr", "may", "jun",
@@ -59,34 +55,38 @@ export default async function FinanzasPage() {
   let patentePorId: Map<string, string>;
   let histIngresos: Mov[];
   let histGastos: Mov[];
+  let viajesCostos: ViajeCosto[];
 
   if (isDemo()) {
     ingresosArr = demoFacturas
-      .filter((f) => f.estado === "pagada" && enRango(f.fecha_pago, periodo))
-      .map((f) => ({ monto: montoFactura(f), cliente: f.cliente?.nombre ?? "—" }));
+      .filter((f) => f.estado === "emitida" && enRango(f.fecha_pago, periodo))
+      .map((f) => ({ monto: Number(f.total), cliente: f.cliente?.nombre ?? "—" }));
     gastos = demoGastos.filter((g) => enRango(g.fecha, periodo));
     patentePorId = new Map(demoVehiculos.map((v) => [v.id, v.patente]));
     histIngresos = demoFacturas
       .filter(
         (f) =>
-          f.estado === "pagada" &&
+          f.estado === "emitida" &&
           f.fecha_pago &&
           f.fecha_pago >= chartDesde &&
           f.fecha_pago <= chartHasta,
       )
-      .map((f) => ({ fecha: f.fecha_pago!, monto: montoFactura(f) }));
+      .map((f) => ({ fecha: f.fecha_pago!, monto: Number(f.total) }));
     histGastos = demoGastos
       .filter((g) => g.fecha >= chartDesde && g.fecha <= chartHasta)
       .map((g) => ({ fecha: g.fecha, monto: Number(g.monto_total) }));
+    viajesCostos = demoViajes
+      .filter((v) => v.fecha_inicio >= chartDesde && v.fecha_inicio <= chartHasta)
+      .map((v) => ({ fecha_inicio: v.fecha_inicio, estado: v.estado, costo: costoTotalViaje(v) }));
   } else {
     const supabase = await createClient();
     /* eslint-disable @typescript-eslint/no-explicit-any */
-    const [{ data: fData }, { data: gData }, { data: vData }, { data: hiData }, { data: hgData }] =
+    const [{ data: fData }, { data: gData }, { data: vData }, { data: hiData }, { data: hgData }, { data: vcData }] =
       await Promise.all([
         supabase
           .from("facturas")
-          .select("valor_a_pagar, valor_servicio, fecha_pago, cliente:clientes(nombre)")
-          .eq("estado", "pagada")
+          .select("total, fecha_pago, cliente:clientes(nombre)")
+          .eq("estado", "emitida")
           .gte("fecha_pago", desde)
           .lte("fecha_pago", hasta),
         supabase
@@ -97,8 +97,8 @@ export default async function FinanzasPage() {
         supabase.from("vehiculos").select("id, patente"),
         supabase
           .from("facturas")
-          .select("valor_a_pagar, valor_servicio, fecha_pago")
-          .eq("estado", "pagada")
+          .select("total, fecha_pago")
+          .eq("estado", "emitida")
           .gte("fecha_pago", chartDesde)
           .lte("fecha_pago", chartHasta),
         supabase
@@ -106,9 +106,15 @@ export default async function FinanzasPage() {
           .select("fecha, monto_total")
           .gte("fecha", chartDesde)
           .lte("fecha", chartHasta),
+        supabase
+          .from("viajes")
+          .select("fecha_inicio, estado, costo_combustible, costo_peajes, costo_viaticos, costo_otros")
+          .neq("estado", "cancelado")
+          .gte("fecha_inicio", chartDesde)
+          .lte("fecha_inicio", chartHasta),
       ]);
     ingresosArr = ((fData ?? []) as any[]).map((f) => ({
-      monto: Number(f.valor_a_pagar ?? f.valor_servicio),
+      monto: Number(f.total),
       cliente: f.cliente?.nombre ?? "—",
     }));
     gastos = (gData ?? []) as GastoVehiculo[];
@@ -117,14 +123,29 @@ export default async function FinanzasPage() {
     );
     histIngresos = ((hiData ?? []) as any[]).map((f) => ({
       fecha: f.fecha_pago as string,
-      monto: Number(f.valor_a_pagar ?? f.valor_servicio),
+      monto: Number(f.total),
     }));
     histGastos = ((hgData ?? []) as any[]).map((g) => ({
       fecha: g.fecha as string,
       monto: Number(g.monto_total),
     }));
+    viajesCostos = ((vcData ?? []) as any[]).map((v) => ({
+      fecha_inicio: v.fecha_inicio as string,
+      estado: v.estado as string,
+      costo: costoTotalViaje(v),
+    }));
     /* eslint-enable @typescript-eslint/no-explicit-any */
   }
+
+  // Los costos directos de los viajes (peajes, viáticos, etc.) también son
+  // egresos: entran al gráfico y al total.
+  histGastos = [
+    ...histGastos,
+    ...viajesCostos.filter((v) => v.costo > 0).map((v) => ({ fecha: v.fecha_inicio, monto: v.costo })),
+  ];
+  const costosViajesPeriodo = viajesCostos
+    .filter((v) => enRango(v.fecha_inicio, periodo))
+    .reduce((a, v) => a + v.costo, 0);
 
   const serie = mesesChart.map(({ anio, mes }) => {
     const pref = `${anio}-${String(mes).padStart(2, "0")}`;
@@ -144,7 +165,7 @@ export default async function FinanzasPage() {
   const maxSerie = Math.max(1, ...serie.flatMap((s) => [s.ingresos, s.egresos]));
 
   const ingresos = ingresosArr.reduce((a, x) => a + x.monto, 0);
-  const egresos = gastos.reduce((a, g) => a + Number(g.monto_total), 0);
+  const egresos = gastos.reduce((a, g) => a + Number(g.monto_total), 0) + costosViajesPeriodo;
   const balance = ingresos - egresos;
 
   const porCategoria = (Object.keys(GASTO_CATEGORIAS) as GastoCategoria[])
@@ -197,10 +218,10 @@ export default async function FinanzasPage() {
           tint="bg-ok-bg text-ok"
         />
         <Kpi
-          label="Egresos (gastos)"
+          label="Egresos"
           value={formatCLP(egresos)}
           valueClass="text-warn"
-          sub={`${gastos.length} gasto${gastos.length === 1 ? "" : "s"}`}
+          sub="Gastos de flota + costos de viajes"
           icon={ArrowUpRight}
           tint="bg-warn-bg text-warn"
         />
@@ -307,7 +328,7 @@ export default async function FinanzasPage() {
             <CardTitle>Egresos por categoría</CardTitle>
           </CardHeader>
           <CardBody>
-            {porCategoria.length === 0 ? (
+            {porCategoria.length === 0 && costosViajesPeriodo === 0 ? (
               <p className="text-sm text-muted">Sin egresos en el periodo.</p>
             ) : (
               <div className="flex flex-col gap-2.5">
@@ -320,6 +341,15 @@ export default async function FinanzasPage() {
                     <span className="tabular-nums">{formatCLP(x.total)}</span>
                   </div>
                 ))}
+                {costosViajesPeriodo > 0 ? (
+                  <div className="flex items-center justify-between rounded-full bg-brand-soft px-3.5 py-2 text-sm font-medium text-brand">
+                    <span className="flex items-center gap-1.5">
+                      <Route className="h-3.5 w-3.5" />
+                      Costos de viajes (peajes, viáticos…)
+                    </span>
+                    <span className="tabular-nums">{formatCLP(costosViajesPeriodo)}</span>
+                  </div>
+                ) : null}
               </div>
             )}
           </CardBody>

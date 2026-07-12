@@ -4,10 +4,18 @@ import { Card } from "@/components/ui/card";
 import { Kpi } from "@/components/ui/kpi";
 import { CircleDollarSign, AlertTriangle, CheckCircle2 } from "lucide-react";
 import { formatCLP } from "@/lib/format";
-import { isDemo, demoFacturas } from "@/lib/demo";
+import { isDemo, demoFacturas, demoViajes } from "@/lib/demo";
 import { getPeriodo, enRango, etiquetaPeriodo } from "@/lib/periodo";
-import { montoFactura, type FacturaConRelaciones } from "@/types/db";
-import { CobranzaAccordion, type CobranzaCliente } from "./cobranza-accordion";
+import {
+  facturaEstadoDerivado,
+  viajePorFacturar,
+  type FacturaConRelaciones,
+} from "@/types/db";
+import {
+  CobranzaAccordion,
+  type CobranzaCliente,
+  type ViajePendiente,
+} from "./cobranza-accordion";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Cobranzas" };
@@ -22,33 +30,60 @@ function diasDesde(fecha: string): number {
   return Math.round((hoy.getTime() - d.getTime()) / 86400000);
 }
 
+type ViajePendRaw = ViajePendiente & {
+  cliente: { id: string; nombre: string } | null;
+  cliente_id: string;
+};
+
 export default async function CobranzasPage() {
   const periodo = await getPeriodo();
 
   let facturas: FacturaConRelaciones[];
+  let viajesPend: ViajePendRaw[];
+
   if (isDemo()) {
     facturas = demoFacturas;
+    viajesPend = demoViajes
+      .filter((v) => viajePorFacturar(v))
+      .map((v) => ({
+        id: v.id,
+        fecha_inicio: v.fecha_inicio,
+        descripcion: v.descripcion,
+        valor: Number(v.valor),
+        cliente_id: v.cliente_id,
+        cliente: v.cliente ? { id: v.cliente.id, nombre: v.cliente.nombre } : null,
+      }));
   } else {
     const supabase = await createClient();
-    const { data } = await supabase
-      .from("facturas")
-      .select("*, cliente:clientes(id,nombre,codigo)")
-      .order("fecha", { ascending: false });
-    facturas = (data ?? []) as FacturaConRelaciones[];
+    const [{ data: fData }, { data: vData }] = await Promise.all([
+      supabase
+        .from("facturas")
+        .select("*, cliente:clientes(id,nombre,codigo), viajes:viajes(id,descripcion,fecha_inicio,valor)")
+        .order("fecha_emision", { ascending: false, nullsFirst: true }),
+      supabase
+        .from("viajes")
+        .select("id, fecha_inicio, descripcion, valor, cliente_id, cliente:clientes(id,nombre)")
+        .eq("estado", "realizado")
+        .is("factura_id", null)
+        .order("fecha_inicio", { ascending: false }),
+    ]);
+    facturas = (fData ?? []) as FacturaConRelaciones[];
+    viajesPend = (vData ?? []) as unknown as ViajePendRaw[];
   }
 
-  // Periodo global: las pagadas cuentan por fecha de pago; el resto por
-  // fecha del servicio.
-  facturas = facturas.filter((f) =>
-    f.estado === "pagada"
-      ? enRango(f.fecha_pago, periodo)
-      : enRango(f.fecha, periodo),
-  );
+  // Periodo global: las pagadas cuentan por fecha de pago, las emitidas por
+  // fecha de emisión; los borradores y los viajes sin facturar se muestran
+  // siempre (son trabajo pendiente, no historia).
+  facturas = facturas.filter((f) => {
+    const derivado = facturaEstadoDerivado(f);
+    if (derivado === "pagada") return enRango(f.fecha_pago, periodo);
+    if (derivado === "por_cobrar" || derivado === "anulada")
+      return enRango(f.fecha_emision, periodo);
+    return true; // borradores
+  });
 
   const map = new Map<string, CobranzaCliente>();
-  for (const f of facturas) {
-    const key = f.cliente?.id ?? "sin-cliente";
-    const nombre = f.cliente?.nombre ?? "Sin cliente";
+  const entrada = (key: string, nombre: string): CobranzaCliente => {
     if (!map.has(key)) {
       map.set(key, {
         clienteId: key,
@@ -58,16 +93,29 @@ export default async function CobranzasPage() {
         vencido: 0,
         pagado: 0,
         facturas: [],
+        viajesPendientes: [],
       });
     }
-    const a = map.get(key)!;
+    return map.get(key)!;
+  };
+
+  for (const v of viajesPend) {
+    if (!enRango(v.fecha_inicio, periodo)) continue;
+    const a = entrada(v.cliente?.id ?? v.cliente_id, v.cliente?.nombre ?? "Sin cliente");
+    a.viajesPendientes.push(v);
+    a.pendienteFacturar += Number(v.valor);
+  }
+
+  for (const f of facturas) {
+    const a = entrada(f.cliente?.id ?? "sin-cliente", f.cliente?.nombre ?? "Sin cliente");
     a.facturas.push(f);
-    const monto = montoFactura(f);
-    if (f.estado === "pagada") a.pagado += monto;
-    else if (f.estado === "facturada") {
+    const derivado = facturaEstadoDerivado(f);
+    const monto = Number(f.total);
+    if (derivado === "pagada") a.pagado += monto;
+    else if (derivado === "por_cobrar") {
       a.porCobrar += monto;
-      if (diasDesde(f.fecha) > DIAS_VENCE) a.vencido += monto;
-    } else {
+      if (f.fecha_emision && diasDesde(f.fecha_emision) > DIAS_VENCE) a.vencido += monto;
+    } else if (derivado === "borrador") {
       a.pendienteFacturar += monto;
     }
   }
@@ -113,7 +161,7 @@ export default async function CobranzasPage() {
 
       {filas.length === 0 ? (
         <Card className="px-6 py-16 text-center text-sm text-muted">
-          No hay facturas registradas todavía.
+          No hay facturas ni viajes por facturar todavía.
         </Card>
       ) : (
         <Card className="overflow-hidden">

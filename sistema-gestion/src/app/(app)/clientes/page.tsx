@@ -6,7 +6,7 @@ import { buttonClass } from "@/components/ui/button";
 import { Plus, Users } from "lucide-react";
 import { isDemo, demoClientes, demoFacturas } from "@/lib/demo";
 import { getPeriodo, rangoPeriodo, enRango } from "@/lib/periodo";
-import { montoFactura, type Cliente, type IngresoCliente } from "@/types/db";
+import type { Cliente, IngresoCliente } from "@/types/db";
 import { ClienteAccordion } from "./cliente-accordion";
 
 export const dynamic = "force-dynamic";
@@ -21,12 +21,12 @@ export default async function ClientesPage() {
   if (isDemo()) {
     clientes = demoClientes;
     ingresos = demoFacturas
-      .filter((f) => f.estado === "pagada" && enRango(f.fecha_pago, periodo))
+      .filter((f) => f.estado === "emitida" && f.fecha_pago && enRango(f.fecha_pago, periodo))
       .map((f) => ({
         id: f.id,
-        numero: f.numero,
+        numero: f.folio !== null ? String(f.folio) : null,
         fecha: f.fecha_pago as string,
-        monto: montoFactura(f),
+        monto: Number(f.total),
         cliente_id: f.cliente_id,
       }));
   } else {
@@ -36,17 +36,17 @@ export default async function ClientesPage() {
       supabase.from("clientes").select("*").order("nombre", { ascending: true }),
       supabase
         .from("facturas")
-        .select("id, numero, fecha_pago, valor_a_pagar, valor_servicio, cliente_id")
-        .eq("estado", "pagada")
+        .select("id, folio, fecha_pago, total, cliente_id")
+        .eq("estado", "emitida")
         .gte("fecha_pago", desde)
         .lte("fecha_pago", hasta),
     ]);
     clientes = (cData ?? []) as Cliente[];
     ingresos = ((fData ?? []) as any[]).map((f) => ({
       id: f.id,
-      numero: f.numero,
+      numero: f.folio !== null && f.folio !== undefined ? String(f.folio) : null,
       fecha: f.fecha_pago,
-      monto: Number(f.valor_a_pagar ?? f.valor_servicio),
+      monto: Number(f.total),
       cliente_id: f.cliente_id,
     }));
     /* eslint-enable @typescript-eslint/no-explicit-any */

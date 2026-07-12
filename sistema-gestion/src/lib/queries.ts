@@ -3,17 +3,18 @@ import {
   isDemo,
   demoEmpresa,
   demoCotizaciones,
-  demoFacturas,
+  demoViajes,
   demoClientes,
 } from "@/lib/demo";
 import {
-  FACTURA_ESTADOS,
+  VIAJE_ESTADOS,
+  facturaEstadoDerivado,
   type Empresa,
   type Cotizacion,
   type CotizacionItem,
   type Cliente,
-  type FacturaConRelaciones,
-  type FacturaEstado,
+  type Factura,
+  type ViajeEstado,
 } from "@/types/db";
 
 export type CotizacionDocumento = {
@@ -64,7 +65,9 @@ export async function getCotizacionParaDocumento(
 }
 
 // ---------------------------------------------------------------------------
-// Informe de facturas/servicios (lista por mes/empresa con total)
+// Informe de servicios (viajes del periodo, con su estado de facturación)
+// Es el documento que se le envía al cliente: el detalle de los servicios
+// prestados y cómo va cada uno (por facturar / facturado / pagado).
 // ---------------------------------------------------------------------------
 export type InformeFiltros = {
   estado?: string;
@@ -73,16 +76,27 @@ export type InformeFiltros = {
   q?: string;
 };
 
-export type FacturasInforme = {
+export type ViajeInformeRow = {
+  id: string;
+  fecha_inicio: string;
+  descripcion: string;
+  orden_compra: string | null;
+  valor: number;
+  clienteNombre: string;
+  folio: number | null;
+  estadoLabel: string;
+};
+
+export type ViajesInforme = {
   empresa: Empresa | null;
-  facturas: FacturaConRelaciones[];
+  viajes: ViajeInformeRow[];
   periodoLabel: string;
   empresaLabel: string;
   estadoLabel: string;
   total: number;
 };
 
-const ESTADOS = Object.keys(FACTURA_ESTADOS) as FacturaEstado[];
+const ESTADOS_VIAJE = Object.keys(VIAJE_ESTADOS) as ViajeEstado[];
 
 function mesLabel(mes?: string): string {
   if (!mes || !/^\d{4}-\d{2}$/.test(mes)) return "Todos los meses";
@@ -95,71 +109,116 @@ function mesLabel(mes?: string): string {
   return s.charAt(0).toUpperCase() + s.slice(1);
 }
 
-export async function getFacturasInforme(
+type FacturaRef = Pick<Factura, "folio" | "estado" | "fecha_pago"> | null;
+
+function estadoViajeLabel(estado: ViajeEstado, factura: FacturaRef): string {
+  if (estado === "cancelado") return "Cancelado";
+  if (estado === "programado") return "Programado";
+  if (!factura) return "Por facturar";
+  const fe = facturaEstadoDerivado(factura);
+  if (fe === "pagada") return "Pagada";
+  if (fe === "por_cobrar") return "Facturada (por pagar)";
+  if (fe === "anulada") return "Factura anulada";
+  return "Factura en borrador";
+}
+
+const FILTRO_LABELS: Record<string, string> = {
+  por_facturar: "Por facturar",
+  programado: "Programados",
+  realizado: "Realizados",
+  cancelado: "Cancelados",
+};
+
+export async function getViajesInforme(
   filtros: InformeFiltros,
-): Promise<FacturasInforme> {
+): Promise<ViajesInforme> {
   const estado =
-    filtros.estado && ESTADOS.includes(filtros.estado as FacturaEstado)
-      ? (filtros.estado as FacturaEstado)
+    filtros.estado &&
+    (filtros.estado === "por_facturar" ||
+      ESTADOS_VIAJE.includes(filtros.estado as ViajeEstado))
+      ? filtros.estado
       : undefined;
 
   let empresa: Empresa | null;
-  let facturas: FacturaConRelaciones[];
+  let filas: ViajeInformeRow[];
   let empresaLabel = "Todas las empresas";
 
   if (isDemo()) {
     empresa = demoEmpresa;
-    facturas = demoFacturas.filter((f) => {
-      if (estado && f.estado !== estado) return false;
-      if (filtros.cliente && f.cliente_id !== filtros.cliente) return false;
-      if (
-        filtros.q &&
-        !(f.descripcion ?? "").toLowerCase().includes(filtros.q.toLowerCase())
-      )
-        return false;
-      if (
-        filtros.mes &&
-        /^\d{4}-\d{2}$/.test(filtros.mes) &&
-        !f.fecha.startsWith(filtros.mes)
-      )
-        return false;
-      return true;
-    });
+    filas = demoViajes
+      .filter((v) => {
+        if (estado === "por_facturar") {
+          if (!(v.estado === "realizado" && v.factura_id === null)) return false;
+        } else if (estado && v.estado !== estado) return false;
+        if (filtros.cliente && v.cliente_id !== filtros.cliente) return false;
+        if (filtros.q && !v.descripcion.toLowerCase().includes(filtros.q.toLowerCase()))
+          return false;
+        if (
+          filtros.mes &&
+          /^\d{4}-\d{2}$/.test(filtros.mes) &&
+          !v.fecha_inicio.startsWith(filtros.mes)
+        )
+          return false;
+        return true;
+      })
+      .map((v) => ({
+        id: v.id,
+        fecha_inicio: v.fecha_inicio,
+        descripcion: v.descripcion,
+        orden_compra: v.orden_compra,
+        valor: Number(v.valor),
+        clienteNombre: v.cliente?.nombre ?? "—",
+        folio: v.factura?.folio ?? null,
+        estadoLabel: estadoViajeLabel(v.estado, v.factura),
+      }));
     if (filtros.cliente) {
       const c = demoClientes.find((x) => x.id === filtros.cliente);
       if (c) empresaLabel = c.nombre;
     }
   } else {
     const supabase = await createClient();
-    const [{ data: emp }] = await Promise.all([
-      supabase
-        .from("empresa")
-        .select("*")
-        .order("created_at", { ascending: true })
-        .limit(1)
-        .maybeSingle(),
-    ]);
+    const { data: emp } = await supabase
+      .from("empresa")
+      .select("*")
+      .order("created_at", { ascending: true })
+      .limit(1)
+      .maybeSingle();
     empresa = (emp as Empresa) ?? null;
 
     let query = supabase
-      .from("facturas")
+      .from("viajes")
       .select(
-        "*, cliente:clientes(id,nombre,codigo), cotizacion:cotizaciones(id,numero)",
+        "id, fecha_inicio, descripcion, orden_compra, valor, estado, cliente:clientes(id,nombre), factura:facturas(folio,estado,fecha_pago)",
       )
-      .order("fecha", { ascending: true });
+      .order("fecha_inicio", { ascending: true });
 
-    if (estado) query = query.eq("estado", estado);
+    if (estado === "por_facturar") {
+      query = query.eq("estado", "realizado").is("factura_id", null);
+    } else if (estado) {
+      query = query.eq("estado", estado);
+    }
     if (filtros.cliente) query = query.eq("cliente_id", filtros.cliente);
     if (filtros.q) query = query.ilike("descripcion", `%${filtros.q}%`);
     if (filtros.mes && /^\d{4}-\d{2}$/.test(filtros.mes)) {
       const [y, m] = filtros.mes.split("-").map(Number);
       const start = `${filtros.mes}-01`;
       const end = new Date(y, m, 0).toISOString().slice(0, 10);
-      query = query.gte("fecha", start).lte("fecha", end);
+      query = query.gte("fecha_inicio", start).lte("fecha_inicio", end);
     }
 
     const { data } = await query;
-    facturas = (data ?? []) as FacturaConRelaciones[];
+    /* eslint-disable @typescript-eslint/no-explicit-any */
+    filas = ((data ?? []) as any[]).map((v) => ({
+      id: v.id,
+      fecha_inicio: v.fecha_inicio,
+      descripcion: v.descripcion,
+      orden_compra: v.orden_compra,
+      valor: Number(v.valor),
+      clienteNombre: v.cliente?.nombre ?? "—",
+      folio: v.factura?.folio ?? null,
+      estadoLabel: estadoViajeLabel(v.estado, v.factura ?? null),
+    }));
+    /* eslint-enable @typescript-eslint/no-explicit-any */
 
     if (filtros.cliente) {
       const { data: c } = await supabase
@@ -171,17 +230,14 @@ export async function getFacturasInforme(
     }
   }
 
-  const total = facturas.reduce(
-    (acc, f) => acc + Number(f.valor_a_pagar ?? f.valor_servicio),
-    0,
-  );
+  const total = filas.reduce((acc, v) => acc + v.valor, 0);
 
   return {
     empresa,
-    facturas,
+    viajes: filas,
     periodoLabel: mesLabel(filtros.mes),
     empresaLabel,
-    estadoLabel: estado ? FACTURA_ESTADOS[estado] : "Todos los estados",
+    estadoLabel: estado ? (FILTRO_LABELS[estado] ?? estado) : "Todos los estados",
     total,
   };
 }

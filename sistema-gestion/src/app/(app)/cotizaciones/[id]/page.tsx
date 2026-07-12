@@ -4,7 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { PageHeader } from "@/components/page-header";
 import { Card, CardBody, CardHeader, CardTitle } from "@/components/ui/card";
 import { buttonClass } from "@/components/ui/button";
-import { CotizacionBadge, FacturaBadge } from "@/components/ui/badge";
+import { CotizacionBadge, ViajeBadge } from "@/components/ui/badge";
 import { eliminarCotizacion } from "../actions";
 import { ConfirmForm } from "@/components/ui/confirm-form";
 import { CotizacionPreview } from "../cotizacion-preview";
@@ -12,7 +12,7 @@ import {
   Pencil,
   FileDown,
   Sheet,
-  Receipt,
+  Route,
   Trash2,
   ArrowLeft,
 } from "lucide-react";
@@ -20,14 +20,14 @@ import { formatCLP, formatDate } from "@/lib/format";
 import {
   isDemo,
   demoCotizacionCompleta,
-  demoFacturasPorCotizacion,
+  demoViajesPorCotizacion,
   demoEmpresa,
 } from "@/lib/demo";
 import type {
   Cotizacion,
   CotizacionItem,
   Cliente,
-  Factura,
+  Viaje,
   Empresa,
 } from "@/types/db";
 
@@ -46,12 +46,12 @@ export default async function CotizacionDetallePage({
   const { id } = await params;
 
   let cot: Row | null;
-  let facturas: Factura[];
+  let viajes: Viaje[];
   let empresa: Empresa | null;
 
   if (isDemo()) {
     cot = demoCotizacionCompleta(id) as Row | null;
-    facturas = demoFacturasPorCotizacion(id);
+    viajes = demoViajesPorCotizacion(id);
     empresa = demoEmpresa;
   } else {
     const supabase = await createClient();
@@ -61,12 +61,12 @@ export default async function CotizacionDetallePage({
       .eq("id", id)
       .maybeSingle();
     cot = (data as Row) ?? null;
-    const [{ data: facturasData }, { data: emp }] = await Promise.all([
+    const [{ data: viajesData }, { data: emp }] = await Promise.all([
       supabase
-        .from("facturas")
+        .from("viajes")
         .select("*")
         .eq("cotizacion_id", id)
-        .order("fecha", { ascending: false }),
+        .order("fecha_inicio", { ascending: false }),
       supabase
         .from("empresa")
         .select("*")
@@ -74,7 +74,7 @@ export default async function CotizacionDetallePage({
         .limit(1)
         .maybeSingle(),
     ]);
-    facturas = (facturasData ?? []) as Factura[];
+    viajes = (viajesData ?? []) as Viaje[];
     empresa = (emp as Empresa) ?? null;
   }
 
@@ -139,36 +139,33 @@ export default async function CotizacionDetallePage({
 
       <Card className="mb-6">
         <CardHeader>
-          <CardTitle>Facturas de esta cotización</CardTitle>
+          <CardTitle>Viajes de esta cotización</CardTitle>
           <Link
-            href={`/facturas/nueva?cotizacion=${cot.id}`}
+            href={`/viajes/nueva?cotizacion=${cot.id}`}
             className={buttonClass({ size: "sm" })}
           >
-            <Receipt className="h-4 w-4" />
-            Crear factura
+            <Route className="h-4 w-4" />
+            Registrar viaje
           </Link>
         </CardHeader>
         <CardBody>
-          {facturas.length === 0 ? (
+          {viajes.length === 0 ? (
             <p className="text-sm text-muted">
-              Aún no hay facturas asociadas a esta cotización.
+              Aún no hay viajes asociados a esta cotización.
             </p>
           ) : (
             <ul className="divide-y divide-border">
-              {facturas.map((f) => (
-                <li key={f.id} className="flex items-center justify-between py-2">
+              {viajes.map((v) => (
+                <li key={v.id} className="flex items-center justify-between py-2">
                   <Link
-                    href={`/facturas/${f.id}`}
+                    href={`/viajes/${v.id}`}
                     className="text-sm font-medium text-brand hover:underline"
                   >
-                    {f.numero ? `Factura ${f.numero}` : "Sin número"} ·{" "}
-                    {formatDate(f.fecha)}
+                    {v.descripcion} · {formatDate(v.fecha_inicio)}
                   </Link>
                   <div className="flex items-center gap-3">
-                    <span className="text-sm tabular-nums">
-                      {formatCLP(f.valor_a_pagar ?? f.valor_servicio)}
-                    </span>
-                    <FacturaBadge estado={f.estado} />
+                    <span className="text-sm tabular-nums">{formatCLP(v.valor)}</span>
+                    <ViajeBadge viaje={v} />
                   </div>
                 </li>
               ))}

@@ -9,8 +9,7 @@ import {
   renderToBuffer,
 } from "@react-pdf/renderer";
 import { formatDate, formatCLP } from "@/lib/format";
-import { FACTURA_ESTADOS } from "@/types/db";
-import type { FacturasInforme } from "@/lib/queries";
+import type { ViajesInforme } from "@/lib/queries";
 import type { LogoData } from "@/lib/logo";
 
 const BRAND = "#1d4e89";
@@ -92,10 +91,10 @@ function InformeDoc({
   data,
   logo,
 }: {
-  data: FacturasInforme;
+  data: ViajesInforme;
   logo: LogoData | null;
 }) {
-  const { empresa, facturas, periodoLabel, empresaLabel, total } = data;
+  const { empresa, viajes, periodoLabel, empresaLabel, total } = data;
   const empresaLine = [empresa?.direccion, empresa?.ciudad]
     .filter(Boolean)
     .join(", ");
@@ -151,25 +150,19 @@ function InformeDoc({
             <Text style={[styles.th, styles.cMonto]}>Monto</Text>
           </View>
 
-          {facturas.map((f, i) => (
+          {viajes.map((v, i) => (
             <View
               style={[styles.tr, ...(i % 2 ? [styles.trAlt] : [])]}
-              key={f.id}
+              key={v.id}
               wrap={false}
             >
-              <Text style={[styles.td, styles.cFecha]}>{formatDate(f.fecha)}</Text>
-              <Text style={[styles.td, styles.cEmpresa]}>
-                {f.cliente?.nombre ?? "—"}
-              </Text>
-              <Text style={[styles.td, styles.cDesc]}>{f.descripcion ?? "—"}</Text>
-              <Text style={[styles.td, styles.cNum]}>{f.numero ?? "—"}</Text>
-              <Text style={[styles.td, styles.cOC]}>{f.orden_compra ?? "—"}</Text>
-              <Text style={[styles.td, styles.cEstado]}>
-                {FACTURA_ESTADOS[f.estado]}
-              </Text>
-              <Text style={[styles.td, styles.cMonto]}>
-                {formatCLP(f.valor_a_pagar ?? f.valor_servicio)}
-              </Text>
+              <Text style={[styles.td, styles.cFecha]}>{formatDate(v.fecha_inicio)}</Text>
+              <Text style={[styles.td, styles.cEmpresa]}>{v.clienteNombre}</Text>
+              <Text style={[styles.td, styles.cDesc]}>{v.descripcion}</Text>
+              <Text style={[styles.td, styles.cNum]}>{v.folio ?? "—"}</Text>
+              <Text style={[styles.td, styles.cOC]}>{v.orden_compra ?? "—"}</Text>
+              <Text style={[styles.td, styles.cEstado]}>{v.estadoLabel}</Text>
+              <Text style={[styles.td, styles.cMonto]}>{formatCLP(v.valor)}</Text>
             </View>
           ))}
         </View>
@@ -178,7 +171,7 @@ function InformeDoc({
           <Text style={styles.totalLabel}>TOTAL</Text>
           <Text style={styles.totalValue}>{formatCLP(total)}</Text>
         </View>
-        <Text style={styles.count}>{facturas.length} servicio(s).</Text>
+        <Text style={styles.count}>{viajes.length} servicio(s).</Text>
 
         <Text style={styles.footer} fixed>
           {empresa?.nombre ?? "Transportes Pucarani"}
@@ -191,7 +184,7 @@ function InformeDoc({
 }
 
 export async function renderInformePDF(
-  data: FacturasInforme,
+  data: ViajesInforme,
   logo: LogoData | null,
 ): Promise<Buffer> {
   return await renderToBuffer(<InformeDoc data={data} logo={logo} />);
