@@ -4,7 +4,7 @@ import { Card, CardBody, CardHeader, CardTitle } from "@/components/ui/card";
 import { Kpi } from "@/components/ui/kpi";
 import { formatCLP } from "@/lib/format";
 import { getPeriodo, rangoPeriodo, etiquetaPeriodo, enRango } from "@/lib/periodo";
-import { isDemo, demoFacturas, demoViajes, demoGastos, demoVehiculos } from "@/lib/demo";
+import { isDemo, demoFacturas, demoViajes, demoGastos } from "@/lib/demo";
 import {
   GASTO_CATEGORIAS,
   costoTotalViaje,
@@ -52,7 +52,6 @@ export default async function FinanzasPage() {
 
   let ingresosArr: Ingreso[];
   let gastos: GastoVehiculo[];
-  let patentePorId: Map<string, string>;
   let histIngresos: Mov[];
   let histGastos: Mov[];
   let viajesCostos: ViajeCosto[];
@@ -62,7 +61,6 @@ export default async function FinanzasPage() {
       .filter((f) => f.estado === "emitida" && enRango(f.fecha_pago, periodo))
       .map((f) => ({ monto: Number(f.total), cliente: f.cliente?.nombre ?? "—" }));
     gastos = demoGastos.filter((g) => enRango(g.fecha, periodo));
-    patentePorId = new Map(demoVehiculos.map((v) => [v.id, v.patente]));
     histIngresos = demoFacturas
       .filter(
         (f) =>
@@ -81,7 +79,7 @@ export default async function FinanzasPage() {
   } else {
     const supabase = await createClient();
     /* eslint-disable @typescript-eslint/no-explicit-any */
-    const [{ data: fData }, { data: gData }, { data: vData }, { data: hiData }, { data: hgData }, { data: vcData }] =
+    const [{ data: fData }, { data: gData }, { data: hiData }, { data: hgData }, { data: vcData }] =
       await Promise.all([
         supabase
           .from("facturas")
@@ -94,7 +92,6 @@ export default async function FinanzasPage() {
           .select("*")
           .gte("fecha", desde)
           .lte("fecha", hasta),
-        supabase.from("vehiculos").select("id, patente"),
         supabase
           .from("facturas")
           .select("total, fecha_pago")
@@ -118,9 +115,6 @@ export default async function FinanzasPage() {
       cliente: f.cliente?.nombre ?? "—",
     }));
     gastos = (gData ?? []) as GastoVehiculo[];
-    patentePorId = new Map(
-      ((vData ?? []) as any[]).map((v) => [v.id as string, v.patente as string]),
-    );
     histIngresos = ((hiData ?? []) as any[]).map((f) => ({
       fecha: f.fecha_pago as string,
       monto: Number(f.total),
@@ -183,9 +177,10 @@ export default async function FinanzasPage() {
     const key = g.vehiculo_id ?? "sin";
     porVehMap.set(key, (porVehMap.get(key) ?? 0) + Number(g.monto_total));
   }
+  // g.vehiculo_id ES la patente (PK del vehículo).
   const porVehiculo = [...porVehMap.entries()]
-    .map(([id, total]) => ({
-      patente: id === "sin" ? "Sin asignar" : (patentePorId.get(id) ?? "—"),
+    .map(([patente, total]) => ({
+      patente: patente === "sin" ? "Sin asignar" : patente,
       total,
     }))
     .sort((a, b) => b.total - a.total);

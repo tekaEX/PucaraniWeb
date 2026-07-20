@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { isDemo } from "@/lib/demo";
 import { s, sReq, bool, intNull, num } from "@/lib/form-helpers";
+import { formatearPatente, PATENTE_HINT } from "@/lib/patentes";
 
 export type FormState = { error?: string; ok?: boolean };
 
@@ -17,12 +18,15 @@ export async function guardarVehiculo(
 ): Promise<FormState> {
   if (isDemo()) return { error: DEMO_MSG };
 
-  const id = s(formData.get("id"));
-  const patente = sReq(formData.get("patente"));
-  if (!patente) return { error: "La patente es obligatoria." };
+  // La patente ES el identificador: se guarda solo en formato canónico.
+  const patenteOriginal = s(formData.get("patente_original"));
+  const patenteRaw = sReq(formData.get("patente"));
+  if (!patenteRaw) return { error: "La patente es obligatoria." };
+  const patente = formatearPatente(patenteRaw);
+  if (!patente) return { error: `Patente inválida. ${PATENTE_HINT}.` };
 
   const values = {
-    patente: patente.toUpperCase(),
+    patente,
     marca: s(formData.get("marca")),
     modelo: s(formData.get("modelo")),
     anio: intNull(formData.get("anio")),
@@ -36,8 +40,8 @@ export async function guardarVehiculo(
   };
 
   const supabase = await createClient();
-  const { error } = id
-    ? await supabase.from("vehiculos").update(values).eq("id", id)
+  const { error } = patenteOriginal
+    ? await supabase.from("vehiculos").update(values).eq("patente", patenteOriginal)
     : await supabase.from("vehiculos").insert(values);
 
   if (error) return { error: `No se pudo guardar: ${error.message}` };
@@ -45,16 +49,16 @@ export async function guardarVehiculo(
   revalidatePath("/vehiculos");
   revalidatePath("/");
   // Al crear vuelve a la lista; al editar inline se queda en el acordeón.
-  if (!id) redirect("/vehiculos");
+  if (!patenteOriginal) redirect("/vehiculos");
   return { ok: true };
 }
 
 export async function eliminarVehiculo(formData: FormData) {
   if (isDemo()) redirect("/vehiculos");
-  const id = sReq(formData.get("id"));
-  if (!id) return;
+  const patente = sReq(formData.get("patente"));
+  if (!patente) return;
   const supabase = await createClient();
-  await supabase.from("vehiculos").delete().eq("id", id);
+  await supabase.from("vehiculos").delete().eq("patente", patente);
   revalidatePath("/vehiculos");
   redirect("/vehiculos");
 }
@@ -99,7 +103,6 @@ export async function agregarGasto(
   });
   if (error) return { error: `No se pudo guardar: ${error.message}` };
 
-  revalidatePath(`/vehiculos/${vehiculo_id}`);
   revalidatePath("/vehiculos");
   return { ok: true };
 }
@@ -107,10 +110,8 @@ export async function agregarGasto(
 export async function eliminarGasto(formData: FormData) {
   if (isDemo()) return;
   const id = sReq(formData.get("id"));
-  const vehiculo_id = sReq(formData.get("vehiculo_id"));
   if (!id) return;
   const supabase = await createClient();
   await supabase.from("gastos_vehiculo").delete().eq("id", id);
-  revalidatePath(`/vehiculos/${vehiculo_id}`);
   revalidatePath("/vehiculos");
 }

@@ -168,7 +168,6 @@ export const demoChoferes: Chofer[] = [
 
 export const demoVehiculos: Vehiculo[] = [
   {
-    id: "demo-veh-1",
     empresa_id: EMPRESA_ID,
     patente: "JKLM-12",
     marca: "Mercedes-Benz",
@@ -185,7 +184,6 @@ export const demoVehiculos: Vehiculo[] = [
     updated_at: now,
   },
   {
-    id: "demo-veh-2",
     empresa_id: EMPRESA_ID,
     patente: "GHPR-34",
     marca: "Hyundai",
@@ -451,12 +449,12 @@ const demoViajesBase: Viaje[] = [
 ];
 
 export const demoAsignaciones: ViajeAsignacion[] = [
-  { id: "demo-asig-1", viaje_id: "demo-via-4", chofer_id: "demo-cho-1", vehiculo_id: "demo-veh-1", fecha: null, notas: null, created_at: now },
+  { id: "demo-asig-1", viaje_id: "demo-via-4", chofer_id: "demo-cho-1", vehiculo_id: "JKLM-12", fecha: null, notas: null, created_at: now },
   // Multi-bus: la jornada mañana del patrimonio salió con dos máquinas.
-  { id: "demo-asig-2", viaje_id: "demo-via-6", chofer_id: "demo-cho-1", vehiculo_id: "demo-veh-1", fecha: null, notas: null, created_at: now },
-  { id: "demo-asig-3", viaje_id: "demo-via-6", chofer_id: "demo-cho-2", vehiculo_id: "demo-veh-2", fecha: null, notas: null, created_at: now },
-  { id: "demo-asig-4", viaje_id: "demo-via-7", chofer_id: "demo-cho-2", vehiculo_id: "demo-veh-2", fecha: null, notas: null, created_at: now },
-  { id: "demo-asig-5", viaje_id: "demo-via-10", chofer_id: "demo-cho-2", vehiculo_id: "demo-veh-1", fecha: null, notas: null, created_at: now },
+  { id: "demo-asig-2", viaje_id: "demo-via-6", chofer_id: "demo-cho-1", vehiculo_id: "JKLM-12", fecha: null, notas: null, created_at: now },
+  { id: "demo-asig-3", viaje_id: "demo-via-6", chofer_id: "demo-cho-2", vehiculo_id: "GHPR-34", fecha: null, notas: null, created_at: now },
+  { id: "demo-asig-4", viaje_id: "demo-via-7", chofer_id: "demo-cho-2", vehiculo_id: "GHPR-34", fecha: null, notas: null, created_at: now },
+  { id: "demo-asig-5", viaje_id: "demo-via-10", chofer_id: "demo-cho-2", vehiculo_id: "JKLM-12", fecha: null, notas: null, created_at: now },
 ];
 
 // ---- Vistas compuestas (las formas que usan las páginas) ----
@@ -467,12 +465,12 @@ function asignacionesDe(viajeId: string): AsignacionConDetalle[] {
     .map((a) => ({
       ...a,
       chofer: demoChoferes.find((c) => c.id === a.chofer_id) ?? null,
-      vehiculo: demoVehiculos.find((v) => v.id === a.vehiculo_id) ?? null,
+      vehiculo: demoVehiculos.find((v) => v.patente === a.vehiculo_id) ?? null,
     }))
     .map((a) => ({
       ...a,
       chofer: a.chofer ? { id: a.chofer.id, nombre: a.chofer.nombre } : null,
-      vehiculo: a.vehiculo ? { id: a.vehiculo.id, patente: a.vehiculo.patente } : null,
+      vehiculo: a.vehiculo ? { patente: a.vehiculo.patente } : null,
     }));
 }
 
@@ -569,8 +567,8 @@ export function demoChoferById(id: string): Chofer | null {
   return demoChoferes.find((x) => x.id === id) ?? null;
 }
 
-export function demoVehiculoById(id: string): Vehiculo | null {
-  return demoVehiculos.find((x) => x.id === id) ?? null;
+export function demoVehiculoByPatente(patente: string): Vehiculo | null {
+  return demoVehiculos.find((x) => x.patente === patente) ?? null;
 }
 
 // --- Gastos por vehículo (manual + SII) ---
@@ -628,18 +626,18 @@ function mkGastoManual(g: {
 }
 
 export const demoGastos: GastoVehiculo[] = [
-  mkGastoSii({ id: "demo-gas-1", vehiculo_id: "demo-veh-1", patente: "JKLM12", folio: 880123, fecha: enMes(0, 2), litros: 120, neto: 110000, iva: 20900 }),
-  mkGastoManual({ id: "demo-gas-2", vehiculo_id: "demo-veh-1", categoria: "mantencion", descripcion: "Cambio de aceite y filtros", proveedor: "Taller Don Pedro", fecha: enMes(0, 3), total: 85000 }),
-  mkGastoSii({ id: "demo-gas-3", vehiculo_id: "demo-veh-2", patente: "GHPR34", folio: 880140, fecha: enMes(0, 4), litros: 210, neto: 190000, iva: 36100 }),
-  mkGastoManual({ id: "demo-gas-4", vehiculo_id: "demo-veh-2", categoria: "seguros", descripcion: "SOAP 2026", fecha: enMes(-5, 15), total: 42000 }),
+  mkGastoSii({ id: "demo-gas-1", vehiculo_id: "JKLM-12", patente: "JKLM12", folio: 880123, fecha: enMes(0, 2), litros: 120, neto: 110000, iva: 20900 }),
+  mkGastoManual({ id: "demo-gas-2", vehiculo_id: "JKLM-12", categoria: "mantencion", descripcion: "Cambio de aceite y filtros", proveedor: "Taller Don Pedro", fecha: enMes(0, 3), total: 85000 }),
+  mkGastoSii({ id: "demo-gas-3", vehiculo_id: "GHPR-34", patente: "GHPR34", folio: 880140, fecha: enMes(0, 4), litros: 210, neto: 190000, iva: 36100 }),
+  mkGastoManual({ id: "demo-gas-4", vehiculo_id: "GHPR-34", categoria: "seguros", descripcion: "SOAP 2026", fecha: enMes(-5, 15), total: 42000 }),
   // Historia (meses anteriores) para el gráfico de tendencia.
-  mkGastoSii({ id: "demo-gas-5", vehiculo_id: "demo-veh-1", patente: "JKLM12", folio: 879950, fecha: enMes(-1, 7), litros: 180, neto: 164200, iva: 31200 }),
-  mkGastoManual({ id: "demo-gas-6", vehiculo_id: "demo-veh-2", categoria: "mantencion", descripcion: "Neumáticos delanteros", proveedor: "Taller Don Pedro", fecha: enMes(-1, 18), total: 120000 }),
-  mkGastoSii({ id: "demo-gas-7", vehiculo_id: "demo-veh-2", patente: "GHPR34", folio: 880021, fecha: enMes(-1, 25), litros: 130, neto: 116500, iva: 22100 }),
-  mkGastoSii({ id: "demo-gas-8", vehiculo_id: "demo-veh-1", patente: "JKLM12", folio: 879800, fecha: enMes(-2, 8), litros: 190, neto: 172300, iva: 32700 }),
-  mkGastoManual({ id: "demo-gas-9", vehiculo_id: "demo-veh-1", categoria: "mantencion", descripcion: "Frenos y suspensión", proveedor: "Taller Don Pedro", fecha: enMes(-2, 17), total: 165000 }),
-  mkGastoSii({ id: "demo-gas-10", vehiculo_id: "demo-veh-2", patente: "GHPR34", folio: 879650, fecha: enMes(-3, 7), litros: 225, neto: 201700, iva: 38300 }),
-  mkGastoManual({ id: "demo-gas-11", vehiculo_id: "demo-veh-2", categoria: "otros", descripcion: "Lavado y aseo de flota", fecha: enMes(-3, 20), total: 35000 }),
-  mkGastoSii({ id: "demo-gas-12", vehiculo_id: "demo-veh-1", patente: "JKLM12", folio: 879400, fecha: enMes(-4, 11), litros: 185, neto: 166400, iva: 31600 }),
-  mkGastoSii({ id: "demo-gas-13", vehiculo_id: "demo-veh-2", patente: "GHPR34", folio: 879200, fecha: enMes(-5, 6), litros: 172, neto: 155500, iva: 29500 }),
+  mkGastoSii({ id: "demo-gas-5", vehiculo_id: "JKLM-12", patente: "JKLM12", folio: 879950, fecha: enMes(-1, 7), litros: 180, neto: 164200, iva: 31200 }),
+  mkGastoManual({ id: "demo-gas-6", vehiculo_id: "GHPR-34", categoria: "mantencion", descripcion: "Neumáticos delanteros", proveedor: "Taller Don Pedro", fecha: enMes(-1, 18), total: 120000 }),
+  mkGastoSii({ id: "demo-gas-7", vehiculo_id: "GHPR-34", patente: "GHPR34", folio: 880021, fecha: enMes(-1, 25), litros: 130, neto: 116500, iva: 22100 }),
+  mkGastoSii({ id: "demo-gas-8", vehiculo_id: "JKLM-12", patente: "JKLM12", folio: 879800, fecha: enMes(-2, 8), litros: 190, neto: 172300, iva: 32700 }),
+  mkGastoManual({ id: "demo-gas-9", vehiculo_id: "JKLM-12", categoria: "mantencion", descripcion: "Frenos y suspensión", proveedor: "Taller Don Pedro", fecha: enMes(-2, 17), total: 165000 }),
+  mkGastoSii({ id: "demo-gas-10", vehiculo_id: "GHPR-34", patente: "GHPR34", folio: 879650, fecha: enMes(-3, 7), litros: 225, neto: 201700, iva: 38300 }),
+  mkGastoManual({ id: "demo-gas-11", vehiculo_id: "GHPR-34", categoria: "otros", descripcion: "Lavado y aseo de flota", fecha: enMes(-3, 20), total: 35000 }),
+  mkGastoSii({ id: "demo-gas-12", vehiculo_id: "JKLM-12", patente: "JKLM12", folio: 879400, fecha: enMes(-4, 11), litros: 185, neto: 166400, iva: 31600 }),
+  mkGastoSii({ id: "demo-gas-13", vehiculo_id: "GHPR-34", patente: "GHPR34", folio: 879200, fecha: enMes(-5, 6), litros: 172, neto: 155500, iva: 29500 }),
 ];

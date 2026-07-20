@@ -43,13 +43,13 @@ export function VehiculoAccordion({
       </thead>
       <tbody className="divide-y divide-border">
         {vehiculos.map((v) => {
-          const open = openId === v.id;
-          const vGastos = porVehiculo.get(v.id) ?? [];
+          const open = openId === v.patente;
+          const vGastos = porVehiculo.get(v.patente) ?? [];
           const total = vGastos.reduce((a, g) => a + Number(g.monto_total), 0);
           return (
-            <Fragment key={v.id}>
+            <Fragment key={v.patente}>
               <tr
-                onClick={() => setOpenId(open ? null : v.id)}
+                onClick={() => setOpenId(open ? null : v.patente)}
                 className="cursor-pointer transition-colors hover:bg-gray-100/60"
               >
                 <td className="px-4 py-3">

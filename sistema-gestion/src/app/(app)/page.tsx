@@ -103,7 +103,7 @@ export default async function DashboardPage() {
         .lte("fecha", hasta),
       supabase
         .from("viajes")
-        .select("*, cliente:clientes(id,nombre,codigo), factura:facturas(id,folio,tipo_dte,estado,fecha_pago), asignaciones:viaje_asignaciones(id,viaje_id,chofer_id,vehiculo_id,fecha,notas,created_at, chofer:choferes(id,nombre), vehiculo:vehiculos(id,patente))")
+        .select("*, cliente:clientes(id,nombre,codigo), factura:facturas(id,folio,tipo_dte,estado,fecha_pago), asignaciones:viaje_asignaciones(id,viaje_id,chofer_id,vehiculo_id,fecha,notas,created_at, chofer:choferes(id,nombre), vehiculo:vehiculos(patente))")
         .gte("fecha_inicio", desde)
         .lte("fecha_inicio", hasta)
         .order("fecha_inicio", { ascending: false })

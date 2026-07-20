@@ -29,14 +29,14 @@ export default async function ViajeDetallePage({
   let clientes: { id: string; nombre: string; codigo: string | null }[];
   let cotizaciones: { id: string; numero: number; cliente_id: string | null; total: number }[];
   let choferes: { id: string; nombre: string }[];
-  let vehiculos: { id: string; patente: string }[];
+  let vehiculos: { patente: string }[];
 
   if (isDemo()) {
     viaje = demoViajeById(id);
     clientes = demoClientes.map((c) => ({ id: c.id, nombre: c.nombre, codigo: c.codigo }));
     cotizaciones = demoCotizacionesLite();
     choferes = demoChoferes.map((c) => ({ id: c.id, nombre: c.nombre }));
-    vehiculos = demoVehiculos.map((v) => ({ id: v.id, patente: v.patente }));
+    vehiculos = demoVehiculos.map((v) => ({ patente: v.patente }));
   } else {
     const supabase = await createClient();
     const [{ data: via }, { data: cl }, { data: cot }, { data: cho }, { data: veh }] =
@@ -44,7 +44,7 @@ export default async function ViajeDetallePage({
         supabase
           .from("viajes")
           .select(
-            "*, cliente:clientes(id,nombre,codigo), cotizacion:cotizaciones(id,numero), factura:facturas(id,folio,tipo_dte,estado,fecha_pago), asignaciones:viaje_asignaciones(id,viaje_id,chofer_id,vehiculo_id,fecha,notas,created_at, chofer:choferes(id,nombre), vehiculo:vehiculos(id,patente))",
+            "*, cliente:clientes(id,nombre,codigo), cotizacion:cotizaciones(id,numero), factura:facturas(id,folio,tipo_dte,estado,fecha_pago), asignaciones:viaje_asignaciones(id,viaje_id,chofer_id,vehiculo_id,fecha,notas,created_at, chofer:choferes(id,nombre), vehiculo:vehiculos(patente))",
           )
           .eq("id", id)
           .maybeSingle(),
@@ -54,7 +54,7 @@ export default async function ViajeDetallePage({
           .select("id,numero,cliente_id,total")
           .order("numero", { ascending: false }),
         supabase.from("choferes").select("id,nombre").order("nombre"),
-        supabase.from("vehiculos").select("id,patente").order("patente"),
+        supabase.from("vehiculos").select("patente").order("patente"),
       ]);
     viaje = (via as ViajeConRelaciones) ?? null;
     clientes = cl ?? [];

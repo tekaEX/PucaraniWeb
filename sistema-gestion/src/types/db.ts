@@ -124,6 +124,7 @@ export interface ViajeAsignacion {
   id: string;
   viaje_id: string;
   chofer_id: string | null;
+  /** Patente del vehículo (FK a vehiculos.patente). */
   vehiculo_id: string | null;
   fecha: string | null;
   notas: string | null;
@@ -174,8 +175,8 @@ export interface Chofer {
 }
 
 export interface Vehiculo {
-  id: string;
   empresa_id: string;
+  /** PK: la patente en formato canónico ("ABCD-12" / "AB-1234"). */
   patente: string;
   marca: string | null;
   modelo: string | null;
@@ -204,6 +205,7 @@ export interface SiiCredencial {
 export interface GastoVehiculo {
   id: string;
   empresa_id: string;
+  /** Patente del vehículo (FK a vehiculos.patente). */
   vehiculo_id: string | null;
   categoria: GastoCategoria;
   descripcion: string | null;
@@ -275,7 +277,7 @@ export type CotizacionCompleta = CotizacionConCliente & {
 
 export type AsignacionConDetalle = ViajeAsignacion & {
   chofer: Pick<Chofer, "id" | "nombre"> | null;
-  vehiculo: Pick<Vehiculo, "id" | "patente"> | null;
+  vehiculo: Pick<Vehiculo, "patente"> | null;
 };
 
 export type ViajeConRelaciones = Viaje & {
@@ -291,7 +293,7 @@ export type FacturaConRelaciones = Factura & {
 };
 
 export type GastoVehiculoConVehiculo = GastoVehiculo & {
-  vehiculo: Pick<Vehiculo, "id" | "patente" | "marca" | "modelo"> | null;
+  vehiculo: Pick<Vehiculo, "patente" | "marca" | "modelo"> | null;
 };
 
 // Ingreso (factura pagada) resumido, para mostrar por cliente.

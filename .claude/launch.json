@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "sistema-gestion",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["--prefix", "sistema-gestion", "run", "dev"],
+      "port": 3000
+    }
+  ]
+}

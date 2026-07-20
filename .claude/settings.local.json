@@ -10,7 +10,9 @@
       "Bash(rm -f assets/vendor/fontawesome-free/css/brands.css assets/vendor/fontawesome-free/css/brands.min.css)",
       "Bash(rm -f assets/vendor/fontawesome-free/css/fontawesome.css assets/vendor/fontawesome-free/css/fontawesome.min.css)",
       "Bash(rm -f assets/vendor/fontawesome-free/css/regular.css assets/vendor/fontawesome-free/css/regular.min.css)",
-      "Bash(rm -f assets/vendor/fontawesome-free/css/solid.css assets/vendor/fontawesome-free/css/solid.min.css)"
+      "Bash(rm -f assets/vendor/fontawesome-free/css/solid.css assets/vendor/fontawesome-free/css/solid.min.css)",
+      "Skill(run)",
+      "Skill(run:*)"
     ]
   }
 }

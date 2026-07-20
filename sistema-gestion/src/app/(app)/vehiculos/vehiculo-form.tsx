@@ -10,6 +10,7 @@ import { Button, buttonClass } from "@/components/ui/button";
 import { Card, CardBody, CardHeader, CardTitle } from "@/components/ui/card";
 import { Save } from "lucide-react";
 import { toInputDate } from "@/lib/format";
+import { PATENTE_PATTERN, PATENTE_HINT } from "@/lib/patentes";
 import type { Vehiculo } from "@/types/db";
 
 export function VehiculoForm({ vehiculo }: { vehiculo?: Vehiculo }) {
@@ -20,7 +21,9 @@ export function VehiculoForm({ vehiculo }: { vehiculo?: Vehiculo }) {
 
   return (
     <form action={formAction} className="space-y-6">
-      {vehiculo ? <input type="hidden" name="id" value={vehiculo.id} /> : null}
+      {vehiculo ? (
+        <input type="hidden" name="patente_original" value={vehiculo.patente} />
+      ) : null}
 
       <Card>
         <CardHeader>
@@ -28,7 +31,17 @@ export function VehiculoForm({ vehiculo }: { vehiculo?: Vehiculo }) {
         </CardHeader>
         <CardBody className="grid gap-4 sm:grid-cols-2">
           <Field label="Patente" htmlFor="patente">
-            <Input id="patente" name="patente" defaultValue={vehiculo?.patente ?? ""} required />
+            <Input
+              id="patente"
+              name="patente"
+              defaultValue={vehiculo?.patente ?? ""}
+              required
+              pattern={PATENTE_PATTERN}
+              maxLength={8}
+              title={PATENTE_HINT}
+              placeholder="ABCD-12"
+              className="uppercase"
+            />
           </Field>
           <Field label="Capacidad (pasajeros)" htmlFor="capacidad">
             <Input id="capacidad" name="capacidad" type="number" defaultValue={vehiculo?.capacidad ?? ""} />

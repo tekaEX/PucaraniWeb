@@ -23,7 +23,7 @@ type CotizacionOpt = {
   titulo?: string | null;
 };
 type ChoferOpt = { id: string; nombre: string };
-type VehiculoOpt = { id: string; patente: string };
+type VehiculoOpt = { patente: string };
 
 type AsigRow = { chofer_id: string; vehiculo_id: string; fecha: string };
 
@@ -264,7 +264,7 @@ export function ViajeForm({
               >
                 <option value="">— Sin vehículo —</option>
                 {vehiculos.map((v) => (
-                  <option key={v.id} value={v.id}>
+                  <option key={v.patente} value={v.patente}>
                     {v.patente}
                   </option>
                 ))}

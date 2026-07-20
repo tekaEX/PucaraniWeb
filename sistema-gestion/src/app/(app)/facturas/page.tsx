@@ -5,31 +5,22 @@ import { Card } from "@/components/ui/card";
 import { Select } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import { buttonClass } from "@/components/ui/button";
-import { Plus, Receipt, Filter, Eye, HandCoins } from "lucide-react";
+import { Plus, Receipt, Filter, Eye } from "lucide-react";
 import { isDemo, demoClientes, demoFacturas } from "@/lib/demo";
 import {
   FACTURA_ESTADOS_DERIVADOS,
-  TIPOS_DTE,
   facturaEstadoDerivado,
   type Cliente,
   type FacturaConRelaciones,
   type FacturaEstadoDerivado,
 } from "@/types/db";
-import { formatCLP, formatDate } from "@/lib/format";
 import { getPeriodo, rangoPeriodo, enRango } from "@/lib/periodo";
-import { marcarPagada } from "./actions";
+import { FacturaAccordion } from "./factura-accordion";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Facturas" };
 
 const ESTADOS = Object.keys(FACTURA_ESTADOS_DERIVADOS) as FacturaEstadoDerivado[];
-
-const estadoChip: Record<FacturaEstadoDerivado, string> = {
-  borrador: "bg-[#ececef] text-[#6e6e73]",
-  por_cobrar: "bg-warn-bg text-warn",
-  pagada: "bg-ok-bg text-ok",
-  anulada: "bg-red-50 text-red-700",
-};
 
 export default async function FacturasPage({
   searchParams,
@@ -113,7 +104,7 @@ export default async function FacturasPage({
     <div>
       <PageHeader
         title="Facturas"
-        description="Los documentos que emites: cada factura puede cubrir uno o varios viajes."
+        description="Los documentos que emites: cada factura puede cubrir uno o varios viajes. Haz clic en una para ver el detalle."
       >
         <Link
           href={`/facturas/informe${informeSuffix}`}
@@ -180,78 +171,7 @@ export default async function FacturasPage({
       ) : (
         <Card className="overflow-hidden">
           <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-border text-left text-xs text-muted">
-                  <th className="px-4 py-3 font-medium">Folio</th>
-                  <th className="px-4 py-3 font-medium">Emisión</th>
-                  <th className="px-4 py-3 font-medium">Cliente</th>
-                  <th className="px-4 py-3 font-medium">Viajes incluidos</th>
-                  <th className="px-4 py-3 text-right font-medium">Total</th>
-                  <th className="px-4 py-3 font-medium">Estado</th>
-                  <th className="px-4 py-3" />
-                </tr>
-              </thead>
-              <tbody>
-                {facturas.map((f) => {
-                  const derivado = facturaEstadoDerivado(f);
-                  return (
-                    <tr key={f.id} className="border-b border-border last:border-0 hover:bg-background/60">
-                      <td className="whitespace-nowrap px-4 py-3">
-                        <Link href={`/facturas/${f.id}`} className="font-medium text-foreground hover:underline">
-                          {f.folio ? `N° ${f.folio}` : "Borrador"}
-                        </Link>
-                        <span className="ml-2 text-xs text-muted">
-                          {TIPOS_DTE[f.tipo_dte] ?? `DTE ${f.tipo_dte}`}
-                        </span>
-                      </td>
-                      <td className="whitespace-nowrap px-4 py-3 text-muted">
-                        {f.fecha_emision ? formatDate(f.fecha_emision) : "—"}
-                      </td>
-                      <td className="px-4 py-3">{f.cliente?.nombre ?? "—"}</td>
-                      <td className="px-4 py-3">
-                        {f.viajes.length === 0 ? (
-                          <span className="text-muted">Sin viajes</span>
-                        ) : f.viajes.length === 1 ? (
-                          f.viajes[0].descripcion
-                        ) : (
-                          <span>
-                            {f.viajes.length} viajes
-                            <span className="ml-1 text-xs text-muted">
-                              ({f.viajes[0].descripcion}…)
-                            </span>
-                          </span>
-                        )}
-                      </td>
-                      <td className="whitespace-nowrap px-4 py-3 text-right tabular-nums">
-                        {formatCLP(f.total)}
-                      </td>
-                      <td className="px-4 py-3">
-                        <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${estadoChip[derivado]}`}>
-                          {FACTURA_ESTADOS_DERIVADOS[derivado]}
-                          {derivado === "pagada" && f.fecha_pago ? ` · ${formatDate(f.fecha_pago)}` : ""}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3">
-                        {derivado === "por_cobrar" ? (
-                          <form action={marcarPagada}>
-                            <input type="hidden" name="id" value={f.id} />
-                            <button
-                              type="submit"
-                              className="inline-flex items-center gap-1 whitespace-nowrap text-xs font-medium text-ok hover:underline"
-                              title="Registrar pago con fecha de hoy"
-                            >
-                              <HandCoins className="h-3.5 w-3.5" />
-                              Registrar pago
-                            </button>
-                          </form>
-                        ) : null}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+            <FacturaAccordion facturas={facturas} />
           </div>
         </Card>
       )}

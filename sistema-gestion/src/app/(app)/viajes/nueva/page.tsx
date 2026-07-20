@@ -28,13 +28,13 @@ export default async function NuevoViajePage({
     titulo?: string | null;
   }[];
   let choferes: { id: string; nombre: string }[];
-  let vehiculos: { id: string; patente: string }[];
+  let vehiculos: { patente: string }[];
 
   if (isDemo()) {
     clientes = demoClientes.map((c) => ({ id: c.id, nombre: c.nombre, codigo: c.codigo }));
     cotizaciones = demoCotizacionesLite();
     choferes = demoChoferes.map((c) => ({ id: c.id, nombre: c.nombre }));
-    vehiculos = demoVehiculos.map((v) => ({ id: v.id, patente: v.patente }));
+    vehiculos = demoVehiculos.map((v) => ({ patente: v.patente }));
   } else {
     const supabase = await createClient();
     const [{ data: cl }, { data: cot }, { data: cho }, { data: veh }] =
@@ -45,7 +45,7 @@ export default async function NuevoViajePage({
           .select("id,numero,cliente_id,total,titulo")
           .order("numero", { ascending: false }),
         supabase.from("choferes").select("id,nombre").order("nombre"),
-        supabase.from("vehiculos").select("id,patente").order("patente"),
+        supabase.from("vehiculos").select("patente").order("patente"),
       ]);
     clientes = cl ?? [];
     cotizaciones = cot ?? [];

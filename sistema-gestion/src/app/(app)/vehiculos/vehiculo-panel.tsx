@@ -14,6 +14,7 @@ import { Badge } from "@/components/ui/badge";
 import { GastoForm } from "./gasto-form";
 import { Trash2, Check, Loader2 } from "lucide-react";
 import { toInputDate, formatCLP, formatDate } from "@/lib/format";
+import { PATENTE_PATTERN, PATENTE_HINT } from "@/lib/patentes";
 import { isDemo } from "@/lib/demo";
 import {
   GASTO_CATEGORIAS,
@@ -112,7 +113,7 @@ export function VehiculoPanel({
           action={eliminarVehiculo}
           mensaje={`¿Eliminar el vehículo ${vehiculo.patente} y sus gastos? Esta acción no se puede deshacer.`}
         >
-          <input type="hidden" name="id" value={vehiculo.id} />
+          <input type="hidden" name="patente" value={vehiculo.patente} />
           <button
             type="submit"
             className="inline-flex items-center gap-1.5 rounded-full border border-red-200 bg-white px-3 py-2 text-sm font-medium text-red-600 hover:bg-red-50"
@@ -132,10 +133,18 @@ export function VehiculoPanel({
           className="space-y-4 rounded-xl border border-border bg-white p-4"
         >
           <p className="text-sm font-semibold">Datos del vehículo</p>
-          <input type="hidden" name="id" value={vehiculo.id} />
+          <input type="hidden" name="patente_original" value={vehiculo.patente} />
           <div className="grid gap-3 sm:grid-cols-2">
             <Campo label="Patente">
-              <Input name="patente" defaultValue={vehiculo.patente} required />
+              <Input
+                name="patente"
+                defaultValue={vehiculo.patente}
+                required
+                pattern={PATENTE_PATTERN}
+                maxLength={8}
+                title={PATENTE_HINT}
+                className="uppercase"
+              />
             </Campo>
             <div className="flex items-end">
               <label className="flex items-center gap-2 text-sm">
@@ -272,7 +281,6 @@ export function VehiculoPanel({
                           mensaje="¿Eliminar este gasto?"
                         >
                           <input type="hidden" name="id" value={gx.id} />
-                          <input type="hidden" name="vehiculo_id" value={vehiculo.id} />
                           <button
                             type="submit"
                             className="text-muted hover:text-red-600"
@@ -291,7 +299,7 @@ export function VehiculoPanel({
 
           <div className="border-t border-[#f0f0f2] pt-3">
             <p className="mb-2 text-sm font-medium">Agregar gasto</p>
-            <GastoForm vehiculoId={vehiculo.id} />
+            <GastoForm vehiculoId={vehiculo.patente} />
           </div>
         </div>
       </div>

@@ -51,7 +51,7 @@ export function construirAlertas(
       if (ev && ev.estado !== "ok") {
         alertas.push({
           tipo: "Vehículo",
-          refId: v.id,
+          refId: v.patente,
           nombre: v.patente,
           documento: doc.label,
           fecha: fecha as string,

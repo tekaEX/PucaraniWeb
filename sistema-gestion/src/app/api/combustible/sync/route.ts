@@ -116,10 +116,11 @@ export async function POST(req: Request) {
   // Vehículos de la empresa (para mapear por patente, SI hubiera detalle)
   const { data: vehiculos } = await supabase
     .from("vehiculos")
-    .select("id, patente")
+    .select("patente")
     .eq("empresa_id", empresaId);
+  // vehiculo_id ES la patente canónica del vehículo (PK).
   const porPatente = new Map(
-    (vehiculos ?? []).map((v) => [normalizar(v.patente), v.id]),
+    (vehiculos ?? []).map((v) => [normalizar(v.patente), v.patente]),
   );
 
   const filas = [];
