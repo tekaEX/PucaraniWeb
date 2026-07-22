@@ -7,7 +7,7 @@ import { isDemo } from "@/lib/demo";
 import { s, sReq, num } from "@/lib/form-helpers";
 import type { ViajeEstado } from "@/types/db";
 
-export type FormState = { error?: string };
+export type FormState = { error?: string; ok?: boolean };
 
 const DEMO_MSG =
   "Modo demostración: conecta Supabase (ver README) para guardar datos reales.";
@@ -102,6 +102,8 @@ export async function guardarViaje(
 
   revalidatePath("/viajes");
   revalidatePath("/");
+  // Edición inline (autoguardado): no redirige, mantiene abierto el acordeón.
+  if (id) return { ok: true };
   redirect("/viajes");
 }
 

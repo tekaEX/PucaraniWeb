@@ -5,8 +5,9 @@ import { Card } from "@/components/ui/card";
 import { buttonClass } from "@/components/ui/button";
 import { Plus, FileText } from "lucide-react";
 import { isDemo, demoCotizaciones, demoViajes, demoEmpresa } from "@/lib/demo";
-import { getPeriodo, rangoPeriodo, enRango } from "@/lib/periodo";
+import { getPeriodo, rangoPeriodo, enRango, etiquetaPeriodo } from "@/lib/periodo";
 import type { Empresa, Viaje } from "@/types/db";
+import { datosNuevaCotizacion } from "./nueva/datos";
 import { CotizacionAccordion, type CotRow } from "./cotizacion-accordion";
 
 export const dynamic = "force-dynamic";
@@ -49,11 +50,14 @@ export default async function CotizacionesPage() {
     viajes = (vData ?? []) as Viaje[];
   }
 
+  // Para la edición inline en el acordeón.
+  const { clientes } = await datosNuevaCotizacion();
+
   return (
     <div>
       <PageHeader
         title="Cotizaciones"
-        description="Presupuestos numerados. Haz clic en una para ver el detalle."
+        description={`Presupuestos de ${etiquetaPeriodo(periodo).toLowerCase()}. Haz clic en una para ver y editar.`}
       >
         <Link href="/cotizaciones/nueva" className={buttonClass()}>
           <Plus className="h-4 w-4" />
@@ -75,6 +79,7 @@ export default async function CotizacionesPage() {
           <div className="overflow-x-auto">
             <CotizacionAccordion
               cotizaciones={cotizaciones}
+              clientes={clientes}
               empresa={empresa}
               viajes={viajes}
             />

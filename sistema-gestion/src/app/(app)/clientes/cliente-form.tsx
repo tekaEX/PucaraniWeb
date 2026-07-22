@@ -21,7 +21,7 @@ export function ClienteForm({ cliente }: { cliente?: Cliente }) {
     <form action={formAction}>
       {cliente ? <input type="hidden" name="id" value={cliente.id} /> : null}
       <Card>
-        <CardBody className="grid gap-4 sm:grid-cols-2">
+        <CardBody className="grid gap-3 sm:grid-cols-2">
           <Field label="Nombre" htmlFor="nombre" className="sm:col-span-2">
             <Input
               id="nombre"

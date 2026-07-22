@@ -1,11 +1,18 @@
 "use client";
 
-import { Fragment, useState } from "react";
+import { Fragment, useState, useTransition } from "react";
 import Link from "next/link";
-import { ChevronDown, Pencil, CheckCircle2, Trash2 } from "lucide-react";
+import { ChevronDown, Trash2 } from "lucide-react";
 import { ViajeBadge } from "@/components/ui/badge";
-import { buttonClass } from "@/components/ui/button";
 import { ConfirmForm } from "@/components/ui/confirm-form";
+import { EstadoSelector, type EstadoOpcion } from "@/components/ui/estado-selector";
+import {
+  ViajeForm,
+  type ClienteOpt,
+  type CotizacionOpt,
+  type ChoferOpt,
+  type VehiculoOpt,
+} from "./viaje-form";
 import { formatCLP, formatDate } from "@/lib/format";
 import {
   costoTotalViaje,
@@ -14,6 +21,33 @@ import {
 } from "@/types/db";
 import { actualizarEstadoViaje, eliminarViaje } from "./actions";
 
+const ESTADOS_VIAJE: EstadoOpcion[] = [
+  { value: "programado", label: "Programado", tone: "blue" },
+  { value: "realizado", label: "Realizado", tone: "green" },
+  { value: "cancelado", label: "Cancelado", tone: "gray" },
+];
+
+// Selector de estado con autoguardado (componente compartido del sistema).
+// useTransition mantiene `pending` (el spinner) hasta que el servidor guarda
+// y la lista se revalida.
+function EstadoViajeControl({ viaje }: { viaje: ViajeConRelaciones }) {
+  const [pending, startTransition] = useTransition();
+  return (
+    <EstadoSelector
+      name="estado"
+      defaultValue={viaje.estado}
+      opciones={ESTADOS_VIAJE}
+      pending={pending}
+      onCambio={(nuevo) => {
+        const fd = new FormData();
+        fd.set("id", viaje.id);
+        fd.set("estado", nuevo);
+        startTransition(() => actualizarEstadoViaje(fd));
+      }}
+    />
+  );
+}
+
 // Tinte de fila sutil según estado (mismo criterio del sistema de diseño).
 function rowTone(v: ViajeConRelaciones) {
   if (viajePorFacturar(v)) return "bg-[#fffdf8]";
@@ -21,7 +55,19 @@ function rowTone(v: ViajeConRelaciones) {
   return "";
 }
 
-export function ViajeAccordion({ viajes }: { viajes: ViajeConRelaciones[] }) {
+export function ViajeAccordion({
+  viajes,
+  clientes,
+  cotizaciones,
+  choferes,
+  vehiculos,
+}: {
+  viajes: ViajeConRelaciones[];
+  clientes: ClienteOpt[];
+  cotizaciones: CotizacionOpt[];
+  choferes: ChoferOpt[];
+  vehiculos: VehiculoOpt[];
+}) {
   const [openId, setOpenId] = useState<string | null>(null);
 
   return (
@@ -111,26 +157,7 @@ export function ViajeAccordion({ viajes }: { viajes: ViajeConRelaciones[] }) {
                 <tr>
                   <td colSpan={9} className="bg-gray-50/50 px-4 py-5">
                     <div className="mb-4 flex flex-wrap items-center gap-2">
-                      <Link
-                        href={`/viajes/${v.id}`}
-                        className={buttonClass({ variant: "outline", size: "sm" })}
-                      >
-                        <Pencil className="h-4 w-4" />
-                        Editar
-                      </Link>
-                      {v.estado === "programado" ? (
-                        <form action={actualizarEstadoViaje}>
-                          <input type="hidden" name="id" value={v.id} />
-                          <input type="hidden" name="estado" value="realizado" />
-                          <button
-                            type="submit"
-                            className={buttonClass({ variant: "secondary", size: "sm" })}
-                          >
-                            <CheckCircle2 className="h-4 w-4" />
-                            Marcar realizado
-                          </button>
-                        </form>
-                      ) : null}
+                      <EstadoViajeControl viaje={v} />
                       <ConfirmForm
                         action={eliminarViaje}
                         mensaje={`¿Eliminar el viaje "${v.descripcion}"? Esta acción no se puede deshacer.`}
@@ -147,96 +174,15 @@ export function ViajeAccordion({ viajes }: { viajes: ViajeConRelaciones[] }) {
                       </ConfirmForm>
                     </div>
 
-                    <div className="grid items-start gap-4 lg:grid-cols-2">
-                      {/* Costos y margen */}
-                      <div className="rounded-xl border border-border bg-white p-4">
-                        <p className="mb-3 text-sm font-semibold">Costos del viaje</p>
-                        <dl className="space-y-1.5 text-sm">
-                          <div className="flex justify-between">
-                            <dt className="text-muted">Combustible</dt>
-                            <dd className="tabular-nums">
-                              {formatCLP(Number(v.costo_combustible))}
-                            </dd>
-                          </div>
-                          <div className="flex justify-between">
-                            <dt className="text-muted">Peajes</dt>
-                            <dd className="tabular-nums">{formatCLP(Number(v.costo_peajes))}</dd>
-                          </div>
-                          <div className="flex justify-between">
-                            <dt className="text-muted">Viáticos</dt>
-                            <dd className="tabular-nums">
-                              {formatCLP(Number(v.costo_viaticos))}
-                            </dd>
-                          </div>
-                          <div className="flex justify-between">
-                            <dt className="text-muted">Otros</dt>
-                            <dd className="tabular-nums">{formatCLP(Number(v.costo_otros))}</dd>
-                          </div>
-                          <div className="flex justify-between border-t border-border pt-1.5 font-medium">
-                            <dt>Total costos</dt>
-                            <dd className="tabular-nums">{formatCLP(costos)}</dd>
-                          </div>
-                          <div className="flex justify-between font-medium">
-                            <dt>Margen (valor − costos)</dt>
-                            <dd
-                              className={`tabular-nums ${v.valor - costos < 0 ? "text-danger" : "text-ok"}`}
-                            >
-                              {formatCLP(v.valor - costos)}
-                            </dd>
-                          </div>
-                        </dl>
-                      </div>
-
-                      {/* Detalle */}
-                      <div className="rounded-xl border border-border bg-white p-4">
-                        <p className="mb-3 text-sm font-semibold">Detalle</p>
-                        <dl className="space-y-1.5 text-sm">
-                          <div className="flex justify-between gap-4">
-                            <dt className="text-muted">Cliente</dt>
-                            <dd className="text-right">{v.cliente?.nombre ?? "—"}</dd>
-                          </div>
-                          <div className="flex justify-between gap-4">
-                            <dt className="text-muted">Orden de compra</dt>
-                            <dd>{v.orden_compra ?? "—"}</dd>
-                          </div>
-                          <div className="flex justify-between gap-4">
-                            <dt className="text-muted">Cotización</dt>
-                            <dd>
-                              {v.cotizacion ? (
-                                <Link
-                                  href={`/cotizaciones/${v.cotizacion.id}`}
-                                  className="text-brand hover:underline"
-                                >
-                                  N° {v.cotizacion.numero}
-                                </Link>
-                              ) : (
-                                "—"
-                              )}
-                            </dd>
-                          </div>
-                          <div className="flex justify-between gap-4">
-                            <dt className="text-muted">Asignaciones</dt>
-                            <dd className="text-right">
-                              {v.asignaciones.length === 0
-                                ? "—"
-                                : v.asignaciones
-                                    .map((a) =>
-                                      [a.chofer?.nombre, a.vehiculo?.patente]
-                                        .filter(Boolean)
-                                        .join(" · "),
-                                    )
-                                    .join(", ")}
-                            </dd>
-                          </div>
-                          {v.notas ? (
-                            <div className="pt-1.5">
-                              <dt className="text-muted">Notas</dt>
-                              <dd className="mt-0.5 whitespace-pre-wrap">{v.notas}</dd>
-                            </div>
-                          ) : null}
-                        </dl>
-                      </div>
-                    </div>
+                    {/* Edición completa inline (mismo patrón que Facturas y
+                        Cotizaciones): datos, asignaciones y costos. */}
+                    <ViajeForm
+                      viaje={v}
+                      clientes={clientes}
+                      cotizaciones={cotizaciones}
+                      choferes={choferes}
+                      vehiculos={vehiculos}
+                    />
                   </td>
                 </tr>
               ) : null}

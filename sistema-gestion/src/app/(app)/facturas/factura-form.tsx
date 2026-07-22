@@ -4,13 +4,15 @@ import { useActionState, useRef, useState } from "react";
 import Link from "next/link";
 import { guardarFactura, type FormState } from "./actions";
 import { createClient } from "@/lib/supabase/client";
+import { isDemo } from "@/lib/demo";
 import { Input } from "@/components/ui/input";
+import { MoneyInput, formatMiles } from "@/components/ui/money-input";
 import { Textarea } from "@/components/ui/textarea";
 import { Select } from "@/components/ui/select";
 import { Field } from "@/components/ui/label";
 import { Button, buttonClass } from "@/components/ui/button";
 import { Card, CardBody, CardHeader, CardTitle } from "@/components/ui/card";
-import { Save, Upload, Paperclip, FileText } from "lucide-react";
+import { Save, Upload, Paperclip, FileText, Check, Loader2 } from "lucide-react";
 import { toInputDate, todayInput, formatCLP, formatDate } from "@/lib/format";
 import { TIPOS_DTE } from "@/types/db";
 import type { FacturaConRelaciones, FacturaEstado } from "@/types/db";
@@ -52,6 +54,9 @@ export function FacturaForm({
   );
   const [tipoDte, setTipoDte] = useState(String(factura?.tipo_dte ?? 34));
   const [estado, setEstado] = useState<FacturaEstado>(factura?.estado ?? "borrador");
+  const [fechaPago, setFechaPago] = useState(
+    factura?.fecha_pago ? toInputDate(factura.fecha_pago) : "",
+  );
   // "" = usar la suma de los viajes seleccionados.
   const [totalManual, setTotalManual] = useState(
     factura ? String(factura.total) : "",
@@ -60,6 +65,30 @@ export function FacturaForm({
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState("");
   const fileRef = useRef<HTMLInputElement>(null);
+
+  // Autoguardado al editar (viaje/factura existente); botón solo al crear.
+  const formRef = useRef<HTMLFormElement>(null);
+  const demo = isDemo();
+  const editando = !!factura;
+
+  // La pastilla del acordeón también cambia estado/pago: re-sincroniza al
+  // llegar props nuevas (patrón "ajustar estado en el render") para no pisar
+  // ese cambio al autoguardar. https://react.dev/learn/you-might-not-need-an-effect
+  const syncKey = `${factura?.estado ?? ""}|${factura?.fecha_pago ?? ""}`;
+  const [syncPrev, setSyncPrev] = useState(syncKey);
+  if (factura && syncKey !== syncPrev) {
+    setSyncPrev(syncKey);
+    setEstado(factura.estado);
+    setFechaPago(factura.fecha_pago ? toInputDate(factura.fecha_pago) : "");
+  }
+
+  function autoguardar() {
+    if (demo || !editando || uploading) return;
+    formRef.current?.requestSubmit();
+  }
+  function onBlurForm(e: React.FocusEvent<HTMLFormElement>) {
+    if (!e.currentTarget.contains(e.relatedTarget as Node | null)) autoguardar();
+  }
 
   const visibles = viajesDisponibles.filter((v) => v.cliente_id === clienteId);
   const seleccionVisible = seleccion.filter((id) => visibles.some((v) => v.id === id));
@@ -120,7 +149,12 @@ export function FacturaForm({
   }
 
   return (
-    <form action={formAction} className="space-y-6">
+    <form
+      ref={formRef}
+      action={formAction}
+      onBlur={editando ? onBlurForm : undefined}
+      className="space-y-4"
+    >
       {factura ? <input type="hidden" name="id" value={factura.id} /> : null}
       <input type="hidden" name="cliente_id" value={clienteId} />
       <input type="hidden" name="viajes" value={JSON.stringify(seleccionVisible)} />
@@ -129,11 +163,14 @@ export function FacturaForm({
       <input type="hidden" name="total" value={total} />
       <input type="hidden" name="archivo_path" value={archivoPath} />
 
+      {/* Dos columnas simétricas: misma altura, sin huecos. */}
+      <div className="grid gap-3 lg:grid-cols-2">
+      <div className="flex flex-col gap-3">
       <Card>
         <CardHeader>
           <CardTitle>Documento</CardTitle>
         </CardHeader>
-        <CardBody className="grid gap-4 sm:grid-cols-2">
+        <CardBody className="grid gap-3 sm:grid-cols-2">
           <Field label="Cliente (receptor)" htmlFor="cliente_select">
             <Select
               id="cliente_select"
@@ -207,7 +244,7 @@ export function FacturaForm({
         </CardBody>
       </Card>
 
-      <Card>
+      <Card className="flex-1">
         <CardHeader>
           <CardTitle>Viajes incluidos</CardTitle>
         </CardHeader>
@@ -223,7 +260,7 @@ export function FacturaForm({
               y márcalo como realizado.
             </p>
           ) : (
-            <div className="divide-y divide-border rounded-lg border border-border">
+            <div className="max-h-56 divide-y divide-border overflow-y-auto rounded-lg border border-border">
               {visibles.map((v) => (
                 <label
                   key={v.id}
@@ -247,23 +284,23 @@ export function FacturaForm({
           </p>
         </CardBody>
       </Card>
+      </div>
 
       <Card>
         <CardHeader>
           <CardTitle>Montos y cobranza</CardTitle>
         </CardHeader>
-        <CardBody className="grid gap-4 sm:grid-cols-2">
+        <CardBody className="grid gap-3 sm:grid-cols-2">
           <Field
             label="Total del documento"
             htmlFor="total_manual"
             hint="Déjalo vacío para usar la suma de los viajes seleccionados."
           >
-            <Input
+            <MoneyInput
               id="total_manual"
-              inputMode="numeric"
               value={totalManual}
-              onChange={(e) => setTotalManual(e.target.value)}
-              placeholder={suma > 0 ? String(suma) : "0"}
+              onChange={setTotalManual}
+              placeholder={suma > 0 ? formatMiles(suma) : "0"}
             />
           </Field>
           <div className="grid grid-cols-3 gap-2 self-end text-sm">
@@ -290,7 +327,8 @@ export function FacturaForm({
               id="fecha_pago"
               name="fecha_pago"
               type="date"
-              defaultValue={factura?.fecha_pago ? toInputDate(factura.fecha_pago) : ""}
+              value={fechaPago}
+              onChange={(e) => setFechaPago(e.target.value)}
               disabled={estado === "borrador"}
             />
           </Field>
@@ -341,6 +379,7 @@ export function FacturaForm({
           </Field>
         </CardBody>
       </Card>
+      </div>
 
       {state.error ? (
         <p className="rounded-lg bg-red-50 border border-red-200 px-3 py-2 text-sm text-red-700">
@@ -348,15 +387,35 @@ export function FacturaForm({
         </p>
       ) : null}
 
-      <div className="flex items-center gap-2">
-        <Button type="submit" disabled={pending || uploading}>
-          <Save className="h-4 w-4" />
-          {pending ? "Guardando…" : "Guardar factura"}
-        </Button>
-        <Link href="/facturas" className={buttonClass({ variant: "outline" })}>
-          Cancelar
-        </Link>
-      </div>
+      {editando ? (
+        <div className="flex h-5 items-center gap-1.5 text-xs text-muted">
+          {pending || uploading ? (
+            <>
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              {uploading ? "Subiendo…" : "Guardando…"}
+            </>
+          ) : state.ok ? (
+            <>
+              <Check className="h-3.5 w-3.5 text-ok" />
+              Guardado
+            </>
+          ) : demo ? (
+            "Autoguardado (no en demo)"
+          ) : (
+            "Los cambios se guardan solos"
+          )}
+        </div>
+      ) : (
+        <div className="flex items-center gap-2">
+          <Button type="submit" disabled={pending || uploading}>
+            <Save className="h-4 w-4" />
+            {pending ? "Guardando…" : "Guardar factura"}
+          </Button>
+          <Link href="/facturas" className={buttonClass({ variant: "outline" })}>
+            Cancelar
+          </Link>
+        </div>
+      )}
     </form>
   );
 }

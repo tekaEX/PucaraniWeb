@@ -14,7 +14,8 @@ import {
   type ViajeConRelaciones,
   type ViajeEstado,
 } from "@/types/db";
-import { getPeriodo, rangoPeriodo, enRango } from "@/lib/periodo";
+import { getPeriodo, rangoPeriodo, enRango, etiquetaPeriodo } from "@/lib/periodo";
+import { datosNuevoViaje } from "./nueva/datos";
 import { ViajeAccordion } from "./viaje-accordion";
 
 export const dynamic = "force-dynamic";
@@ -71,11 +72,15 @@ export default async function ViajesPage({
     viajes = (data ?? []) as ViajeConRelaciones[];
   }
 
+  // Catálogos para la edición inline en el acordeón (mismo cargador que
+  // usa el modal de "Nuevo viaje").
+  const { cotizaciones, choferes, vehiculos } = await datosNuevoViaje();
+
   return (
     <div>
       <PageHeader
         title="Viajes"
-        description="La operación diaria: servicios con sus choferes, buses y costos. Haz clic en uno para ver el detalle."
+        description={`Servicios de ${etiquetaPeriodo(periodo).toLowerCase()} (cámbialo en el selector de arriba). Haz clic en uno para editarlo.`}
       >
         <Link href="/viajes/nueva" className={buttonClass()}>
           <Plus className="h-4 w-4" />
@@ -136,7 +141,13 @@ export default async function ViajesPage({
       ) : (
         <Card className="overflow-hidden">
           <div className="overflow-x-auto">
-            <ViajeAccordion viajes={viajes} />
+            <ViajeAccordion
+              viajes={viajes}
+              clientes={clientes}
+              cotizaciones={cotizaciones}
+              choferes={choferes}
+              vehiculos={vehiculos}
+            />
           </div>
         </Card>
       )}

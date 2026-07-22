@@ -4,59 +4,68 @@ import { PageHeader } from "@/components/page-header";
 import { Card } from "@/components/ui/card";
 import { buttonClass } from "@/components/ui/button";
 import { Plus, Users } from "lucide-react";
-import { isDemo, demoClientes, demoFacturas } from "@/lib/demo";
-import { getPeriodo, rangoPeriodo, enRango } from "@/lib/periodo";
-import type { Cliente, IngresoCliente } from "@/types/db";
+import { isDemo, demoClientes, demoFacturas, demoViajes } from "@/lib/demo";
+import { getPeriodo, etiquetaPeriodo } from "@/lib/periodo";
+import { viajePorFacturar, type Cliente, type FacturaConRelaciones } from "@/types/db";
+import { cuentaVacia, type CuentaCliente, type ViajePendRaw } from "@/lib/cobranza";
+import { construirCuentas } from "@/lib/cobranza-server";
 import { ClienteAccordion } from "./cliente-accordion";
 
 export const dynamic = "force-dynamic";
 
 export default async function ClientesPage() {
-  let clientes: Cliente[];
-  let ingresos: IngresoCliente[];
-
   const periodo = await getPeriodo();
-  const { desde, hasta } = rangoPeriodo(periodo);
+
+  let clientes: Cliente[];
+  let facturas: FacturaConRelaciones[];
+  let viajesPend: ViajePendRaw[];
 
   if (isDemo()) {
     clientes = demoClientes;
-    ingresos = demoFacturas
-      .filter((f) => f.estado === "emitida" && f.fecha_pago && enRango(f.fecha_pago, periodo))
-      .map((f) => ({
-        id: f.id,
-        numero: f.folio !== null ? String(f.folio) : null,
-        fecha: f.fecha_pago as string,
-        monto: Number(f.total),
-        cliente_id: f.cliente_id,
+    facturas = demoFacturas;
+    viajesPend = demoViajes
+      .filter((v) => viajePorFacturar(v))
+      .map((v) => ({
+        id: v.id,
+        fecha_inicio: v.fecha_inicio,
+        descripcion: v.descripcion,
+        valor: Number(v.valor),
+        cliente_id: v.cliente_id,
+        cliente: v.cliente ? { id: v.cliente.id, nombre: v.cliente.nombre } : null,
       }));
   } else {
     const supabase = await createClient();
-    /* eslint-disable @typescript-eslint/no-explicit-any */
-    const [{ data: cData }, { data: fData }] = await Promise.all([
+    const [{ data: cData }, { data: fData }, { data: vData }] = await Promise.all([
       supabase.from("clientes").select("*").order("nombre", { ascending: true }),
       supabase
         .from("facturas")
-        .select("id, folio, fecha_pago, total, cliente_id")
-        .eq("estado", "emitida")
-        .gte("fecha_pago", desde)
-        .lte("fecha_pago", hasta),
+        .select("*, cliente:clientes(id,nombre,codigo), viajes:viajes(id,descripcion,fecha_inicio,valor)")
+        .order("fecha_emision", { ascending: false, nullsFirst: true }),
+      supabase
+        .from("viajes")
+        .select("id, fecha_inicio, descripcion, valor, cliente_id, cliente:clientes(id,nombre)")
+        .eq("estado", "realizado")
+        .is("factura_id", null)
+        .order("fecha_inicio", { ascending: false }),
     ]);
     clientes = (cData ?? []) as Cliente[];
-    ingresos = ((fData ?? []) as any[]).map((f) => ({
-      id: f.id,
-      numero: f.folio !== null && f.folio !== undefined ? String(f.folio) : null,
-      fecha: f.fecha_pago,
-      monto: Number(f.total),
-      cliente_id: f.cliente_id,
-    }));
-    /* eslint-enable @typescript-eslint/no-explicit-any */
+    facturas = (fData ?? []) as FacturaConRelaciones[];
+    viajesPend = (vData ?? []) as unknown as ViajePendRaw[];
+  }
+
+  // Estado de cuenta por cliente. Se completa para todos (los sin actividad
+  // quedan en cero) y se pasa como objeto plano (serializable al cliente).
+  const cuentasMap = construirCuentas(facturas, viajesPend, periodo);
+  const cuentas: Record<string, CuentaCliente> = {};
+  for (const c of clientes) {
+    cuentas[c.id] = cuentasMap.get(c.id) ?? cuentaVacia(c.id, c.nombre);
   }
 
   return (
     <div>
       <PageHeader
         title="Clientes"
-        description="Empresas a las que prestas servicio. Haz clic en una para ver y editar."
+        description={`Empresas a las que prestas servicio · estado de cuenta de ${etiquetaPeriodo(periodo).toLowerCase()}. Haz clic en una para ver y editar.`}
       >
         <Link href="/clientes/nuevo" className={buttonClass()}>
           <Plus className="h-4 w-4" />
@@ -76,7 +85,7 @@ export default async function ClientesPage() {
       ) : (
         <Card className="overflow-hidden">
           <div className="overflow-x-auto">
-            <ClienteAccordion clientes={clientes} ingresos={ingresos} />
+            <ClienteAccordion clientes={clientes} cuentas={cuentas} />
           </div>
         </Card>
       )}

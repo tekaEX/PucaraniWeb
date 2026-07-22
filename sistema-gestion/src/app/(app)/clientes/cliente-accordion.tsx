@@ -1,31 +1,21 @@
 "use client";
 
-import { Fragment, useMemo, useState } from "react";
+import { Fragment, useState } from "react";
 import { ChevronDown } from "lucide-react";
 import { InitialsAvatar } from "@/components/ui/avatar";
 import { formatCLP } from "@/lib/format";
 import { ClientePanel } from "./cliente-panel";
-import type { Cliente, IngresoCliente } from "@/types/db";
+import { cuentaVacia, type CuentaCliente } from "@/lib/cobranza";
+import type { Cliente } from "@/types/db";
 
 export function ClienteAccordion({
   clientes,
-  ingresos,
+  cuentas,
 }: {
   clientes: Cliente[];
-  ingresos: IngresoCliente[];
+  cuentas: Record<string, CuentaCliente>;
 }) {
   const [openId, setOpenId] = useState<string | null>(null);
-
-  const porCliente = useMemo(() => {
-    const m = new Map<string, IngresoCliente[]>();
-    for (const i of ingresos) {
-      if (!i.cliente_id) continue;
-      const arr = m.get(i.cliente_id) ?? [];
-      arr.push(i);
-      m.set(i.cliente_id, arr);
-    }
-    return m;
-  }, [ingresos]);
 
   return (
     <table className="w-full text-sm">
@@ -42,8 +32,7 @@ export function ClienteAccordion({
       <tbody className="divide-y divide-border">
         {clientes.map((c) => {
           const open = openId === c.id;
-          const cIngresos = porCliente.get(c.id) ?? [];
-          const total = cIngresos.reduce((a, i) => a + Number(i.monto), 0);
+          const cuenta = cuentas[c.id] ?? cuentaVacia(c.id, c.nombre);
           return (
             <Fragment key={c.id}>
               <tr
@@ -62,7 +51,11 @@ export function ClienteAccordion({
                   {c.contacto_nombre ?? c.contacto_telefono ?? c.contacto_email ?? "—"}
                 </td>
                 <td className="px-4 py-3 text-right tabular-nums font-medium">
-                  {total ? formatCLP(total) : "—"}
+                  {cuenta.pagado ? (
+                    <span className="text-ok">{formatCLP(cuenta.pagado)}</span>
+                  ) : (
+                    "—"
+                  )}
                 </td>
                 <td className="px-4 py-3 text-right">
                   <ChevronDown
@@ -74,7 +67,7 @@ export function ClienteAccordion({
               {open ? (
                 <tr>
                   <td colSpan={6} className="bg-gray-50/50 px-4 py-5">
-                    <ClientePanel cliente={c} ingresos={cIngresos} />
+                    <ClientePanel cliente={c} cuenta={cuenta} />
                   </td>
                 </tr>
               ) : null}

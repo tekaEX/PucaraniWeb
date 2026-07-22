@@ -1,8 +1,9 @@
 "use client";
 
-import { useActionState, useEffect, useRef } from "react";
+import { useActionState, useEffect, useRef, useState } from "react";
 import { agregarGasto, type FormState } from "./actions";
 import { Input } from "@/components/ui/input";
+import { MoneyInput } from "@/components/ui/money-input";
 import { Select } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import { Plus } from "lucide-react";
@@ -14,10 +15,18 @@ export function GastoForm({ vehiculoId }: { vehiculoId: string }) {
     {},
   );
   const ref = useRef<HTMLFormElement>(null);
+  const [monto, setMonto] = useState("");
 
+  // Tras agregar un gasto, limpia el formulario: el monto (controlado) en el
+  // render; los demás campos (no controlados) con form.reset() en un efecto.
+  const [ultimo, setUltimo] = useState(state);
+  if (state !== ultimo) {
+    setUltimo(state);
+    if (state.ok) setMonto("");
+  }
   useEffect(() => {
     if (state.ok) ref.current?.reset();
-  }, [state.ok]);
+  }, [state]);
 
   return (
     <form ref={ref} action={formAction} className="space-y-3">
@@ -39,7 +48,7 @@ export function GastoForm({ vehiculoId }: { vehiculoId: string }) {
           <label className="mb-1 block text-xs font-medium text-muted">
             Monto
           </label>
-          <Input name="monto_total" inputMode="numeric" placeholder="$ 0" required />
+          <MoneyInput name="monto_total" value={monto} onChange={setMonto} placeholder="0" required />
         </div>
         <div>
           <label className="mb-1 block text-xs font-medium text-muted">

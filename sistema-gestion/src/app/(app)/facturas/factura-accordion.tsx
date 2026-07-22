@@ -1,11 +1,10 @@
 "use client";
 
-import { Fragment, useState } from "react";
-import Link from "next/link";
-import { ChevronDown, Pencil, HandCoins, Trash2 } from "lucide-react";
+import { Fragment, useState, useTransition } from "react";
+import { ChevronDown, Trash2 } from "lucide-react";
 import { FacturaBadge } from "@/components/ui/badge";
-import { buttonClass } from "@/components/ui/button";
 import { ConfirmForm } from "@/components/ui/confirm-form";
+import { EstadoSelector, type EstadoOpcion } from "@/components/ui/estado-selector";
 import { formatCLP, formatDate } from "@/lib/format";
 import {
   TIPOS_DTE,
@@ -13,7 +12,47 @@ import {
   type FacturaConRelaciones,
   type FacturaEstadoDerivado,
 } from "@/types/db";
-import { marcarPagada, eliminarFactura } from "./actions";
+import { actualizarEstadoFactura, eliminarFactura } from "./actions";
+import { FacturaForm, type ViajeOpt } from "./factura-form";
+
+const ESTADOS_FACTURA: EstadoOpcion[] = [
+  { value: "por_cobrar", label: "Por cobrar", tone: "amber" },
+  { value: "pagada", label: "Pagada", tone: "green" },
+];
+
+// Pastilla de estado autoguardada (como en Viajes). Emitir/pagar requiere
+// folio: si falta, avisa al usuario en vez de llamar al servidor.
+function FacturaEstadoControl({ factura }: { factura: FacturaConRelaciones }) {
+  const [pending, startTransition] = useTransition();
+  const [error, setError] = useState("");
+  const derivado = facturaEstadoDerivado(factura);
+
+  function onCambio(nuevo: string): boolean {
+    setError("");
+    if ((nuevo === "por_cobrar" || nuevo === "pagada") && !factura.folio) {
+      setError("Asigna primero un folio (abajo) para emitir la factura.");
+      return false; // veta: la pastilla no se mueve
+    }
+    const fd = new FormData();
+    fd.set("id", factura.id);
+    fd.set("estado", nuevo);
+    startTransition(() => actualizarEstadoFactura(fd));
+    return true;
+  }
+
+  return (
+    <div>
+      <EstadoSelector
+        name="estado"
+        defaultValue={derivado}
+        opciones={ESTADOS_FACTURA}
+        pending={pending}
+        onCambio={onCambio}
+      />
+      {error ? <p className="mt-1 text-xs text-danger">{error}</p> : null}
+    </div>
+  );
+}
 
 // Tinte de fila sutil según estado (mismo criterio del sistema de diseño).
 function rowTone(derivado: FacturaEstadoDerivado) {
@@ -22,7 +61,15 @@ function rowTone(derivado: FacturaEstadoDerivado) {
   return "";
 }
 
-export function FacturaAccordion({ facturas }: { facturas: FacturaConRelaciones[] }) {
+export function FacturaAccordion({
+  facturas,
+  clientes,
+  porFacturar,
+}: {
+  facturas: FacturaConRelaciones[];
+  clientes: { id: string; nombre: string; codigo: string | null }[];
+  porFacturar: ViajeOpt[];
+}) {
   const [openId, setOpenId] = useState<string | null>(null);
 
   return (
@@ -91,26 +138,7 @@ export function FacturaAccordion({ facturas }: { facturas: FacturaConRelaciones[
                 <tr>
                   <td colSpan={7} className="bg-gray-50/50 px-4 py-5">
                     <div className="mb-4 flex flex-wrap items-center gap-2">
-                      <Link
-                        href={`/facturas/${f.id}`}
-                        className={buttonClass({ variant: "outline", size: "sm" })}
-                      >
-                        <Pencil className="h-4 w-4" />
-                        Ver / editar
-                      </Link>
-                      {derivado === "por_cobrar" ? (
-                        <form action={marcarPagada}>
-                          <input type="hidden" name="id" value={f.id} />
-                          <button
-                            type="submit"
-                            className={buttonClass({ variant: "secondary", size: "sm" })}
-                            title="Registrar pago con fecha de hoy"
-                          >
-                            <HandCoins className="h-4 w-4" />
-                            Registrar pago
-                          </button>
-                        </form>
-                      ) : null}
+                      <FacturaEstadoControl factura={f} />
                       <ConfirmForm
                         action={eliminarFactura}
                         mensaje={`¿Eliminar la factura ${f.folio ? `N° ${f.folio}` : "en borrador"}? Sus viajes quedarán como "por facturar". Esta acción no se puede deshacer.`}
@@ -127,83 +155,24 @@ export function FacturaAccordion({ facturas }: { facturas: FacturaConRelaciones[
                       </ConfirmForm>
                     </div>
 
-                    <div className="grid items-start gap-4 lg:grid-cols-2">
-                      {/* Viajes incluidos */}
-                      <div className="overflow-hidden rounded-xl border border-border bg-white">
-                        <p className="border-b border-border px-4 py-3 text-sm font-semibold">
-                          Viajes incluidos
-                        </p>
-                        {f.viajes.length === 0 ? (
-                          <p className="px-4 py-3 text-sm text-muted">
-                            Esta factura no tiene viajes asociados.
-                          </p>
-                        ) : (
-                          <table className="w-full text-sm">
-                            <tbody className="divide-y divide-border">
-                              {f.viajes.map((v) => (
-                                <tr key={v.id}>
-                                  <td className="w-28 whitespace-nowrap px-4 py-2.5 text-muted">
-                                    {formatDate(v.fecha_inicio)}
-                                  </td>
-                                  <td className="px-4 py-2.5">
-                                    <Link
-                                      href={`/viajes/${v.id}`}
-                                      className="text-brand hover:underline"
-                                    >
-                                      {v.descripcion}
-                                    </Link>
-                                  </td>
-                                  <td className="px-4 py-2.5 text-right tabular-nums font-medium">
-                                    {formatCLP(v.valor)}
-                                  </td>
-                                </tr>
-                              ))}
-                            </tbody>
-                          </table>
-                        )}
-                      </div>
-
-                      {/* Resumen del documento */}
-                      <div className="rounded-xl border border-border bg-white p-4">
-                        <p className="mb-3 text-sm font-semibold">Documento</p>
-                        <dl className="space-y-1.5 text-sm">
-                          <div className="flex justify-between gap-4">
-                            <dt className="text-muted">Tipo</dt>
-                            <dd>{TIPOS_DTE[f.tipo_dte] ?? `DTE ${f.tipo_dte}`}</dd>
-                          </div>
-                          <div className="flex justify-between gap-4">
-                            <dt className="text-muted">Neto</dt>
-                            <dd className="tabular-nums">{formatCLP(f.neto)}</dd>
-                          </div>
-                          <div className="flex justify-between gap-4">
-                            <dt className="text-muted">IVA</dt>
-                            <dd className="tabular-nums">{formatCLP(f.iva)}</dd>
-                          </div>
-                          <div className="flex justify-between gap-4 border-t border-border pt-1.5 font-medium">
-                            <dt>Total</dt>
-                            <dd className="tabular-nums">{formatCLP(f.total)}</dd>
-                          </div>
-                          <div className="flex justify-between gap-4">
-                            <dt className="text-muted">Fecha de pago</dt>
-                            <dd>
-                              {f.fecha_pago ? (
-                                <span className="font-medium text-ok">
-                                  {formatDate(f.fecha_pago)}
-                                </span>
-                              ) : (
-                                "—"
-                              )}
-                            </dd>
-                          </div>
-                          {f.notas ? (
-                            <div className="pt-1.5">
-                              <dt className="text-muted">Notas</dt>
-                              <dd className="mt-0.5 whitespace-pre-wrap">{f.notas}</dd>
-                            </div>
-                          ) : null}
-                        </dl>
-                      </div>
-                    </div>
+                    {/* Edición completa inline: los viajes disponibles son los
+                        propios de esta factura + los que siguen por facturar. */}
+                    <FacturaForm
+                      factura={f}
+                      clientes={clientes}
+                      viajesDisponibles={[
+                        ...f.viajes.map((v) => ({
+                          id: v.id,
+                          cliente_id: v.cliente_id,
+                          descripcion: v.descripcion,
+                          fecha_inicio: v.fecha_inicio,
+                          valor: Number(v.valor),
+                        })),
+                        ...porFacturar.filter(
+                          (v) => !f.viajes.some((p) => p.id === v.id),
+                        ),
+                      ]}
+                    />
                   </td>
                 </tr>
               ) : null}

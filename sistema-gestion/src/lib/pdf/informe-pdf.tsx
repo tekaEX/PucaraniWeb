@@ -105,6 +105,7 @@ function InformeDoc({
         <View style={styles.header}>
           <View style={styles.brandWrap}>
             {logo ? (
+              // eslint-disable-next-line jsx-a11y/alt-text -- <Image> de @react-pdf/renderer no admite alt
               <Image
                 src={{ data: logo.buffer, format: logo.ext === "jpeg" ? "jpg" : "png" }}
                 style={styles.logo}

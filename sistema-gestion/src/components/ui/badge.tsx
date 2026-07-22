@@ -12,7 +12,7 @@ import {
 import { evaluarVenc } from "@/lib/vencimientos";
 import { formatDate } from "@/lib/format";
 
-const tones = {
+export const tones = {
   gray: { wrap: "bg-[#ececef] text-[#6e6e73]", dot: "#86868b" },
   blue: { wrap: "bg-info-bg text-info", dot: "var(--info)" },
   green: { wrap: "bg-ok-bg text-ok", dot: "var(--ok)" },
@@ -21,7 +21,7 @@ const tones = {
   violet: { wrap: "bg-[#ece8f8] text-[#5b3aa8]", dot: "#5b3aa8" },
 } as const;
 
-type Tone = keyof typeof tones;
+export type Tone = keyof typeof tones;
 
 export function Badge({
   tone = "gray",

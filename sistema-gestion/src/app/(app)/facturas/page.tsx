@@ -14,7 +14,8 @@ import {
   type FacturaConRelaciones,
   type FacturaEstadoDerivado,
 } from "@/types/db";
-import { getPeriodo, rangoPeriodo, enRango } from "@/lib/periodo";
+import { getPeriodo, rangoPeriodo, enRango, etiquetaPeriodo } from "@/lib/periodo";
+import { datosNuevaFactura } from "./nueva/datos";
 import { FacturaAccordion } from "./factura-accordion";
 
 export const dynamic = "force-dynamic";
@@ -61,7 +62,7 @@ export default async function FacturasPage({
 
     let query = supabase
       .from("facturas")
-      .select("*, cliente:clientes(id,nombre,codigo), viajes:viajes(id,descripcion,fecha_inicio,valor)")
+      .select("*, cliente:clientes(id,nombre,codigo), viajes:viajes(id,cliente_id,descripcion,fecha_inicio,valor)")
       .order("fecha_emision", { ascending: false, nullsFirst: true });
 
     if (sp.estado === "borrador") query = query.eq("estado", "borrador");
@@ -91,6 +92,10 @@ export default async function FacturasPage({
     }
   }
 
+  // Para editar inline en el acordeón: viajes aún por facturar (se suman a
+  // los propios de cada factura dentro del acordeón).
+  const { viajesDisponibles: porFacturar } = await datosNuevaFactura();
+
   const informeParams = new URLSearchParams();
   if (sp.cliente) informeParams.set("cliente", sp.cliente);
   if (periodo.mes !== null) {
@@ -104,7 +109,7 @@ export default async function FacturasPage({
     <div>
       <PageHeader
         title="Facturas"
-        description="Los documentos que emites: cada factura puede cubrir uno o varios viajes. Haz clic en una para ver el detalle."
+        description={`Documentos emitidos en ${etiquetaPeriodo(periodo).toLowerCase()} (los borradores se muestran siempre). Haz clic en una para editarla.`}
       >
         <Link
           href={`/facturas/informe${informeSuffix}`}
@@ -171,7 +176,11 @@ export default async function FacturasPage({
       ) : (
         <Card className="overflow-hidden">
           <div className="overflow-x-auto">
-            <FacturaAccordion facturas={facturas} />
+            <FacturaAccordion
+              facturas={facturas}
+              clientes={clientes}
+              porFacturar={porFacturar}
+            />
           </div>
         </Card>
       )}

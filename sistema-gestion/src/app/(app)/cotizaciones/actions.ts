@@ -7,7 +7,7 @@ import { isDemo } from "@/lib/demo";
 import { s, sReq, bool } from "@/lib/form-helpers";
 import type { CotizacionEstado } from "@/types/db";
 
-export type FormState = { error?: string };
+export type FormState = { error?: string; ok?: boolean };
 
 const DEMO_MSG =
   "Modo demostración: conecta Supabase (ver README) para guardar datos reales.";
@@ -51,6 +51,52 @@ function calcTotales(items: ItemInput[], exento: boolean) {
   );
   const iva = exento ? 0 : Math.round(subtotal * 0.19);
   return { subtotal, iva, total: subtotal + iva };
+}
+
+// Al ACEPTAR una cotización, sus líneas se convierten en viajes PROGRAMADOS
+// (uno por línea, vinculados a la cotización) para que la operación aparezca
+// de inmediato en Viajes. Solo se generan si la cotización aún no tiene
+// viajes (evita duplicados al re-guardar o re-aceptar) y requiere cliente.
+// La fecha de inicio queda como hoy: se ajusta después en cada viaje.
+async function generarViajesDesdeCotizacion(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  cotizacionId: string,
+): Promise<string | null> {
+  const { count } = await supabase
+    .from("viajes")
+    .select("id", { count: "exact", head: true })
+    .eq("cotizacion_id", cotizacionId);
+  if ((count ?? 0) > 0) return null;
+
+  const { data: cot } = await supabase
+    .from("cotizaciones")
+    .select("id, cliente_id, items:cotizacion_items(descripcion, cantidad, valor_unitario, orden)")
+    .eq("id", cotizacionId)
+    .maybeSingle();
+  if (!cot) return null;
+  if (!cot.cliente_id) {
+    return "La cotización quedó aceptada, pero sin cliente no se pueden generar los viajes: asígnale un cliente y guarda de nuevo.";
+  }
+
+  const hoy = new Date().toISOString().slice(0, 10);
+  const filas = [...(cot.items ?? [])]
+    .sort((a, b) => a.orden - b.orden)
+    .map((it) => ({
+      cliente_id: cot.cliente_id,
+      cotizacion_id: cot.id,
+      descripcion: it.descripcion,
+      fecha_inicio: hoy,
+      estado: "programado" as const,
+      valor: Math.round(Number(it.cantidad) * Number(it.valor_unitario)),
+    }));
+  if (filas.length === 0) return null;
+
+  const { error } = await supabase.from("viajes").insert(filas);
+  if (error) return `No se pudieron generar los viajes: ${error.message}`;
+
+  revalidatePath("/viajes");
+  revalidatePath("/");
+  return null;
 }
 
 function readHeader(formData: FormData) {
@@ -109,8 +155,15 @@ export async function crearCotizacion(
   }));
   await supabase.from("cotizacion_items").insert(rows);
 
+  // Si nace directamente aceptada, genera sus viajes (mejor esfuerzo: la
+  // cotización ya existe, así que no bloqueamos la redirección).
+  if (header.estado === "aceptada") {
+    await generarViajesDesdeCotizacion(supabase, cot.id);
+  }
+
   revalidatePath("/cotizaciones");
-  redirect(`/cotizaciones/${cot.id}`);
+  // Siempre de vuelta a la lista: el detalle/edición vive en el acordeón.
+  redirect("/cotizaciones");
 }
 
 export async function actualizarCotizacion(
@@ -150,9 +203,20 @@ export async function actualizarCotizacion(
   }));
   await supabase.from("cotizacion_items").insert(rows);
 
+  // Aceptada ⇒ sus líneas se vuelven viajes programados (una sola vez).
+  if (header.estado === "aceptada") {
+    const errViajes = await generarViajesDesdeCotizacion(supabase, id);
+    if (errViajes) {
+      revalidatePath("/cotizaciones");
+      return { error: errViajes };
+    }
+  }
+
   revalidatePath("/cotizaciones");
   revalidatePath(`/cotizaciones/${id}`);
-  redirect(`/cotizaciones/${id}`);
+  // Sin redirect: la edición vive inline (documento editable en el acordeón)
+  // con autoguardado; devolver ok mantiene abierto el panel.
+  return { ok: true };
 }
 
 export async function eliminarCotizacion(formData: FormData) {

@@ -1,29 +1,31 @@
 "use client";
 
-import { useActionState, useState } from "react";
+import { useActionState, useRef, useState } from "react";
 import Link from "next/link";
 import { guardarViaje, type FormState } from "./actions";
 import { Input } from "@/components/ui/input";
+import { MoneyInput } from "@/components/ui/money-input";
 import { Textarea } from "@/components/ui/textarea";
 import { Select } from "@/components/ui/select";
 import { Field } from "@/components/ui/label";
 import { Button, buttonClass } from "@/components/ui/button";
 import { Card, CardBody, CardHeader, CardTitle } from "@/components/ui/card";
-import { Save, Plus, X } from "lucide-react";
+import { Save, Plus, X, Check, Loader2 } from "lucide-react";
+import { isDemo } from "@/lib/demo";
 import { toInputDate, todayInput, formatCLP } from "@/lib/format";
 import { VIAJE_ESTADOS } from "@/types/db";
 import type { ViajeConRelaciones, ViajeEstado } from "@/types/db";
 
-type ClienteOpt = { id: string; nombre: string; codigo: string | null };
-type CotizacionOpt = {
+export type ClienteOpt = { id: string; nombre: string; codigo: string | null };
+export type CotizacionOpt = {
   id: string;
   numero: number;
   cliente_id: string | null;
   total: number;
   titulo?: string | null;
 };
-type ChoferOpt = { id: string; nombre: string };
-type VehiculoOpt = { patente: string };
+export type ChoferOpt = { id: string; nombre: string };
+export type VehiculoOpt = { patente: string };
 
 type AsigRow = { chofer_id: string; vehiculo_id: string; fecha: string };
 
@@ -57,6 +59,20 @@ export function ViajeForm({
     {},
   );
 
+  // Al editar (viaje existente) los cambios se autoguardan al salir del campo;
+  // al crear se usa el botón. Mismo patrón que Vehículos/Choferes/Clientes.
+  const formRef = useRef<HTMLFormElement>(null);
+  const demo = isDemo();
+  const editando = !!viaje;
+
+  function autoguardar() {
+    if (demo || !editando) return;
+    formRef.current?.requestSubmit();
+  }
+  function onBlurForm(e: React.FocusEvent<HTMLFormElement>) {
+    if (!e.currentTarget.contains(e.relatedTarget as Node | null)) autoguardar();
+  }
+
   const [cotizacionId, setCotizacionId] = useState(
     viaje?.cotizacion_id ?? defaults?.cotizacion_id ?? "",
   );
@@ -79,6 +95,15 @@ export function ViajeForm({
       fecha: a.fecha ? toInputDate(a.fecha) : "",
     })),
   );
+  // La pastilla del acordeón también cambia el estado: re-sincroniza al llegar
+  // props nuevas (patrón "ajustar estado en el render") para no pisarlo al
+  // autoguardar. https://react.dev/learn/you-might-not-need-an-effect
+  const [estado, setEstado] = useState<ViajeEstado>(viaje?.estado ?? "programado");
+  const [estadoProp, setEstadoProp] = useState(viaje?.estado);
+  if (viaje && viaje.estado !== estadoProp) {
+    setEstadoProp(viaje.estado);
+    setEstado(viaje.estado);
+  }
 
   const ingreso = toNum(valor);
   const costoTotal =
@@ -112,7 +137,12 @@ export function ViajeForm({
   );
 
   return (
-    <form action={formAction} className="space-y-6">
+    <form
+      ref={formRef}
+      action={formAction}
+      onBlur={editando ? onBlurForm : undefined}
+      className="space-y-4"
+    >
       {viaje ? <input type="hidden" name="id" value={viaje.id} /> : null}
       <input type="hidden" name="cotizacion_id" value={cotizacionId} />
       <input type="hidden" name="cliente_id" value={clienteId} />
@@ -128,11 +158,13 @@ export function ViajeForm({
         </p>
       ) : null}
 
+      {/* Dos columnas simétricas: misma altura, sin huecos. */}
+      <div className="grid gap-3 lg:grid-cols-2">
       <Card>
         <CardHeader>
           <CardTitle>Datos del servicio</CardTitle>
         </CardHeader>
-        <CardBody className="grid gap-4 sm:grid-cols-2">
+        <CardBody className="grid gap-3 sm:grid-cols-2">
           <Field label="Descripción" htmlFor="descripcion" className="sm:col-span-2">
             <Input
               id="descripcion"
@@ -192,7 +224,12 @@ export function ViajeForm({
           </Field>
 
           <Field label="Estado" htmlFor="estado">
-            <Select id="estado" name="estado" defaultValue={viaje?.estado ?? "programado"}>
+            <Select
+              id="estado"
+              name="estado"
+              value={estado}
+              onChange={(e) => setEstado(e.target.value as ViajeEstado)}
+            >
               {(Object.entries(VIAJE_ESTADOS) as [ViajeEstado, string][]).map(
                 ([value, label]) => (
                   <option key={value} value={value}>
@@ -212,18 +249,12 @@ export function ViajeForm({
           </Field>
 
           <Field label="Valor del servicio" htmlFor="valor">
-            <Input
-              id="valor"
-              name="valor"
-              inputMode="numeric"
-              value={valor}
-              onChange={(e) => setValor(e.target.value)}
-              placeholder="100000"
-            />
+            <MoneyInput id="valor" name="valor" value={valor} onChange={setValor} placeholder="0" />
           </Field>
         </CardBody>
       </Card>
 
+      <div className="flex flex-col gap-3">
       <Card>
         <CardHeader>
           <CardTitle>Choferes y vehículos</CardTitle>
@@ -236,7 +267,7 @@ export function ViajeForm({
             </p>
           ) : null}
           {asignaciones.length > 0 ? (
-            <div className="hidden gap-2 text-xs font-medium text-muted sm:grid sm:grid-cols-[1fr_1fr_11rem_2.5rem]">
+            <div className="hidden gap-2 text-xs font-medium text-muted sm:grid sm:grid-cols-[1fr_1fr_8.5rem_2rem]">
               <span>Chofer</span>
               <span>Vehículo</span>
               <span>Día (opcional)</span>
@@ -244,7 +275,7 @@ export function ViajeForm({
             </div>
           ) : null}
           {asignaciones.map((a, i) => (
-            <div key={i} className="grid gap-2 sm:grid-cols-[1fr_1fr_11rem_2.5rem] sm:items-center">
+            <div key={i} className="grid gap-2 sm:grid-cols-[1fr_1fr_8.5rem_2rem] sm:items-center">
               <Select
                 value={a.chofer_id}
                 onChange={(e) => setAsig(i, { chofer_id: e.target.value })}
@@ -304,44 +335,40 @@ export function ViajeForm({
         <CardHeader>
           <CardTitle>Costos del viaje y utilidad</CardTitle>
         </CardHeader>
-        <CardBody className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <CardBody className="grid grid-cols-2 gap-3">
           <Field label="Combustible" htmlFor="costo_combustible" className="mb-0">
-            <Input
+            <MoneyInput
               id="costo_combustible"
               name="costo_combustible"
-              inputMode="numeric"
               value={costos.combustible}
-              onChange={(e) => setCostos({ ...costos, combustible: e.target.value })}
+              onChange={(raw) => setCostos({ ...costos, combustible: raw })}
               placeholder="0"
             />
           </Field>
           <Field label="Peajes" htmlFor="costo_peajes" className="mb-0">
-            <Input
+            <MoneyInput
               id="costo_peajes"
               name="costo_peajes"
-              inputMode="numeric"
               value={costos.peajes}
-              onChange={(e) => setCostos({ ...costos, peajes: e.target.value })}
+              onChange={(raw) => setCostos({ ...costos, peajes: raw })}
               placeholder="0"
             />
           </Field>
           <Field label="Viáticos" htmlFor="costo_viaticos" className="mb-0">
-            <Input
+            <MoneyInput
               id="costo_viaticos"
               name="costo_viaticos"
-              inputMode="numeric"
               value={costos.viaticos}
-              onChange={(e) => setCostos({ ...costos, viaticos: e.target.value })}
+              onChange={(raw) => setCostos({ ...costos, viaticos: raw })}
               placeholder="0"
             />
           </Field>
           <Field label="Otros" htmlFor="costo_otros" className="mb-0">
-            <Input
+            <MoneyInput
               id="costo_otros"
               name="costo_otros"
-              inputMode="numeric"
               value={costos.otros}
-              onChange={(e) => setCostos({ ...costos, otros: e.target.value })}
+              onChange={(raw) => setCostos({ ...costos, otros: raw })}
               placeholder="0"
             />
           </Field>
@@ -364,13 +391,15 @@ export function ViajeForm({
         </div>
       </Card>
 
-      <Card>
+      <Card className="flex-1">
         <CardBody>
           <Field label="Notas" htmlFor="notas" className="mb-0">
             <Textarea id="notas" name="notas" defaultValue={viaje?.notas ?? ""} rows={2} />
           </Field>
         </CardBody>
       </Card>
+      </div>
+      </div>
 
       {state.error ? (
         <p className="rounded-lg bg-red-50 border border-red-200 px-3 py-2 text-sm text-red-700">
@@ -378,15 +407,35 @@ export function ViajeForm({
         </p>
       ) : null}
 
-      <div className="flex items-center gap-2">
-        <Button type="submit" disabled={pending}>
-          <Save className="h-4 w-4" />
-          {pending ? "Guardando…" : "Guardar viaje"}
-        </Button>
-        <Link href="/viajes" className={buttonClass({ variant: "outline" })}>
-          Cancelar
-        </Link>
-      </div>
+      {editando ? (
+        <div className="flex h-5 items-center gap-1.5 text-xs text-muted">
+          {pending ? (
+            <>
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              Guardando…
+            </>
+          ) : state.ok ? (
+            <>
+              <Check className="h-3.5 w-3.5 text-ok" />
+              Guardado
+            </>
+          ) : demo ? (
+            "Autoguardado (no en demo)"
+          ) : (
+            "Los cambios se guardan solos"
+          )}
+        </div>
+      ) : (
+        <div className="flex items-center gap-2">
+          <Button type="submit" disabled={pending}>
+            <Save className="h-4 w-4" />
+            {pending ? "Guardando…" : "Guardar viaje"}
+          </Button>
+          <Link href="/viajes" className={buttonClass({ variant: "outline" })}>
+            Cancelar
+          </Link>
+        </div>
+      )}
     </form>
   );
 }

@@ -4,7 +4,6 @@ import { useActionState, useRef, useState } from "react";
 import { guardarEmpresa, type FormState } from "./actions";
 import { createClient } from "@/lib/supabase/client";
 import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
 import { Field } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Card, CardBody, CardHeader, CardTitle } from "@/components/ui/card";

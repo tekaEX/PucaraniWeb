@@ -1,21 +1,17 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { PageHeader } from "@/components/page-header";
-import { Card, CardBody, CardHeader, CardTitle } from "@/components/ui/card";
 import { buttonClass } from "@/components/ui/button";
-import { ViajeBadge } from "@/components/ui/badge";
 import { Kpi } from "@/components/ui/kpi";
-import { formatCLP, formatDate } from "@/lib/format";
+import { formatCLP } from "@/lib/format";
 import {
   FileText,
-  Route,
   Plus,
   Clock,
   CircleDollarSign,
   CheckCircle2,
   TrendingUp,
   TrendingDown,
-  AlertTriangle,
 } from "lucide-react";
 import {
   isDemo,
@@ -23,10 +19,7 @@ import {
   demoViajes,
   demoFacturas,
   demoGastos,
-  demoChoferes,
-  demoVehiculos,
 } from "@/lib/demo";
-import { construirAlertas } from "@/lib/vencimientos";
 import {
   getPeriodo,
   rangoPeriodo,
@@ -42,11 +35,9 @@ import {
   facturaPagada,
   type Factura,
   type Viaje,
-  type ViajeConRelaciones,
   type GastoVehiculo,
-  type Chofer,
-  type Vehiculo,
 } from "@/types/db";
+import { FinanzasSecciones } from "./finanzas/secciones";
 
 export const dynamic = "force-dynamic";
 
@@ -64,9 +55,6 @@ export default async function DashboardPage() {
   let viajes: Viaje[];
   let facturas: Factura[];
   let gastos: GastoVehiculo[];
-  let recientes: ViajeConRelaciones[];
-  let choferes: Chofer[];
-  let vehiculos: Vehiculo[];
 
   if (isDemo()) {
     cotPeriodo = demoCotizaciones
@@ -75,9 +63,6 @@ export default async function DashboardPage() {
     viajes = demoViajes;
     facturas = demoFacturas;
     gastos = demoGastos;
-    recientes = demoViajes.filter((v) => enRango(v.fecha_inicio, periodo)).slice(0, 8);
-    choferes = demoChoferes;
-    vehiculos = demoVehiculos;
   } else {
     const supabase = await createClient();
     const [
@@ -85,9 +70,6 @@ export default async function DashboardPage() {
       { data: viajesData },
       { data: factData },
       { data: gastosData },
-      { data: recientesData },
-      { data: choData },
-      { data: vehData },
     ] = await Promise.all([
       supabase
         .from("cotizaciones")
@@ -101,23 +83,11 @@ export default async function DashboardPage() {
         .select("*")
         .gte("fecha", rangoPeriodo(prev).desde)
         .lte("fecha", hasta),
-      supabase
-        .from("viajes")
-        .select("*, cliente:clientes(id,nombre,codigo), factura:facturas(id,folio,tipo_dte,estado,fecha_pago), asignaciones:viaje_asignaciones(id,viaje_id,chofer_id,vehiculo_id,fecha,notas,created_at, chofer:choferes(id,nombre), vehiculo:vehiculos(patente))")
-        .gte("fecha_inicio", desde)
-        .lte("fecha_inicio", hasta)
-        .order("fecha_inicio", { ascending: false })
-        .limit(8),
-      supabase.from("choferes").select("*"),
-      supabase.from("vehiculos").select("*"),
     ]);
     cotPeriodo = cotData ?? [];
     viajes = (viajesData ?? []) as Viaje[];
     facturas = (factData ?? []) as Factura[];
     gastos = (gastosData ?? []) as GastoVehiculo[];
-    recientes = (recientesData ?? []) as ViajeConRelaciones[];
-    choferes = (choData ?? []) as Chofer[];
-    vehiculos = (vehData ?? []) as Vehiculo[];
   }
 
   // Fila 1 — KPIs del periodo. Todos los estados son DERIVADOS:
@@ -159,8 +129,6 @@ export default async function DashboardPage() {
   const dIngresos = delta(ingresos, ingresosPrev);
   const dCostos = delta(costos, costosPrev);
   const vs = etiquetaCorta(prev);
-
-  const alertas = construirAlertas(choferes, vehiculos);
 
   return (
     <div>
@@ -249,98 +217,11 @@ export default async function DashboardPage() {
         />
       </div>
 
-      <Card className="mt-6">
-        <CardHeader>
-          <CardTitle>Alertas de documentos</CardTitle>
-          <Link href="/vehiculos" className="text-sm font-medium text-brand hover:underline">
-            Ver flota
-          </Link>
-        </CardHeader>
-        <CardBody>
-          {alertas.length === 0 ? (
-            <p className="flex items-center gap-2 text-sm text-muted">
-              <CheckCircle2 className="h-4 w-4 text-ok" />
-              Toda la documentación está al día.
-            </p>
-          ) : (
-            <ul className="divide-y divide-border">
-              {alertas.map((a, i) => (
-                <li
-                  key={`${a.refId}-${a.documento}-${i}`}
-                  className="flex items-center justify-between gap-3 py-2"
-                >
-                  <div className="flex items-center gap-2 text-sm">
-                    <AlertTriangle
-                      className={`h-4 w-4 ${a.estado === "vencido" ? "text-danger" : "text-warn"}`}
-                    />
-                    <span className="font-medium">{a.nombre}</span>
-                    <span className="text-muted">· {a.documento}</span>
-                  </div>
-                  <span
-                    className={`text-xs font-medium ${a.estado === "vencido" ? "text-danger" : "text-warn"}`}
-                  >
-                    {a.estado === "vencido"
-                      ? `Vencido hace ${Math.abs(a.dias)} día(s)`
-                      : `Vence en ${a.dias} día(s)`}
-                  </span>
-                </li>
-              ))}
-            </ul>
-          )}
-        </CardBody>
-      </Card>
-
-      <Card className="mt-6 overflow-hidden">
-        <CardHeader>
-          <CardTitle>Últimos viajes</CardTitle>
-          <Link href="/viajes" className="text-sm font-medium text-brand hover:underline">
-            Ver todo
-          </Link>
-        </CardHeader>
-        {recientes.length === 0 ? (
-          <CardBody>
-            <p className="flex flex-col items-center gap-3 py-8 text-center text-sm text-muted">
-              <Route className="h-7 w-7" />
-              Aún no hay viajes registrados en este periodo.
-            </p>
-          </CardBody>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead className="bg-gray-50 text-left text-xs uppercase tracking-wide text-muted">
-                <tr>
-                  <th className="px-4 py-3 font-medium">Fecha</th>
-                  <th className="px-4 py-3 font-medium">Descripción</th>
-                  <th className="px-4 py-3 font-medium">Cliente</th>
-                  <th className="px-4 py-3 font-medium text-right">Valor</th>
-                  <th className="px-4 py-3 font-medium">Estado</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-border">
-                {recientes.map((v) => (
-                  <tr key={v.id} className="hover:bg-gray-100/60">
-                    <td className="px-4 py-2.5 whitespace-nowrap text-muted">
-                      {formatDate(v.fecha_inicio)}
-                    </td>
-                    <td className="px-4 py-2.5 max-w-xs truncate">
-                      <Link href={`/viajes/${v.id}`} className="hover:underline">
-                        {v.descripcion}
-                      </Link>
-                    </td>
-                    <td className="px-4 py-2.5">{v.cliente?.nombre ?? "—"}</td>
-                    <td className="px-4 py-2.5 text-right tabular-nums font-medium">
-                      {formatCLP(v.valor)}
-                    </td>
-                    <td className="px-4 py-2.5">
-                      <ViajeBadge viaje={v} />
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </Card>
+      {/* Secciones financieras (ex página "Resumen"): gráfico de 6 meses,
+          egresos por vehículo/categoría e ingresos por cliente. */}
+      <div className="mt-6">
+        <FinanzasSecciones />
+      </div>
     </div>
   );
 }

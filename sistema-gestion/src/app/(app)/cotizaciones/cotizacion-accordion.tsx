@@ -6,13 +6,12 @@ import {
   ChevronDown,
   FileDown,
   Sheet,
-  Pencil,
   Route,
   Trash2,
 } from "lucide-react";
 import { CotizacionBadge, ViajeBadge } from "@/components/ui/badge";
 import { buttonClass } from "@/components/ui/button";
-import { CotizacionPreview } from "./cotizacion-preview";
+import { CotizacionEditor } from "./cotizacion-editor";
 import { eliminarCotizacion } from "./actions";
 import { ConfirmForm } from "@/components/ui/confirm-form";
 import { formatCLP, formatDate } from "@/lib/format";
@@ -31,10 +30,12 @@ export type CotRow = Cotizacion & {
 
 export function CotizacionAccordion({
   cotizaciones,
+  clientes,
   empresa,
   viajes,
 }: {
   cotizaciones: CotRow[];
+  clientes: { id: string; nombre: string; codigo: string | null }[];
   empresa: Empresa | null;
   viajes: Viaje[];
 }) {
@@ -67,7 +68,6 @@ export function CotizacionAccordion({
       <tbody className="divide-y divide-border">
         {cotizaciones.map((c) => {
           const open = openId === c.id;
-          const items = [...(c.items ?? [])].sort((a, b) => a.orden - b.orden);
           const cotViajes = viajesPorCot.get(c.id) ?? [];
           return (
             <Fragment key={c.id}>
@@ -115,13 +115,6 @@ export function CotizacionAccordion({
                         Excel
                       </a>
                       <Link
-                        href={`/cotizaciones/${c.id}/editar`}
-                        className={buttonClass({ variant: "outline", size: "sm" })}
-                      >
-                        <Pencil className="h-4 w-4" />
-                        Editar
-                      </Link>
-                      <Link
                         href={`/viajes/nueva?cotizacion=${c.id}`}
                         className={buttonClass({ size: "sm" })}
                       >
@@ -144,7 +137,9 @@ export function CotizacionAccordion({
                       </ConfirmForm>
                     </div>
 
-                    <CotizacionPreview empresa={empresa} cot={c} items={items} />
+                    {/* Documento editable: la vista previa del PDF, pero cada
+                        texto se edita en el lugar (autoguardado). */}
+                    <CotizacionEditor cot={c} empresa={empresa} clientes={clientes} />
 
                     {cotViajes.length > 0 ? (
                       <div className="mt-4">

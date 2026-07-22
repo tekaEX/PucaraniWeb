@@ -296,15 +296,6 @@ export type GastoVehiculoConVehiculo = GastoVehiculo & {
   vehiculo: Pick<Vehiculo, "patente" | "marca" | "modelo"> | null;
 };
 
-// Ingreso (factura pagada) resumido, para mostrar por cliente.
-export type IngresoCliente = {
-  id: string;
-  numero: string | null;
-  fecha: string; // fecha de pago
-  monto: number;
-  cliente_id: string | null;
-};
-
 // ---------------------------------------------------------------------------
 // Etiquetas legibles
 // ---------------------------------------------------------------------------

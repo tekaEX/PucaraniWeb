@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, useEffect, useRef, useState } from "react";
+import { useActionState, useRef } from "react";
 import { actualizarLicencia, type FormState } from "./actions";
 import { Input } from "@/components/ui/input";
 import { Check, Loader2 } from "lucide-react";
@@ -15,15 +15,6 @@ export function LicenciaForm({ chofer }: { chofer: Chofer }) {
   );
   const formRef = useRef<HTMLFormElement>(null);
   const demo = isDemo();
-  const [guardado, setGuardado] = useState(false);
-
-  useEffect(() => {
-    if (state.ok) {
-      setGuardado(true);
-      const t = setTimeout(() => setGuardado(false), 2000);
-      return () => clearTimeout(t);
-    }
-  }, [state]);
 
   function onBlurForm(e: React.FocusEvent<HTMLFormElement>) {
     if (demo) return;
@@ -67,7 +58,7 @@ export function LicenciaForm({ chofer }: { chofer: Chofer }) {
             <Loader2 className="h-3.5 w-3.5 animate-spin" />
             Guardando licencia…
           </>
-        ) : guardado ? (
+        ) : state.ok ? (
           <>
             <Check className="h-3.5 w-3.5 text-ok" />
             Licencia guardada

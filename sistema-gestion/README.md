@@ -1,20 +1,30 @@
 # Gestión — Transportes Pucarani
 
-Sistema web para **cotizaciones** (presupuestos numerados) y **facturación / seguimiento**
-de servicios de transporte de pasajeros.
+Sistema web (ERP interno) para gestionar la operación de una empresa de transporte de
+pasajeros: **cotizaciones → viajes → facturación → cobranza**, con costos y finanzas.
 
 Permite:
 
-- Crear **cotizaciones con número correlativo** automático, con ítems por día y total
-  (exento de IVA por defecto).
-- **Exportar la cotización a PDF y a Excel** para enviarla al cliente.
-- Registrar **facturas**, **enlazarlas a su cotización**, guardar la **orden de compra (OC)**
-  y adjuntar (opcional) el **PDF de la factura**.
-- Ver el **estado** de cada factura: *En proceso → Por facturar → Facturada (por pagar) → Pagada*.
-- Un **dashboard** con totales y la tabla de seguimiento con colores (verde = pagada, ámbar = facturada).
-- **Inicio de sesión** para proteger los datos.
+- Crear **cotizaciones con número correlativo** automático (ítems por día, exento de IVA
+  por defecto) y **exportarlas a PDF y Excel**. Al **aceptar** una cotización, sus líneas
+  se convierten automáticamente en **viajes programados**.
+- Registrar **viajes** (la operación): cliente, fechas, **choferes y buses asignados**
+  (varios por viaje) y **costos** (combustible, peajes, viáticos) con su utilidad.
+- Emitir **facturas** que agrupan uno o varios viajes, con su **folio**, tipo de DTE y
+  adjunto PDF opcional. Los estados son **derivados** (no se declaran a mano): un viaje
+  realizado sin factura está *por facturar*; una factura emitida sin pago está *por cobrar*;
+  con fecha de pago pasa a *pagada*.
+- **Dashboard** unificado con KPIs del periodo, tendencia de 6 meses e ingresos/egresos.
+- **Estado de cuenta por cliente** (cobranzas): cuánto te deben, qué está vencido (+30 días)
+  y el detalle de facturas y viajes por facturar.
+- **Gastos de flota** por vehículo (manual o importados del SII) y alertas de vencimientos
+  de documentos (revisión técnica, SOAP, permiso, licencias) en una **campana** siempre visible.
+- **Periodo global** (mes/año) que filtra toda la app, edición **inline con autoguardado**
+  en cada lista, y **modo demostración** con datos de ejemplo cuando no hay Supabase configurado.
+- **Inicio de sesión** con roles (admin / operador / contador / chofer) para proteger los datos.
 
-Construido con **Next.js 16**, **Supabase** (base de datos + login + archivos) y **Tailwind CSS**.
+Construido con **Next.js 16** (App Router), **React 19**, **Supabase** (PostgreSQL + login +
+archivos) y **Tailwind CSS v4**.
 
 ---
 
@@ -24,14 +34,23 @@ Construido con **Next.js 16**, **Supabase** (base de datos + login + archivos) y
 2. **New project** → ponle un nombre (ej. `transportes-pucarani`), elige una contraseña
    para la base de datos y la región más cercana (ej. *South America (São Paulo)*).
 3. Cuando el proyecto esté listo, ve a **SQL Editor → New query** y ejecuta **en orden**
-   los dos archivos de la carpeta `supabase/migrations` de este proyecto (copia todo el
-   contenido de cada uno, pégalo y presiona **Run**):
-   1. [`0001_init.sql`](supabase/migrations/0001_init.sql) — tablas base, permisos,
-      almacenamiento de archivos y datos iniciales.
-   2. [`0002_flota_costos.sql`](supabase/migrations/0002_flota_costos.sql) — choferes,
-      vehículos y costos por viaje.
+   los archivos de la carpeta `supabase/migrations` (copia el contenido de cada uno,
+   pégalo y presiona **Run**). Pégalos **directamente desde el editor de código** (no por
+   la consola) para no corromper los acentos:
+   - `0001` … `0005` — esquema base v1 (histórico).
+   - [`0006_esquema_v2.sql`](supabase/migrations/0006_esquema_v2.sql) — **rediseño v2**
+     (viajes separados de facturas, estados derivados, roles/RLS). Es destructivo y deja
+     la base lista; los anteriores quedan como historia.
+   - [`0007`](supabase/migrations/0007_gastos_por_patente.sql) y
+     [`0008_patente_identificador.sql`](supabase/migrations/0008_patente_identificador.sql)
+     — la **patente pasa a ser el identificador del vehículo** (PK) y vincula los gastos
+     del SII automáticamente.
+
+   Opcionales: [`seed_demo.sql`](supabase/seed_demo.sql) carga datos de prueba realistas
+   (evergreen, relativos a hoy); [`fix_encoding.sql`](supabase/fix_encoding.sql) repara
+   acentos si algún `.sql` se ejecutó con codificación equivocada.
 4. Crea tu usuario: **Authentication → Users → Add user → Create new user**. Pon tu correo
-   y una contraseña. (Con eso podrás iniciar sesión en el sistema).
+   y una contraseña (el primer usuario queda como **admin**). Con eso inicias sesión.
 5. Copia tus credenciales en **Project Settings → API**:
    - **Project URL** → será `NEXT_PUBLIC_SUPABASE_URL`
    - **anon public** (clave pública) → será `NEXT_PUBLIC_SUPABASE_ANON_KEY`
@@ -108,29 +127,42 @@ Cada vez que hagas `git push`, Vercel actualiza el sitio automáticamente.
 
 ## 6) Cómo se usa
 
-- **Configuración:** pon los datos de tu empresa, sube el logo y ajusta el próximo número
-  de cotización. Esos datos aparecen en el PDF/Excel.
-- **Clientes:** crea tus clientes (EPA, TPA, etc.) con su código/sección.
-- **Cotizaciones:** *Nueva cotización* → agrega líneas de servicio → guardar. El número se
-  asigna solo. Desde el detalle puedes **exportar PDF/Excel** y **crear una factura** ligada.
-- **Facturas:** registra el servicio, su valor, la **OC**, el **N° de factura** y su
-  **estado**. Al marcarla *Pagada* se completa la fecha de pago. Puedes adjuntar el PDF.
-- **Vehículos y Choferes:** registra tu flota y conductores con los vencimientos de
-  documentos (revisión técnica, SOAP, permiso de circulación y licencia). El sistema
-  avisa cuando están vencidos o por vencer.
-- **Cobranzas:** muestra cuánto te debe cada cliente, qué está vencido (+30 días) y el
-  estado de cuenta por empresa.
-- **Costos y utilidad:** en cada factura puedes registrar combustible, peajes y viáticos
-  para ver la utilidad del viaje; el dashboard resume ingresos, costos y utilidad.
-- **Dashboard:** totales (cotizado, por facturar, por cobrar, pagado), rentabilidad y
-  alertas de documentos por vencer.
+El menú está agrupado en **Operación** (Cotizaciones, Viajes, Facturas) y **Datos**
+(Vehículos, Choferes, Clientes), con el **Dashboard** arriba. La barra superior tiene el
+**selector de periodo** (mes/año) y la **campana** de alertas, visibles en toda la app.
+Todo se **edita en línea** (clic en una fila → se despliega) y se **autoguarda**; los
+botones "Nuevo…" abren una **ventana modal**.
+
+- **Configuración:** datos de tu empresa, logo y próximo número de cotización (aparecen en
+  el PDF/Excel).
+- **Cotizaciones:** *Nueva cotización* → agrega líneas → el número se asigna solo. Exporta
+  **PDF/Excel** y, al marcarla **Aceptada**, se generan sus **viajes programados**.
+- **Viajes:** la operación diaria. Marca un viaje como **Realizado** (queda *por facturar*),
+  asígnale choferes/buses y registra sus costos para ver la utilidad.
+- **Facturas:** crea una factura, elige los **viajes que cubre** y su **folio**. La pastilla
+  de estado marca **Por cobrar → Pagada** (registra el pago con fecha de hoy).
+- **Vehículos y Choferes:** tu flota y conductores con los vencimientos de documentos
+  (revisión técnica, SOAP, permiso, licencia). Las alertas salen en la **campana**.
+- **Clientes:** cada cliente muestra su **estado de cuenta** (por facturar, por cobrar,
+  vencido, pagado) con el detalle de facturas y viajes — reemplaza la antigua "Cobranzas".
+- **Dashboard:** KPIs del periodo (cotizado, por facturar, por cobrar, pagado, ingresos,
+  costos, utilidad), tendencia de 6 meses, egresos por vehículo/categoría e ingresos por
+  cliente.
 
 ---
 
 ## Notas técnicas
 
-- Para agregar más usuarios: Supabase → **Authentication → Users → Add user**.
-- Los archivos (logo y PDF de facturas) se guardan en **Supabase Storage** (buckets
-  `logos` y `adjuntos`).
-- La numeración correlativa se controla con el campo *Próximo número de cotización* en
-  **Configuración** (empezó en 1189, continuando el último presupuesto n-1188).
+- **Estados derivados:** los estados (*por facturar*, *por cobrar*, *pagada*) no se guardan;
+  se calculan de los datos (viaje sin factura, factura sin fecha de pago, etc.). Una sola
+  fuente de verdad, sin desincronización.
+- **Patente = identificador del vehículo:** la patente es la clave primaria de `vehiculos`
+  (formato `ABCD-12` / `AB-1234`, validado en la app y en la base). Los gastos del SII se
+  vinculan solos por patente.
+- **Modo demostración:** si `NEXT_PUBLIC_SUPABASE_URL` está vacío, la app corre con datos
+  de ejemplo (no persiste). Útil para presentar sin configurar nada.
+- Usuarios: Supabase → **Authentication → Users → Add user**. Roles en la tabla `perfiles`.
+- Archivos (logo, fotos, PDF de facturas, certificados) en **Supabase Storage**; los
+  buckets `adjuntos` y `certificados` son privados (se acceden con URL firmada).
+- Correlativo de cotizaciones: campo *Próximo número de cotización* en **Configuración**
+  (empezó en 1189, continuando el último presupuesto 1188).

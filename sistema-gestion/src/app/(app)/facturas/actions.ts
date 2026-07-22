@@ -7,7 +7,7 @@ import { isDemo } from "@/lib/demo";
 import { s, sReq, num, intNull } from "@/lib/form-helpers";
 import type { FacturaEstado } from "@/types/db";
 
-export type FormState = { error?: string };
+export type FormState = { error?: string; ok?: boolean };
 
 const DEMO_MSG =
   "Modo demostración: conecta Supabase (ver README) para guardar datos reales.";
@@ -117,6 +117,8 @@ export async function guardarFactura(
   revalidatePath("/viajes");
   revalidatePath("/cobranzas");
   revalidatePath("/");
+  // Edición inline (autoguardado): no redirige, mantiene abierto el acordeón.
+  if (id) return { ok: true };
   redirect("/facturas");
 }
 
@@ -136,6 +138,51 @@ export async function marcarPagada(formData: FormData) {
     .update({ fecha_pago: new Date().toISOString().slice(0, 10) })
     .eq("id", id)
     .is("fecha_pago", null);
+  revalidatePath("/facturas");
+  revalidatePath("/cobranzas");
+  revalidatePath("/");
+}
+
+// Cambia el estado DERIVADO de la factura desde la pastilla (autoguardado).
+// Traduce el estado visible a las columnas reales:
+//   borrador   → estado=borrador, sin pago
+//   por_cobrar → estado=emitida, sin pago   (requiere folio)
+//   pagada     → estado=emitida, fecha_pago=hoy (requiere folio)
+//   anulada    → estado=anulada
+// El cliente ya bloquea emitir/pagar sin folio; esto es la red de seguridad.
+export async function actualizarEstadoFactura(formData: FormData) {
+  const id = sReq(formData.get("id"));
+  const nuevo = sReq(formData.get("estado"));
+  if (!id) return;
+
+  if (isDemo()) {
+    revalidatePath("/facturas");
+    return;
+  }
+
+  const supabase = await createClient();
+  const hoy = new Date().toISOString().slice(0, 10);
+
+  let values: Record<string, unknown>;
+  if (nuevo === "borrador") values = { estado: "borrador", fecha_pago: null };
+  else if (nuevo === "anulada") values = { estado: "anulada" };
+  else if (nuevo === "por_cobrar") values = { estado: "emitida", fecha_pago: null };
+  else if (nuevo === "pagada") values = { estado: "emitida", fecha_pago: hoy };
+  else return;
+
+  // Emitir exige folio + fecha de emisión (check de la base): si falta la
+  // fecha, la ponemos hoy. Si falta el folio, no se puede emitir.
+  if (nuevo === "por_cobrar" || nuevo === "pagada") {
+    const { data: f } = await supabase
+      .from("facturas")
+      .select("folio, fecha_emision")
+      .eq("id", id)
+      .maybeSingle();
+    if (!f?.folio) return; // sin folio no se emite (el cliente ya avisó)
+    if (!f.fecha_emision) values.fecha_emision = hoy;
+  }
+
+  await supabase.from("facturas").update(values).eq("id", id);
   revalidatePath("/facturas");
   revalidatePath("/cobranzas");
   revalidatePath("/");

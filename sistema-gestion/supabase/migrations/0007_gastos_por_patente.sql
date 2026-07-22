@@ -2,6 +2,11 @@
 -- 0007 — Vinculación automática gasto ↔ vehículo POR PATENTE
 -- Ejecutar en Supabase > SQL Editor. Re-ejecutable.
 --
+-- ⚠️ SUPERSEDIDA por 0008: ahí la patente pasa a ser la PK del vehículo y estos
+-- triggers se recrean para usar la patente en vez del uuid. En una instalación
+-- nueva basta con ejecutar 0006 → 0007 → 0008 en orden. NO re-ejecutar 0007
+-- después de 0008 (asume una columna `vehiculos.id` que 0008 elimina).
+--
 -- El id (uuid) sigue siendo el FK interno (si corriges una patente mal
 -- escrita, los gastos no se pierden). La PATENTE pasa a ser la llave de
 -- negocio que vincula solos a los gastos:

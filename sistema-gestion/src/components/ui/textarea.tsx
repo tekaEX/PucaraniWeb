@@ -8,7 +8,7 @@ export const Textarea = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <textarea
     ref={ref}
-    className={cn(inputClass, "min-h-20 py-2 leading-relaxed", className)}
+    className={cn(inputClass, "min-h-16 py-2 leading-relaxed", className)}
     {...props}
   />
 ));

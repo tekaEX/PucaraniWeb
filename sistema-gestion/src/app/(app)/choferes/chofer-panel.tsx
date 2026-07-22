@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, useEffect, useRef, useState } from "react";
+import { useActionState, useRef } from "react";
 import { guardarChofer, eliminarChofer, type FormState } from "./actions";
 import { ConfirmForm } from "@/components/ui/confirm-form";
 import { Input } from "@/components/ui/input";
@@ -20,15 +20,6 @@ export function ChoferPanel({ chofer }: { chofer: Chofer }) {
   const formRef = useRef<HTMLFormElement>(null);
   const formId = `chofer-form-${chofer.id}`;
   const demo = isDemo();
-  const [guardado, setGuardado] = useState(false);
-
-  useEffect(() => {
-    if (state.ok) {
-      setGuardado(true);
-      const t = setTimeout(() => setGuardado(false), 2000);
-      return () => clearTimeout(t);
-    }
-  }, [state]);
 
   // Guarda automáticamente cuando el foco sale del formulario (o de las notas).
   function autoguardar() {
@@ -114,7 +105,7 @@ export function ChoferPanel({ chofer }: { chofer: Chofer }) {
                 <Loader2 className="h-3.5 w-3.5 animate-spin" />
                 Guardando…
               </>
-            ) : guardado ? (
+            ) : state.ok ? (
               <>
                 <Check className="h-3.5 w-3.5 text-ok" />
                 Guardado

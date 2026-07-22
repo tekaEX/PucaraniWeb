@@ -5,10 +5,8 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   LayoutDashboard,
-  PieChart,
   FileText,
   Receipt,
-  Wallet,
   Users,
   Settings,
   Bus,
@@ -22,6 +20,8 @@ import {
 import { cn } from "@/lib/utils";
 import { logout } from "@/app/login/actions";
 import { PeriodoSelector } from "@/components/periodo-selector";
+import { Notificaciones } from "@/components/notificaciones";
+import type { Alerta } from "@/lib/vencimientos";
 
 type NavItem = {
   href: string;
@@ -37,14 +37,7 @@ const grupos: { label?: string; items: NavItem[] }[] = [
     items: [
       { href: "/cotizaciones", label: "Cotizaciones", icon: FileText },
       { href: "/viajes", label: "Viajes", icon: Route },
-    ],
-  },
-  {
-    label: "Finanzas",
-    items: [
-      { href: "/finanzas", label: "Resumen", icon: PieChart },
       { href: "/facturas", label: "Facturas", icon: Receipt },
-      { href: "/cobranzas", label: "Cobranzas", icon: Wallet },
     ],
   },
   {
@@ -63,6 +56,7 @@ export function AppShell({
   empresaNombre,
   periodoAnio,
   periodoMes,
+  alertas,
   demo = false,
 }: {
   children: React.ReactNode;
@@ -70,6 +64,7 @@ export function AppShell({
   empresaNombre: string;
   periodoAnio: number;
   periodoMes: number | null;
+  alertas: Alerta[];
   demo?: boolean;
 }) {
   const pathname = usePathname();
@@ -197,7 +192,10 @@ export function AppShell({
             <CalendarDays className="h-4 w-4 text-brand" />
             <span className="hidden sm:inline">Periodo</span>
           </div>
-          <PeriodoSelector anio={periodoAnio} mes={periodoMes} />
+          <div className="flex items-center gap-2">
+            <Notificaciones alertas={alertas} />
+            <PeriodoSelector anio={periodoAnio} mes={periodoMes} />
+          </div>
         </div>
 
         <div className="p-4 sm:p-6 lg:p-8">

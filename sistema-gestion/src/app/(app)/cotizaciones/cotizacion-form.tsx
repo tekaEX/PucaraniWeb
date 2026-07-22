@@ -5,6 +5,7 @@ import Link from "next/link";
 import { addDays } from "date-fns";
 import type { FormState } from "./actions";
 import { Input } from "@/components/ui/input";
+import { MoneyInput } from "@/components/ui/money-input";
 import { Textarea } from "@/components/ui/textarea";
 import { Select } from "@/components/ui/select";
 import { Field } from "@/components/ui/label";
@@ -95,7 +96,7 @@ export function CotizacionForm({
   }
 
   return (
-    <form action={formAction} className="space-y-6">
+    <form action={formAction} className="space-y-4">
       {cotizacion ? <input type="hidden" name="id" value={cotizacion.id} /> : null}
       <input type="hidden" name="itemsJson" value={itemsJson} />
       <input type="hidden" name="exento_iva" value={exento ? "on" : ""} />
@@ -106,7 +107,7 @@ export function CotizacionForm({
             {cotizacion ? `Cotización N° ${cotizacion.numero}` : "Datos de la cotización"}
           </CardTitle>
         </CardHeader>
-        <CardBody className="grid gap-4 sm:grid-cols-2">
+        <CardBody className="grid gap-3 sm:grid-cols-2">
           <Field label="Cliente" htmlFor="cliente_id">
             <Select
               id="cliente_id"
@@ -200,11 +201,10 @@ export function CotizacionForm({
                 />
               </Field>
               <Field label="Valor unitario" className="mb-0">
-                <Input
-                  inputMode="numeric"
+                <MoneyInput
                   value={r.valor_unitario}
-                  onChange={(e) => updateRow(r.key, { valor_unitario: e.target.value })}
-                  placeholder="80000"
+                  onChange={(raw) => updateRow(r.key, { valor_unitario: raw })}
+                  placeholder="0"
                 />
               </Field>
               <Field label="Total" className="mb-0">

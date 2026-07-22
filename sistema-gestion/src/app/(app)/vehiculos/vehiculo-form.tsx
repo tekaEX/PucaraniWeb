@@ -20,16 +20,18 @@ export function VehiculoForm({ vehiculo }: { vehiculo?: Vehiculo }) {
   );
 
   return (
-    <form action={formAction} className="space-y-6">
+    <form action={formAction} className="space-y-4">
       {vehiculo ? (
         <input type="hidden" name="patente_original" value={vehiculo.patente} />
       ) : null}
 
+      {/* Dos columnas simétricas: misma altura, sin huecos. */}
+      <div className="grid gap-3 lg:grid-cols-2">
       <Card>
         <CardHeader>
           <CardTitle>Datos del vehículo</CardTitle>
         </CardHeader>
-        <CardBody className="grid gap-4 sm:grid-cols-2">
+        <CardBody className="grid gap-3 sm:grid-cols-2">
           <Field label="Patente" htmlFor="patente">
             <Input
               id="patente"
@@ -61,11 +63,12 @@ export function VehiculoForm({ vehiculo }: { vehiculo?: Vehiculo }) {
         </CardBody>
       </Card>
 
+      <div className="flex flex-col gap-3">
       <Card>
         <CardHeader>
           <CardTitle>Documentos (vencimientos)</CardTitle>
         </CardHeader>
-        <CardBody className="grid gap-4 sm:grid-cols-3">
+        <CardBody className="grid gap-3 sm:grid-cols-2">
           <Field label="Revisión técnica" htmlFor="revision_tecnica_venc">
             <Input
               id="revision_tecnica_venc"
@@ -97,7 +100,7 @@ export function VehiculoForm({ vehiculo }: { vehiculo?: Vehiculo }) {
         </CardBody>
       </Card>
 
-      <Card>
+      <Card className="flex-1">
         <CardBody className="space-y-4">
           <label className="flex items-center gap-2">
             <input
@@ -118,6 +121,8 @@ export function VehiculoForm({ vehiculo }: { vehiculo?: Vehiculo }) {
           ) : null}
         </CardBody>
       </Card>
+      </div>
+      </div>
 
       <div className="flex items-center gap-2">
         <Button type="submit" disabled={pending}>

@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, useEffect, useRef, useState } from "react";
+import { useActionState, useRef } from "react";
 import {
   guardarVehiculo,
   eliminarVehiculo,
@@ -60,15 +60,6 @@ export function VehiculoPanel({
   );
   const formRef = useRef<HTMLFormElement>(null);
   const demo = isDemo();
-  const [guardado, setGuardado] = useState(false);
-
-  useEffect(() => {
-    if (state.ok) {
-      setGuardado(true);
-      const t = setTimeout(() => setGuardado(false), 2000);
-      return () => clearTimeout(t);
-    }
-  }, [state]);
 
   function autoguardar() {
     if (demo) return;
@@ -98,7 +89,7 @@ export function VehiculoPanel({
               <Loader2 className="h-3.5 w-3.5 animate-spin" />
               Guardando…
             </>
-          ) : guardado ? (
+          ) : state.ok ? (
             <>
               <Check className="h-3.5 w-3.5 text-ok" />
               Guardado
