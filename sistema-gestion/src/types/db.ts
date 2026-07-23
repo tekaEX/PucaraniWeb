@@ -88,7 +88,8 @@ export interface CotizacionItem {
   cotizacion_id: string;
   orden: number;
   descripcion: string;
-  cantidad: number;
+  /** Fecha del servicio (se usa como fecha_inicio del viaje al aceptar). */
+  fecha: string | null;
   valor_unitario: number;
   total: number;
   created_at: string;

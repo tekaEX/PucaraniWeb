@@ -33,6 +33,14 @@ export function EstadoSelector({
   const [valor, setValor] = useState(defaultValue);
   const inputRef = useRef<HTMLInputElement>(null);
 
+  // Sincroniza con el valor del servidor cuando cambia (tras guardar y
+  // revalidar): así la pastilla siempre refleja lo realmente guardado.
+  const [defPrev, setDefPrev] = useState(defaultValue);
+  if (defaultValue !== defPrev) {
+    setDefPrev(defaultValue);
+    setValor(defaultValue);
+  }
+
   function elegir(nuevo: string) {
     if (nuevo === valor || pending) return;
     const previo = valor;

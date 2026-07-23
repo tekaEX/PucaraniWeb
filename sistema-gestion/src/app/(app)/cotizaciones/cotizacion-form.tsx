@@ -22,8 +22,8 @@ const TITULO_DEFAULT = "Transporte de pasajeros — bus de acercamiento";
 
 type Row = {
   key: string;
+  fecha: string;
   descripcion: string;
-  cantidad: string;
   valor_unitario: string;
 };
 
@@ -58,16 +58,16 @@ export function CotizacionForm({
     items && items.length > 0
       ? items.map((it) => ({
           key: newKey(),
+          fecha: it.fecha ? toInputDate(it.fecha) : "",
           descripcion: it.descripcion,
-          cantidad: String(it.cantidad),
           valor_unitario: String(it.valor_unitario),
         }))
-      : [{ key: newKey(), descripcion: "", cantidad: "1", valor_unitario: "" }],
+      : [{ key: newKey(), fecha: "", descripcion: "", valor_unitario: "" }],
   );
 
   const totales = useMemo(() => {
     const subtotal = rows.reduce(
-      (acc, r) => acc + Math.round(toNum(r.cantidad || "1") * toNum(r.valor_unitario)),
+      (acc, r) => acc + Math.round(toNum(r.valor_unitario)),
       0,
     );
     const iva = exento ? 0 : Math.round(subtotal * 0.19);
@@ -76,8 +76,8 @@ export function CotizacionForm({
 
   const itemsJson = JSON.stringify(
     rows.map((r) => ({
+      fecha: r.fecha || null,
       descripcion: r.descripcion,
-      cantidad: toNum(r.cantidad || "1"),
       valor_unitario: toNum(r.valor_unitario),
     })),
   );
@@ -88,7 +88,7 @@ export function CotizacionForm({
   function addRow() {
     setRows((prev) => [
       ...prev,
-      { key: newKey(), descripcion: "", cantidad: "1", valor_unitario: "" },
+      { key: newKey(), fecha: "", descripcion: "", valor_unitario: "" },
     ]);
   }
   function removeRow(key: string) {
@@ -182,8 +182,15 @@ export function CotizacionForm({
           {rows.map((r) => (
             <div
               key={r.key}
-              className="grid grid-cols-1 gap-2 rounded-lg border border-border p-3 sm:grid-cols-[1fr_5rem_8rem_8rem_2.5rem] sm:items-end"
+              className="grid grid-cols-1 gap-2 rounded-lg border border-border p-3 sm:grid-cols-[9.5rem_1fr_8rem_2.5rem] sm:items-end"
             >
+              <Field label="Fecha" className="mb-0">
+                <Input
+                  type="date"
+                  value={r.fecha}
+                  onChange={(e) => updateRow(r.key, { fecha: e.target.value })}
+                />
+              </Field>
               <Field label="Descripción" className="mb-0">
                 <Textarea
                   value={r.descripcion}
@@ -193,24 +200,12 @@ export function CotizacionForm({
                   rows={2}
                 />
               </Field>
-              <Field label="Cant." className="mb-0">
-                <Input
-                  inputMode="decimal"
-                  value={r.cantidad}
-                  onChange={(e) => updateRow(r.key, { cantidad: e.target.value })}
-                />
-              </Field>
-              <Field label="Valor unitario" className="mb-0">
+              <Field label="Valor" className="mb-0">
                 <MoneyInput
                   value={r.valor_unitario}
                   onChange={(raw) => updateRow(r.key, { valor_unitario: raw })}
                   placeholder="0"
                 />
-              </Field>
-              <Field label="Total" className="mb-0">
-                <div className="flex h-10 items-center justify-end rounded-lg bg-gray-50 px-3 text-sm font-medium tabular-nums">
-                  {formatCLP(Math.round(toNum(r.cantidad || "1") * toNum(r.valor_unitario)))}
-                </div>
               </Field>
               <button
                 type="button"

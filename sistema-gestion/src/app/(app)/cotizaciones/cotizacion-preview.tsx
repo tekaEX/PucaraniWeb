@@ -75,21 +75,19 @@ export function CotizacionPreview({
           <thead className="bg-brand text-left text-xs text-white">
             <tr>
               <th className="px-3 py-2 font-semibold">#</th>
+              <th className="px-3 py-2 font-semibold">Fecha</th>
               <th className="px-3 py-2 font-semibold">Descripción</th>
-              <th className="px-3 py-2 text-right font-semibold">Cant.</th>
-              <th className="px-3 py-2 text-right font-semibold">V. unitario</th>
-              <th className="px-3 py-2 text-right font-semibold">Total</th>
+              <th className="px-3 py-2 text-right font-semibold">Valor</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-border">
             {items.map((it, i) => (
               <tr key={it.id}>
                 <td className="px-3 py-2 align-top text-muted">{i + 1}</td>
-                <td className="px-3 py-2 align-top whitespace-pre-wrap">{it.descripcion}</td>
-                <td className="px-3 py-2 text-right align-top tabular-nums">{it.cantidad}</td>
-                <td className="px-3 py-2 text-right align-top tabular-nums">
-                  {formatCLP(it.valor_unitario)}
+                <td className="px-3 py-2 align-top whitespace-nowrap text-muted">
+                  {it.fecha ? formatDate(it.fecha) : "—"}
                 </td>
+                <td className="px-3 py-2 align-top whitespace-pre-wrap">{it.descripcion}</td>
                 <td className="px-3 py-2 text-right align-top tabular-nums">
                   {formatCLP(it.total)}
                 </td>

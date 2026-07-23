@@ -70,6 +70,7 @@ const styles = StyleSheet.create({
   },
   td: { paddingVertical: 6, paddingHorizontal: 8 },
   colNum: { width: 26 },
+  colFecha: { width: 68 },
   colDesc: { flex: 1 },
   colMid: { width: 54, textAlign: "right" },
   colMoney: { width: 80, textAlign: "right" },
@@ -185,19 +186,17 @@ function CotizacionDoc({
         <View style={styles.table}>
           <View style={styles.thead}>
             <Text style={[styles.th, styles.colNum]}>#</Text>
+            <Text style={[styles.th, styles.colFecha]}>Fecha</Text>
             <Text style={[styles.th, styles.colDesc]}>Descripción</Text>
-            <Text style={[styles.th, styles.colMid]}>Cant.</Text>
-            <Text style={[styles.th, styles.colMoney]}>V. unitario</Text>
-            <Text style={[styles.th, styles.colMoney]}>Total</Text>
+            <Text style={[styles.th, styles.colMoney]}>Valor</Text>
           </View>
           {c.items.map((it, i) => (
             <View style={styles.tr} key={it.id} wrap={false}>
               <Text style={[styles.td, styles.colNum]}>{i + 1}</Text>
-              <Text style={[styles.td, styles.colDesc]}>{it.descripcion}</Text>
-              <Text style={[styles.td, styles.colMid]}>{it.cantidad}</Text>
-              <Text style={[styles.td, styles.colMoney]}>
-                {formatCLP(it.valor_unitario)}
+              <Text style={[styles.td, styles.colFecha]}>
+                {it.fecha ? formatDate(it.fecha) : "—"}
               </Text>
+              <Text style={[styles.td, styles.colDesc]}>{it.descripcion}</Text>
               <Text style={[styles.td, styles.colMoney]}>
                 {formatCLP(it.total)}
               </Text>

@@ -1,9 +1,13 @@
 "use client";
 
-import { useActionState, useRef, useState } from "react";
+import { useActionState, useRef, useState, useTransition } from "react";
 import { Plus, Trash2, Check, Loader2 } from "lucide-react";
 import { EstadoSelector, type EstadoOpcion } from "@/components/ui/estado-selector";
-import { actualizarCotizacion, type FormState } from "./actions";
+import {
+  actualizarCotizacion,
+  actualizarEstadoCotizacion,
+  type FormState,
+} from "./actions";
 import { formatCLP, toInputDate } from "@/lib/format";
 import { formatMiles } from "@/components/ui/money-input";
 import { isDemo } from "@/lib/demo";
@@ -23,8 +27,8 @@ const ESTADOS_COTIZACION: EstadoOpcion[] = [
 
 type ItemRow = {
   key: number;
+  fecha: string;
   descripcion: string;
-  cantidad: number;
   valor_unitario: number;
 };
 
@@ -47,14 +51,15 @@ export function CotizacionEditor({
   );
   const formRef = useRef<HTMLFormElement>(null);
   const demo = isDemo();
+  const [estadoPending, startEstado] = useTransition();
 
   const [items, setItems] = useState<ItemRow[]>(() =>
     [...(cot.items ?? [])]
       .sort((a, b) => a.orden - b.orden)
       .map((it, i) => ({
         key: i,
+        fecha: it.fecha ? toInputDate(it.fecha) : "",
         descripcion: it.descripcion,
-        cantidad: Number(it.cantidad),
         valor_unitario: Number(it.valor_unitario),
       })),
   );
@@ -67,14 +72,19 @@ export function CotizacionEditor({
   function onBlurForm(e: React.FocusEvent<HTMLFormElement>) {
     if (!e.currentTarget.contains(e.relatedTarget as Node | null)) autoguardar();
   }
+  // El estado se guarda con acción dedicada (no el autoguardado del documento),
+  // para que no compitan y el estado no se revierta.
+  function cambiarEstado(nuevo: string) {
+    const fd = new FormData();
+    fd.set("id", cot.id);
+    fd.set("estado", nuevo);
+    startEstado(() => actualizarEstadoCotizacion(fd));
+  }
   function setItem(i: number, patch: Partial<ItemRow>) {
     setItems((rows) => rows.map((r, idx) => (idx === i ? { ...r, ...patch } : r)));
   }
 
-  const subtotal = items.reduce(
-    (a, it) => a + Math.round(it.cantidad * it.valor_unitario),
-    0,
-  );
+  const subtotal = items.reduce((a, it) => a + Math.round(it.valor_unitario), 0);
   const iva = exento ? 0 : Math.round(subtotal * 0.19);
   const total = subtotal + iva;
 
@@ -90,9 +100,9 @@ export function CotizacionEditor({
         type="hidden"
         name="itemsJson"
         value={JSON.stringify(
-          items.map(({ descripcion, cantidad, valor_unitario }) => ({
+          items.map(({ fecha, descripcion, valor_unitario }) => ({
+            fecha,
             descripcion,
-            cantidad,
             valor_unitario,
           })),
         )}
@@ -104,8 +114,8 @@ export function CotizacionEditor({
           name="estado"
           defaultValue={cot.estado}
           opciones={ESTADOS_COTIZACION}
-          onCambio={autoguardar}
-          pending={pending}
+          onCambio={cambiarEstado}
+          pending={estadoPending}
         />
         <span className="flex h-4 items-center gap-1.5 text-xs text-muted">
           {pending ? (
@@ -218,10 +228,9 @@ export function CotizacionEditor({
             <thead className="bg-brand text-left text-xs text-white">
               <tr>
                 <th className="px-3 py-2 font-semibold">#</th>
+                <th className="w-36 px-3 py-2 font-semibold">Fecha</th>
                 <th className="px-3 py-2 font-semibold">Descripción</th>
-                <th className="w-20 px-3 py-2 text-right font-semibold">Cant.</th>
-                <th className="w-32 px-3 py-2 text-right font-semibold">V. unitario</th>
-                <th className="w-28 px-3 py-2 text-right font-semibold">Total</th>
+                <th className="w-32 px-3 py-2 text-right font-semibold">Valor</th>
                 <th className="w-8 px-1 py-2"></th>
               </tr>
             </thead>
@@ -230,21 +239,20 @@ export function CotizacionEditor({
                 <tr key={it.key}>
                   <td className="px-3 py-2 align-top text-muted">{i + 1}</td>
                   <td className="px-3 py-2 align-top">
+                    <input
+                      type="date"
+                      value={it.fecha}
+                      onChange={(e) => setItem(i, { fecha: e.target.value })}
+                      className={`${invis} w-full tabular-nums`}
+                    />
+                  </td>
+                  <td className="px-3 py-2 align-top">
                     <textarea
                       value={it.descripcion}
                       onChange={(e) => setItem(i, { descripcion: e.target.value })}
-                      rows={Math.max(1, Math.ceil(it.descripcion.length / 70))}
+                      rows={Math.max(1, Math.ceil(it.descripcion.length / 60))}
                       placeholder="Descripción del servicio…"
                       className={`${invis} w-full resize-none`}
-                    />
-                  </td>
-                  <td className="px-3 py-2 text-right align-top">
-                    <input
-                      type="number"
-                      min={0}
-                      value={it.cantidad}
-                      onChange={(e) => setItem(i, { cantidad: Number(e.target.value) })}
-                      className={`${invis} w-16 text-right tabular-nums`}
                     />
                   </td>
                   <td className="px-3 py-2 text-right align-top">
@@ -260,9 +268,6 @@ export function CotizacionEditor({
                       placeholder="$0"
                       className={`${invis} w-28 text-right tabular-nums`}
                     />
-                  </td>
-                  <td className="px-3 py-2 text-right align-top tabular-nums">
-                    {formatCLP(Math.round(it.cantidad * it.valor_unitario))}
                   </td>
                   <td className="px-1 py-2 text-right align-top">
                     <button
@@ -285,7 +290,7 @@ export function CotizacionEditor({
             onClick={() =>
               setItems((rows) => [
                 ...rows,
-                { key: Date.now(), descripcion: "", cantidad: 1, valor_unitario: 0 },
+                { key: Date.now(), fecha: "", descripcion: "", valor_unitario: 0 },
               ])
             }
             className="flex w-full items-center gap-1.5 border-t border-border px-3 py-2 text-xs font-medium text-brand hover:bg-brand-soft/50"

@@ -28,9 +28,8 @@ export async function GET(
 
   ws.columns = [
     { width: 6 },
-    { width: 52 },
-    { width: 10 },
-    { width: 16 },
+    { width: 13 },
+    { width: 54 },
     { width: 16 },
   ];
 
@@ -99,7 +98,7 @@ export async function GET(
   r++;
   // Encabezado de la tabla
   const head = r;
-  const headers = ["#", "Descripción", "Cant.", "Valor unitario", "Total"];
+  const headers = ["#", "Fecha", "Descripción", "Valor"];
   headers.forEach((h, i) => {
     const cell = ws.getCell(head, i + 1);
     cell.value = h;
@@ -110,7 +109,7 @@ export async function GET(
       fgColor: { argb: BRAND },
     };
     cell.alignment = {
-      horizontal: i >= 2 ? "right" : "left",
+      horizontal: i === 3 ? "right" : "left",
       vertical: "middle",
     };
   });
@@ -118,25 +117,22 @@ export async function GET(
 
   c.items.forEach((it, idx) => {
     ws.getCell(r, 1).value = idx + 1;
-    ws.getCell(r, 2).value = it.descripcion;
-    ws.getCell(r, 2).alignment = { wrapText: true, vertical: "top" };
-    ws.getCell(r, 3).value = Number(it.cantidad);
-    ws.getCell(r, 4).value = Number(it.valor_unitario);
-    ws.getCell(r, 5).value = Number(it.total);
+    ws.getCell(r, 2).value = it.fecha ? formatDate(it.fecha) : "";
+    ws.getCell(r, 3).value = it.descripcion;
+    ws.getCell(r, 3).alignment = { wrapText: true, vertical: "top" };
+    ws.getCell(r, 4).value = Number(it.total);
     ws.getCell(r, 4).numFmt = '"$"#,##0';
-    ws.getCell(r, 5).numFmt = '"$"#,##0';
-    ws.getCell(r, 3).alignment = { horizontal: "right" };
     r++;
   });
 
   // Totales
   const totalRow = (label: string, value: number, bold = false) => {
-    ws.getCell(r, 4).value = label;
+    ws.getCell(r, 3).value = label;
+    ws.getCell(r, 3).font = { bold };
+    ws.getCell(r, 3).alignment = { horizontal: "right" };
+    ws.getCell(r, 4).value = value;
+    ws.getCell(r, 4).numFmt = '"$"#,##0';
     ws.getCell(r, 4).font = { bold };
-    ws.getCell(r, 4).alignment = { horizontal: "right" };
-    ws.getCell(r, 5).value = value;
-    ws.getCell(r, 5).numFmt = '"$"#,##0';
-    ws.getCell(r, 5).font = { bold };
     r++;
   };
   totalRow("Subtotal", Number(c.subtotal));
@@ -151,7 +147,7 @@ export async function GET(
     r++;
     ws.getCell(`B${r}`).value = c.nota_pie;
     ws.getCell(`B${r}`).alignment = { wrapText: true };
-    ws.mergeCells(`B${r}:E${r}`);
+    ws.mergeCells(`B${r}:D${r}`);
   }
 
   const buf = await wb.xlsx.writeBuffer();

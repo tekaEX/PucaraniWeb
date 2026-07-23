@@ -170,27 +170,27 @@ begin
           true, 'enviada', 750000, 0, 750000)
   returning id into v_cot1188;
 
-  insert into cotizacion_items (cotizacion_id, orden, descripcion, cantidad, valor_unitario, total) values
-    (v_cot1188, 0, 'Día 15 — desde casino el morro al regimiento Rancagua, Museo Azapa, retorno casino el morro.', 1, 80000, 80000),
-    (v_cot1188, 1, 'Día 16 — Todo el día, desde 07:30 hasta las 20:00. Putre.', 1, 350000, 350000),
-    (v_cot1188, 2, 'Día 17 — Todo el día a Tacna, desde las 07:30 hasta las 21:00 aprox. Regreso a Arica.', 1, 240000, 240000),
-    (v_cot1188, 3, 'Día 18 — Desde las 8:30 hasta las 14:00. Casino morro hacia brigada, Coraceros-morro-restaurant (por indicar).', 1, 80000, 80000);
+  insert into cotizacion_items (cotizacion_id, orden, descripcion, fecha, valor_unitario, total) values
+    (v_cot1188, 0, 'Día 15 — desde casino el morro al regimiento Rancagua, Museo Azapa, retorno casino el morro.', pg_temp.dia(0, 15), 80000, 80000),
+    (v_cot1188, 1, 'Día 16 — Todo el día, desde 07:30 hasta las 20:00. Putre.', pg_temp.dia(0, 16), 350000, 350000),
+    (v_cot1188, 2, 'Día 17 — Todo el día a Tacna, desde las 07:30 hasta las 21:00 aprox. Regreso a Arica.', pg_temp.dia(0, 17), 240000, 240000),
+    (v_cot1188, 3, 'Día 18 — Desde las 8:30 hasta las 14:00. Casino morro hacia brigada, Coraceros-morro-restaurant (por indicar).', pg_temp.dia(0, 18), 80000, 80000);
 
   insert into cotizaciones (empresa_id, numero, fecha, fecha_validez, cliente_id, autor, titulo, exento_iva, estado, subtotal, iva, total)
   values (v_empresa, 1181, current_date - 45, current_date - 15, v_epa, 'c.carreño',
           'Interior puerto — traslado de personal', true, 'aceptada', 60000, 0, 60000)
   returning id into v_cot1181;
 
-  insert into cotizacion_items (cotizacion_id, orden, descripcion, cantidad, valor_unitario, total)
-  values (v_cot1181, 0, 'Recorrido interior puerto, ida y vuelta.', 1, 60000, 60000);
+  insert into cotizacion_items (cotizacion_id, orden, descripcion, fecha, valor_unitario, total)
+  values (v_cot1181, 0, 'Recorrido interior puerto, ida y vuelta.', current_date - 42, 60000, 60000);
 
   insert into cotizaciones (empresa_id, numero, fecha, fecha_validez, cliente_id, autor, titulo, exento_iva, estado, subtotal, iva, total)
   values (v_empresa, 1179, pg_temp.dia(-1, 13), pg_temp.dia(-1, 13) + 30, v_tpa, 'c.carreño',
           'CIOP — traslado de autoridades', true, 'aceptada', 180000, 0, 180000)
   returning id into v_cot1179;
 
-  insert into cotizacion_items (cotizacion_id, orden, descripcion, cantidad, valor_unitario, total)
-  values (v_cot1179, 0, 'Servicio CIOP, jornada completa.', 1, 180000, 180000);
+  insert into cotizacion_items (cotizacion_id, orden, descripcion, fecha, valor_unitario, total)
+  values (v_cot1179, 0, 'Servicio CIOP, jornada completa.', pg_temp.dia(-1, 13), 180000, 180000);
 
   -- --------------------------------------------------------------------------
   -- 8. Viajes + facturas (todas exentas: tipo_dte 34, iva 0)
