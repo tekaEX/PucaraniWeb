@@ -51,8 +51,10 @@ export function ClienteAccordion({
                   {c.contacto_nombre ?? c.contacto_telefono ?? c.contacto_email ?? "—"}
                 </td>
                 <td className="px-4 py-3 text-right tabular-nums font-medium">
-                  {cuenta.pagado ? (
-                    <span className="text-ok">{formatCLP(cuenta.pagado)}</span>
+                  {cuenta.pagado + cuenta.taxis > 0 ? (
+                    <span className="text-ok">
+                      {formatCLP(cuenta.pagado + cuenta.taxis)}
+                    </span>
                   ) : (
                     "—"
                   )}
@@ -67,7 +69,9 @@ export function ClienteAccordion({
               {open ? (
                 <tr>
                   <td colSpan={6} className="bg-gray-50/50 px-4 py-5">
-                    <ClientePanel cliente={c} cuenta={cuenta} />
+                    <div className="animate-expand">
+                      <ClientePanel cliente={c} cuenta={cuenta} />
+                    </div>
                   </td>
                 </tr>
               ) : null}

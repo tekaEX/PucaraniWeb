@@ -7,16 +7,20 @@ import {
   diasDesde,
   cuentaVacia,
   type CuentaCliente,
+  type TaxiIngreso,
   type ViajePendRaw,
 } from "@/lib/cobranza";
 
 // Construye el estado de cuenta por cliente respetando el periodo global:
 // pagadas por fecha de pago, emitidas/anuladas por fecha de emisión; los
 // borradores y viajes sin facturar se muestran siempre (trabajo pendiente).
+// Los servicios de taxi del periodo suman como ingreso del cliente (se cobran
+// al momento; nunca pasan por facturas).
 export function construirCuentas(
   facturas: FacturaConRelaciones[],
   viajesPend: ViajePendRaw[],
   periodo: Periodo,
+  taxis: TaxiIngreso[] = [],
 ): Map<string, CuentaCliente> {
   const map = new Map<string, CuentaCliente>();
   const entrada = (key: string, nombre: string) => {
@@ -50,6 +54,19 @@ export function construirCuentas(
       if (f.fecha_emision && diasDesde(f.fecha_emision) > DIAS_VENCE) a.vencido += monto;
     } else if (derivado === "borrador") {
       a.pendienteFacturar += monto;
+    }
+  }
+
+  // Taxis del periodo: solo los que tienen cliente asociado (los particulares
+  // no pertenecen a ninguna cuenta).
+  for (const t of taxis) {
+    if (!t.cliente_id || !enRango(t.fecha, periodo)) continue;
+    const cuenta = map.get(t.cliente_id);
+    if (cuenta) cuenta.taxis += Number(t.monto);
+    else {
+      const nueva = cuentaVacia(t.cliente_id, "");
+      nueva.taxis = Number(t.monto);
+      map.set(t.cliente_id, nueva);
     }
   }
 

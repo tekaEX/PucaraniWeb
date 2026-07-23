@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { isDemo } from "@/lib/demo";
+import { hoyChile } from "@/lib/format";
 import { s, sReq, bool } from "@/lib/form-helpers";
 import type { CotizacionEstado } from "@/types/db";
 
@@ -90,7 +91,7 @@ async function generarViajesDesdeCotizacion(
   }
 
   // Cada línea es un viaje programado; su fecha es la de la línea (o hoy).
-  const hoy = new Date().toISOString().slice(0, 10);
+  const hoy = hoyChile();
   const filas = [...(cot.items ?? [])]
     .sort((a, b) => a.orden - b.orden)
     .map((it) => ({
@@ -114,7 +115,7 @@ async function generarViajesDesdeCotizacion(
 function readHeader(formData: FormData) {
   const estadoRaw = sReq(formData.get("estado")) as CotizacionEstado;
   return {
-    fecha: sReq(formData.get("fecha")) || new Date().toISOString().slice(0, 10),
+    fecha: sReq(formData.get("fecha")) || hoyChile(),
     fecha_validez: s(formData.get("fecha_validez")),
     cliente_id: s(formData.get("cliente_id")),
     autor: s(formData.get("autor")),

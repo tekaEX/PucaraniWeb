@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { isDemo } from "@/lib/demo";
+import { hoyChile } from "@/lib/format";
 import { s, sReq, num, intNull } from "@/lib/form-helpers";
 import type { FacturaEstado } from "@/types/db";
 
@@ -64,7 +65,7 @@ export async function guardarFactura(
     return { error: "Un borrador no puede tener fecha de pago: emite la factura primero." };
   }
   if (formData.get("marcar_pagada") === "1" && !fecha_pago) {
-    fecha_pago = new Date().toISOString().slice(0, 10);
+    fecha_pago = hoyChile();
   }
 
   const values = {
@@ -135,7 +136,7 @@ export async function marcarPagada(formData: FormData) {
   const supabase = await createClient();
   await supabase
     .from("facturas")
-    .update({ fecha_pago: new Date().toISOString().slice(0, 10) })
+    .update({ fecha_pago: hoyChile() })
     .eq("id", id)
     .is("fecha_pago", null);
   revalidatePath("/facturas");
@@ -161,7 +162,7 @@ export async function actualizarEstadoFactura(formData: FormData) {
   }
 
   const supabase = await createClient();
-  const hoy = new Date().toISOString().slice(0, 10);
+  const hoy = hoyChile();
 
   let values: Record<string, unknown>;
   if (nuevo === "borrador") values = { estado: "borrador", fecha_pago: null };

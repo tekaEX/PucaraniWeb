@@ -2,12 +2,14 @@
 // seguros para usar tanto en cliente como en servidor. La agregación que
 // depende del periodo global vive en cobranza-server.ts.
 import type { FacturaConRelaciones } from "@/types/db";
+import { hoyChile } from "@/lib/format";
 
 export const DIAS_VENCE = 30;
 
 export function diasDesde(fecha: string): number {
-  const hoy = new Date();
-  hoy.setHours(0, 0, 0, 0);
+  // Anclado al día de Chile: en el servidor (UTC) la antigüedad no debe
+  // adelantarse un día por la noche.
+  const hoy = new Date(`${hoyChile()}T00:00:00`);
   const d = new Date(fecha.length === 10 ? `${fecha}T00:00:00` : fecha);
   d.setHours(0, 0, 0, 0);
   return Math.round((hoy.getTime() - d.getTime()) / 86400000);
@@ -26,6 +28,13 @@ export type ViajePendRaw = ViajePendiente & {
   cliente_id: string;
 };
 
+// Servicio de taxi mínimo para la agregación por cliente.
+export type TaxiIngreso = {
+  cliente_id: string | null;
+  fecha: string;
+  monto: number;
+};
+
 export type CuentaCliente = {
   clienteId: string;
   nombre: string;
@@ -33,6 +42,8 @@ export type CuentaCliente = {
   porCobrar: number;
   vencido: number;
   pagado: number;
+  /** Ingresos por servicios de taxi del periodo (se cobran al momento). */
+  taxis: number;
   facturas: FacturaConRelaciones[];
   viajesPendientes: ViajePendiente[];
 };
@@ -45,6 +56,7 @@ export function cuentaVacia(clienteId: string, nombre: string): CuentaCliente {
     porCobrar: 0,
     vencido: 0,
     pagado: 0,
+    taxis: 0,
     facturas: [],
     viajesPendientes: [],
   };

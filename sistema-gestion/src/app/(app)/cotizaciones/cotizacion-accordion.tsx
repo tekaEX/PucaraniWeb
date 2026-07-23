@@ -99,6 +99,7 @@ export function CotizacionAccordion({
               {open ? (
                 <tr>
                   <td colSpan={7} className="bg-gray-50/50 px-4 py-5">
+                    <div className="animate-expand">
                     <div className="mb-4 flex flex-wrap items-center gap-2">
                       <a
                         href={`/api/cotizaciones/${c.id}/pdf`}
@@ -167,6 +168,7 @@ export function CotizacionAccordion({
                         </ul>
                       </div>
                     ) : null}
+                    </div>
                   </td>
                 </tr>
               ) : null}

@@ -22,6 +22,15 @@ export type RolUsuario = "admin" | "operador" | "contador" | "chofer";
 export type GastoCategoria = "combustible" | "mantencion" | "seguros" | "otros";
 export type GastoOrigen = "manual" | "sii";
 
+export type TaxiTipo =
+  | "aeropuerto_arica"
+  | "arica_aeropuerto"
+  | "tacna_peru"
+  | "local"
+  | "taxi_exclusivo"
+  | "taxi_compartido"
+  | "especial";
+
 export interface Perfil {
   id: string; // = auth.users.id
   nombre: string;
@@ -225,6 +234,29 @@ export interface GastoVehiculo {
   updated_at: string;
 }
 
+// Servicio del área de taxis: se gestiona aislado (no toca viajes/facturas)
+// pero suma a los ingresos por cliente. cliente/chofer_texto conservan el
+// nombre cuando una importación desde la app antigua no encontró match.
+export interface ServicioTaxi {
+  id: string;
+  empresa_id: string;
+  fecha: string;
+  tipo: TaxiTipo;
+  /** Solo cuando tipo = "especial". */
+  descripcion: string | null;
+  monto: number;
+  /** Nombre del pasajero. */
+  pasajero: string | null;
+  cliente_id: string | null;
+  chofer_id: string | null;
+  cliente_texto: string | null;
+  chofer_texto: string | null;
+  /** Id del registro en la app antigua (importación idempotente). */
+  origen_id: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
 // ---------------------------------------------------------------------------
 // Estados derivados (la única forma correcta de leerlos)
 // ---------------------------------------------------------------------------
@@ -297,6 +329,21 @@ export type GastoVehiculoConVehiculo = GastoVehiculo & {
   vehiculo: Pick<Vehiculo, "patente" | "marca" | "modelo"> | null;
 };
 
+export type ServicioTaxiConRelaciones = ServicioTaxi & {
+  cliente: ClienteRef | null;
+  chofer: Pick<Chofer, "id" | "nombre"> | null;
+};
+
+/** Nombre de empresa a mostrar: FK viva, o el texto conservado de la importación. */
+export function taxiNombreCliente(s: ServicioTaxiConRelaciones): string | null {
+  return s.cliente?.nombre ?? s.cliente_texto ?? null;
+}
+
+/** Nombre de chofer a mostrar: FK viva, o el texto conservado de la importación. */
+export function taxiNombreChofer(s: ServicioTaxiConRelaciones): string | null {
+  return s.chofer?.nombre ?? s.chofer_texto ?? null;
+}
+
 // ---------------------------------------------------------------------------
 // Etiquetas legibles
 // ---------------------------------------------------------------------------
@@ -319,6 +366,19 @@ export const FACTURA_ESTADOS_DERIVADOS: Record<FacturaEstadoDerivado, string> = 
   por_cobrar: "Emitida (por cobrar)",
   pagada: "Pagada",
   anulada: "Anulada",
+};
+
+// Tipos de servicio de taxi (mismo orden que el talonario físico; los 6
+// primeros son las casillas del vale, "especial" se escribe a mano).
+// `monto` es el valor por defecto que precarga el formulario.
+export const TAXI_TIPOS: Record<TaxiTipo, { label: string; monto: number | null }> = {
+  aeropuerto_arica: { label: "Aeropuerto → Ciudad Arica", monto: 8000 },
+  arica_aeropuerto: { label: "Ciudad Arica → Aeropuerto", monto: 8000 },
+  tacna_peru: { label: "Tacna – Perú", monto: null },
+  local: { label: "Servicio local", monto: null },
+  taxi_exclusivo: { label: "Taxi exclusivo", monto: null },
+  taxi_compartido: { label: "Taxi compartido", monto: null },
+  especial: { label: "Especial", monto: null },
 };
 
 export const TIPOS_DTE: Record<number, string> = {

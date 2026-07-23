@@ -88,7 +88,9 @@ export function VehiculoAccordion({
               {open ? (
                 <tr>
                   <td colSpan={8} className="bg-gray-50/50 px-4 py-5">
-                    <VehiculoPanel vehiculo={v} gastos={vGastos} />
+                    <div className="animate-expand">
+                      <VehiculoPanel vehiculo={v} gastos={vGastos} />
+                    </div>
                   </td>
                 </tr>
               ) : null}

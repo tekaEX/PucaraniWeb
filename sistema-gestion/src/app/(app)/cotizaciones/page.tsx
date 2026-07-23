@@ -30,7 +30,7 @@ export default async function CotizacionesPage() {
     viajes = demoViajes;
   } else {
     const supabase = await createClient();
-    const [{ data: cData }, { data: emp }, { data: vData }] = await Promise.all([
+    const [{ data: cData }, { data: emp }] = await Promise.all([
       supabase
         .from("cotizaciones")
         .select("*, cliente:clientes(id,nombre,codigo), items:cotizacion_items(*)")
@@ -43,11 +43,20 @@ export default async function CotizacionesPage() {
         .order("created_at", { ascending: true })
         .limit(1)
         .maybeSingle(),
-      supabase.from("viajes").select("*").not("cotizacion_id", "is", null),
     ]);
     cotizaciones = (cData ?? []) as CotRow[];
     empresa = (emp as Empresa) ?? null;
-    viajes = (vData ?? []) as Viaje[];
+
+    // Solo los viajes de las cotizaciones visibles (no toda la tabla).
+    if (cotizaciones.length > 0) {
+      const { data: vData } = await supabase
+        .from("viajes")
+        .select("*")
+        .in("cotizacion_id", cotizaciones.map((c) => c.id));
+      viajes = (vData ?? []) as Viaje[];
+    } else {
+      viajes = [];
+    }
   }
 
   // Para la edición inline en el acordeón.

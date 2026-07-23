@@ -156,6 +156,7 @@ export function ViajeAccordion({
               {open ? (
                 <tr>
                   <td colSpan={9} className="bg-gray-50/50 px-4 py-5">
+                    <div className="animate-expand">
                     <div className="mb-4 flex flex-wrap items-center gap-2">
                       <EstadoViajeControl viaje={v} />
                       <ConfirmForm
@@ -183,6 +184,7 @@ export function ViajeAccordion({
                       choferes={choferes}
                       vehiculos={vehiculos}
                     />
+                    </div>
                   </td>
                 </tr>
               ) : null}

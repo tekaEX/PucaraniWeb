@@ -21,7 +21,7 @@ export function Kpi({
   tint: string;
 }) {
   return (
-    <Card>
+    <Card className="transition-[box-shadow,transform] duration-200 hover:-translate-y-0.5 hover:shadow-card">
       <CardBody>
         <div className="flex items-start justify-between gap-2">
           <span className="text-sm text-muted">{label}</span>

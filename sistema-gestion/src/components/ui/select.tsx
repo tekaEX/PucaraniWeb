@@ -8,7 +8,11 @@ export const Select = React.forwardRef<
 >(({ className, children, ...props }, ref) => (
   <select
     ref={ref}
-    className={cn(inputClass, "appearance-none bg-white pr-8", className)}
+    className={cn(
+      inputClass,
+      "ui-select cursor-pointer appearance-none bg-white pr-9",
+      className,
+    )}
     {...props}
   >
     {children}

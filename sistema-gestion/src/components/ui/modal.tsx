@@ -34,7 +34,7 @@ export function Modal({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+      className="animate-fade-in fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-[2px]"
       onClick={() => router.back()}
       role="dialog"
       aria-modal="true"
@@ -42,7 +42,7 @@ export function Modal({
     >
       <div
         onClick={(e) => e.stopPropagation()}
-        className={`flex max-h-[90vh] w-full flex-col overflow-hidden rounded-[18px] bg-background shadow-card ${
+        className={`animate-scale-in flex max-h-[90vh] w-full flex-col overflow-hidden rounded-[18px] bg-background shadow-card ${
           ancho === "4xl" ? "max-w-4xl" : "max-w-3xl"
         }`}
       >

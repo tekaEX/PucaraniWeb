@@ -1,4 +1,5 @@
 import { cookies } from "next/headers";
+import { hoyChile } from "@/lib/format";
 
 // Periodo global de la app. mes: 1-12, o null = año completo.
 export type Periodo = { anio: number; mes: number | null };
@@ -18,11 +19,12 @@ const MESES = [
   "diciembre",
 ];
 
-// Lee el periodo desde la cookie (server-side). Por defecto, el mes actual.
+// Lee el periodo desde la cookie (server-side). Por defecto, el mes actual
+// EN CHILE (el servidor corre en UTC: de noche ya sería el mes siguiente).
 export async function getPeriodo(): Promise<Periodo> {
   const raw = (await cookies()).get("periodo")?.value;
-  const now = new Date();
-  const fallback: Periodo = { anio: now.getFullYear(), mes: now.getMonth() + 1 };
+  const [hAnio, hMes] = hoyChile().split("-").map(Number);
+  const fallback: Periodo = { anio: hAnio, mes: hMes };
   if (!raw) return fallback;
   const [a, m] = raw.split("-");
   const anio = Number(a);

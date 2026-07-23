@@ -45,7 +45,7 @@ export function Notificaciones({ alertas }: { alertas: Alerta[] }) {
         <>
           {/* Cierre al hacer clic fuera */}
           <div className="fixed inset-0 z-20" onClick={() => setOpen(false)} />
-          <div className="absolute right-0 top-full z-30 mt-2 w-80 overflow-hidden rounded-[18px] border border-border bg-card shadow-card">
+          <div className="animate-scale-in absolute right-0 top-full z-30 mt-2 w-80 origin-top-right overflow-hidden rounded-[18px] border border-border bg-card shadow-card">
             <p className="border-b border-border px-4 py-3 text-sm font-semibold">
               Alertas de documentos
             </p>

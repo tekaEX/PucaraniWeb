@@ -53,3 +53,16 @@ export function toInputDate(d: string | Date | null | undefined): string {
 export function todayInput(): string {
   return toInputDate(new Date());
 }
+
+// Fecha de HOY (YYYY-MM-DD) en la zona horaria del negocio (Chile).
+// En el servidor (Vercel corre en UTC) usar toISOString() daría la fecha de
+// MAÑANA pasadas las ~20:00 de Chile, corriendo pagos/viajes al mes siguiente.
+// Toda fecha "hoy" que se persista debe salir de aquí.
+export function hoyChile(): string {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: "America/Santiago",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(new Date());
+}

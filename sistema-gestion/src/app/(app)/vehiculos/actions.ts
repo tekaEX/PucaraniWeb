@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { isDemo } from "@/lib/demo";
+import { hoyChile } from "@/lib/format";
 import { s, sReq, bool, intNull, num } from "@/lib/form-helpers";
 import { formatearPatente, PATENTE_HINT } from "@/lib/patentes";
 
@@ -80,7 +81,7 @@ export async function agregarGasto(
   const monto_total = num(formData.get("monto_total"));
   if (!monto_total) return { error: "Ingresa un monto válido." };
   const fecha =
-    sReq(formData.get("fecha")) || new Date().toISOString().slice(0, 10);
+    sReq(formData.get("fecha")) || hoyChile();
   const descripcion = s(formData.get("descripcion"));
 
   const supabase = await createClient();

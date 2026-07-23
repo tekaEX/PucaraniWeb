@@ -39,6 +39,18 @@ export function EstadoCuenta({ cuenta }: { cuenta: CuentaCliente }) {
         <Monto label="Pagado" value={cuenta.pagado} tone={cuenta.pagado ? "text-ok" : ""} />
       </div>
 
+      {cuenta.taxis > 0 ? (
+        <p className="rounded-xl border border-border bg-white px-4 py-3 text-sm">
+          <span className="text-muted">Servicios de taxi del periodo: </span>
+          <span className="font-semibold tabular-nums text-ok">
+            {formatCLP(cuenta.taxis)}
+          </span>
+          <span className="ml-1 text-xs text-muted">
+            (se cobran al momento, no pasan por facturas)
+          </span>
+        </p>
+      ) : null}
+
       {cuenta.viajesPendientes.length > 0 ? (
         <div>
           <p className="mb-2 text-sm font-semibold">Viajes por facturar</p>

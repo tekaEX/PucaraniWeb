@@ -27,6 +27,8 @@ import type {
   FacturaConRelaciones,
   GastoVehiculo,
   ClienteRef,
+  ServicioTaxi,
+  ServicioTaxiConRelaciones,
 } from "@/types/db";
 
 export function isDemo(): boolean {
@@ -640,4 +642,52 @@ export const demoGastos: GastoVehiculo[] = [
   mkGastoManual({ id: "demo-gas-11", vehiculo_id: "GHPR-34", categoria: "otros", descripcion: "Lavado y aseo de flota", fecha: enMes(-3, 20), total: 35000 }),
   mkGastoSii({ id: "demo-gas-12", vehiculo_id: "JKLM-12", patente: "JKLM12", folio: 879400, fecha: enMes(-4, 11), litros: 185, neto: 166400, iva: 31600 }),
   mkGastoSii({ id: "demo-gas-13", vehiculo_id: "GHPR-34", patente: "GHPR34", folio: 879200, fecha: enMes(-5, 6), litros: 172, neto: 155500, iva: 29500 }),
+];
+
+// --- Servicios de taxi ---
+// Área aparte: no tocan viajes/facturas, pero suman a ingresos por cliente.
+function mkTaxi(t: {
+  id: string;
+  fecha: string;
+  tipo: ServicioTaxi["tipo"];
+  monto: number;
+  pasajero?: string;
+  cliente?: string; // id de demoClientes
+  chofer?: string; // id de demoChoferes
+  descripcion?: string;
+}): ServicioTaxiConRelaciones {
+  const chofer = t.chofer ? demoChoferes.find((c) => c.id === t.chofer)! : null;
+  return {
+    id: t.id,
+    empresa_id: EMPRESA_ID,
+    fecha: t.fecha,
+    tipo: t.tipo,
+    descripcion: t.descripcion ?? null,
+    monto: t.monto,
+    pasajero: t.pasajero ?? null,
+    cliente_id: t.cliente ?? null,
+    chofer_id: t.chofer ?? null,
+    cliente_texto: null,
+    chofer_texto: null,
+    origen_id: null,
+    created_at: now,
+    updated_at: now,
+    cliente: t.cliente ? cliRef(t.cliente) : null,
+    chofer: chofer ? { id: chofer.id, nombre: chofer.nombre } : null,
+  };
+}
+
+export const demoServiciosTaxi: ServicioTaxiConRelaciones[] = [
+  // Mes en curso
+  mkTaxi({ id: "demo-tx-1", fecha: enMes(0, 2), tipo: "aeropuerto_arica", monto: 8000, pasajero: "C. Fuentes", cliente: "demo-cli-epa", chofer: "demo-cho-1" }),
+  mkTaxi({ id: "demo-tx-2", fecha: enMes(0, 2), tipo: "arica_aeropuerto", monto: 8000, pasajero: "M. Herrera", cliente: "demo-cli-epa", chofer: "demo-cho-1" }),
+  mkTaxi({ id: "demo-tx-3", fecha: enMes(0, 5), tipo: "local", monto: 12000, pasajero: "Sra. Torres", cliente: "demo-cli-tpa", chofer: "demo-cho-2" }),
+  mkTaxi({ id: "demo-tx-4", fecha: enMes(0, 8), tipo: "tacna_peru", monto: 45000, pasajero: "Familia Rojas", chofer: "demo-cho-2" }),
+  mkTaxi({ id: "demo-tx-5", fecha: enMes(0, 10), tipo: "especial", monto: 60000, descripcion: "Tour Lauca medio día", pasajero: "Turistas hotel", chofer: "demo-cho-1" }),
+  mkTaxi({ id: "demo-tx-6", fecha: enMes(0, 12), tipo: "taxi_exclusivo", monto: 25000, cliente: "demo-cli-tpa" }),
+  // Mes anterior (comparación y tendencia)
+  mkTaxi({ id: "demo-tx-7", fecha: enMes(-1, 6), tipo: "aeropuerto_arica", monto: 8000, pasajero: "J. Paredes", cliente: "demo-cli-epa", chofer: "demo-cho-1" }),
+  mkTaxi({ id: "demo-tx-8", fecha: enMes(-1, 14), tipo: "taxi_compartido", monto: 6000, chofer: "demo-cho-2" }),
+  mkTaxi({ id: "demo-tx-9", fecha: enMes(-1, 21), tipo: "local", monto: 10000, cliente: "demo-cli-erispe", chofer: "demo-cho-2" }),
+  mkTaxi({ id: "demo-tx-10", fecha: enMes(-2, 9), tipo: "arica_aeropuerto", monto: 8000, cliente: "demo-cli-epa", chofer: "demo-cho-1" }),
 ];

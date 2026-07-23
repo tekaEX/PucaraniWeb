@@ -4,10 +4,21 @@ import { PageHeader } from "@/components/page-header";
 import { Card } from "@/components/ui/card";
 import { buttonClass } from "@/components/ui/button";
 import { Plus, Users } from "lucide-react";
-import { isDemo, demoClientes, demoFacturas, demoViajes } from "@/lib/demo";
-import { getPeriodo, etiquetaPeriodo } from "@/lib/periodo";
+import {
+  isDemo,
+  demoClientes,
+  demoFacturas,
+  demoViajes,
+  demoServiciosTaxi,
+} from "@/lib/demo";
+import { getPeriodo, etiquetaPeriodo, rangoPeriodo } from "@/lib/periodo";
 import { viajePorFacturar, type Cliente, type FacturaConRelaciones } from "@/types/db";
-import { cuentaVacia, type CuentaCliente, type ViajePendRaw } from "@/lib/cobranza";
+import {
+  cuentaVacia,
+  type CuentaCliente,
+  type TaxiIngreso,
+  type ViajePendRaw,
+} from "@/lib/cobranza";
 import { construirCuentas } from "@/lib/cobranza-server";
 import { ClienteAccordion } from "./cliente-accordion";
 
@@ -19,10 +30,12 @@ export default async function ClientesPage() {
   let clientes: Cliente[];
   let facturas: FacturaConRelaciones[];
   let viajesPend: ViajePendRaw[];
+  let taxis: TaxiIngreso[];
 
   if (isDemo()) {
     clientes = demoClientes;
     facturas = demoFacturas;
+    taxis = demoServiciosTaxi;
     viajesPend = demoViajes
       .filter((v) => viajePorFacturar(v))
       .map((v) => ({
@@ -35,27 +48,44 @@ export default async function ClientesPage() {
       }));
   } else {
     const supabase = await createClient();
-    const [{ data: cData }, { data: fData }, { data: vData }] = await Promise.all([
-      supabase.from("clientes").select("*").order("nombre", { ascending: true }),
-      supabase
-        .from("facturas")
-        .select("*, cliente:clientes(id,nombre,codigo), viajes:viajes(id,descripcion,fecha_inicio,valor)")
-        .order("fecha_emision", { ascending: false, nullsFirst: true }),
-      supabase
-        .from("viajes")
-        .select("id, fecha_inicio, descripcion, valor, cliente_id, cliente:clientes(id,nombre)")
-        .eq("estado", "realizado")
-        .is("factura_id", null)
-        .order("fecha_inicio", { ascending: false }),
-    ]);
+    const { desde, hasta } = rangoPeriodo(periodo);
+    // El estado de cuenta muestra el periodo (pagadas por fecha_pago, emitidas
+    // y anuladas por fecha_emisión) + los borradores (siempre): se trae solo
+    // eso, no la tabla completa.
+    const [{ data: cData }, { data: fData }, { data: vData }, { data: tData }] =
+      await Promise.all([
+        supabase.from("clientes").select("*").order("nombre", { ascending: true }),
+        supabase
+          .from("facturas")
+          .select("*, cliente:clientes(id,nombre,codigo), viajes:viajes(id,descripcion,fecha_inicio,valor)")
+          .or(
+            `fecha_emision.is.null,and(fecha_emision.gte.${desde},fecha_emision.lte.${hasta}),and(fecha_pago.gte.${desde},fecha_pago.lte.${hasta})`,
+          )
+          .order("fecha_emision", { ascending: false, nullsFirst: true }),
+        supabase
+          .from("viajes")
+          .select("id, fecha_inicio, descripcion, valor, cliente_id, cliente:clientes(id,nombre)")
+          .eq("estado", "realizado")
+          .is("factura_id", null)
+          .gte("fecha_inicio", desde)
+          .lte("fecha_inicio", hasta)
+          .order("fecha_inicio", { ascending: false }),
+        supabase
+          .from("servicios_taxi")
+          .select("cliente_id, fecha, monto")
+          .not("cliente_id", "is", null)
+          .gte("fecha", desde)
+          .lte("fecha", hasta),
+      ]);
     clientes = (cData ?? []) as Cliente[];
     facturas = (fData ?? []) as FacturaConRelaciones[];
     viajesPend = (vData ?? []) as unknown as ViajePendRaw[];
+    taxis = (tData ?? []) as TaxiIngreso[];
   }
 
   // Estado de cuenta por cliente. Se completa para todos (los sin actividad
   // quedan en cero) y se pasa como objeto plano (serializable al cliente).
-  const cuentasMap = construirCuentas(facturas, viajesPend, periodo);
+  const cuentasMap = construirCuentas(facturas, viajesPend, periodo, taxis);
   const cuentas: Record<string, CuentaCliente> = {};
   for (const c of clientes) {
     cuentas[c.id] = cuentasMap.get(c.id) ?? cuentaVacia(c.id, c.nombre);

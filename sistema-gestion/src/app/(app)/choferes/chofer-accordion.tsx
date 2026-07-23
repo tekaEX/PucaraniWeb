@@ -64,7 +64,9 @@ export function ChoferAccordion({ choferes }: { choferes: Chofer[] }) {
               {open ? (
                 <tr>
                   <td colSpan={7} className="bg-gray-50/50 px-4 py-5">
-                    <ChoferPanel chofer={c} />
+                    <div className="animate-expand">
+                      <ChoferPanel chofer={c} />
+                    </div>
                   </td>
                 </tr>
               ) : null}

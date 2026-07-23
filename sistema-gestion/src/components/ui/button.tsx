@@ -5,11 +5,14 @@ type Variant = "primary" | "secondary" | "outline" | "ghost" | "danger";
 type Size = "sm" | "md" | "lg" | "icon";
 
 const variantClasses: Record<Variant, string> = {
-  primary: "bg-brand text-brand-foreground hover:bg-brand-dark",
+  primary:
+    "bg-brand text-brand-foreground shadow-[0_1px_2px_rgba(11,93,86,0.3)] hover:bg-brand-dark hover:shadow-[0_4px_14px_rgba(11,93,86,0.28)]",
   secondary: "bg-[#ececef] text-foreground hover:bg-[#e2e2e6]",
-  outline: "border border-separator bg-white text-foreground hover:bg-background",
+  outline:
+    "border border-separator bg-white text-foreground shadow-[0_1px_2px_rgba(0,0,0,0.04)] hover:border-[#b6b6bd] hover:bg-background",
   ghost: "text-brand hover:bg-brand-soft",
-  danger: "bg-danger text-white hover:bg-[#a32a21]",
+  danger:
+    "bg-danger text-white shadow-[0_1px_2px_rgba(192,54,44,0.3)] hover:bg-[#a32a21] hover:shadow-[0_4px_14px_rgba(192,54,44,0.28)]",
 };
 
 const sizeClasses: Record<Size, string> = {
@@ -21,8 +24,9 @@ const sizeClasses: Record<Size, string> = {
 
 export function buttonClass(opts?: { variant?: Variant; size?: Size; className?: string }) {
   const { variant = "primary", size = "md", className } = opts ?? {};
+  // El active:scale da el "clic" físico; la transición corta lo hace nítido.
   return cn(
-    "inline-flex items-center justify-center rounded-full font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/40 disabled:pointer-events-none disabled:opacity-50",
+    "inline-flex select-none items-center justify-center rounded-full font-medium transition-[background-color,box-shadow,border-color,transform] duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/40 active:scale-[0.97] disabled:pointer-events-none disabled:opacity-50",
     variantClasses[variant],
     sizeClasses[size],
     className,

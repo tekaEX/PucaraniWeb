@@ -12,6 +12,8 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // Assets estáticos (incluye la app de taxis embebida y libs de terceros).
+    "public/**",
   ]),
 ]);
 

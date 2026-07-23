@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { isDemo } from "@/lib/demo";
+import { hoyChile } from "@/lib/format";
 import { s, sReq, num } from "@/lib/form-helpers";
 import type { ViajeEstado } from "@/types/db";
 
@@ -60,7 +61,7 @@ export async function guardarViaje(
     descripcion,
     cliente_id,
     cotizacion_id: s(formData.get("cotizacion_id")),
-    fecha_inicio: sReq(formData.get("fecha_inicio")) || new Date().toISOString().slice(0, 10),
+    fecha_inicio: sReq(formData.get("fecha_inicio")) || hoyChile(),
     fecha_fin: s(formData.get("fecha_fin")),
     estado,
     valor: num(formData.get("valor")),

@@ -19,6 +19,7 @@ import {
   demoViajes,
   demoFacturas,
   demoGastos,
+  demoServiciosTaxi,
 } from "@/lib/demo";
 import {
   getPeriodo,
@@ -55,6 +56,7 @@ export default async function DashboardPage() {
   let viajes: Viaje[];
   let facturas: Factura[];
   let gastos: GastoVehiculo[];
+  let taxis: { fecha: string; monto: number }[];
 
   if (isDemo()) {
     cotPeriodo = demoCotizaciones
@@ -63,31 +65,54 @@ export default async function DashboardPage() {
     viajes = demoViajes;
     facturas = demoFacturas;
     gastos = demoGastos;
+    taxis = demoServiciosTaxi;
   } else {
     const supabase = await createClient();
+    // Todas las cifras del Dashboard son del periodo o del anterior (deltas),
+    // así que se trae SOLO ese rango — nunca tablas completas, que además del
+    // costo quedarían truncadas por el tope de filas de Supabase al crecer.
+    const rangoDesde = rangoPeriodo(prev).desde;
     const [
       { data: cotData },
       { data: viajesData },
       { data: factData },
       { data: gastosData },
+      { data: taxisData },
     ] = await Promise.all([
       supabase
         .from("cotizaciones")
         .select("total")
         .gte("fecha", desde)
         .lte("fecha", hasta),
-      supabase.from("viajes").select("*"),
-      supabase.from("facturas").select("*"),
+      supabase
+        .from("viajes")
+        .select(
+          "estado, factura_id, fecha_inicio, valor, costo_combustible, costo_peajes, costo_viaticos, costo_otros",
+        )
+        .gte("fecha_inicio", rangoDesde)
+        .lte("fecha_inicio", hasta),
+      supabase
+        .from("facturas")
+        .select("estado, total, fecha_emision, fecha_pago")
+        .or(
+          `and(fecha_pago.gte.${rangoDesde},fecha_pago.lte.${hasta}),and(fecha_emision.gte.${rangoDesde},fecha_emision.lte.${hasta})`,
+        ),
       supabase
         .from("gastos_vehiculo")
-        .select("*")
-        .gte("fecha", rangoPeriodo(prev).desde)
+        .select("fecha, monto_total")
+        .gte("fecha", rangoDesde)
+        .lte("fecha", hasta),
+      supabase
+        .from("servicios_taxi")
+        .select("fecha, monto")
+        .gte("fecha", rangoDesde)
         .lte("fecha", hasta),
     ]);
     cotPeriodo = cotData ?? [];
-    viajes = (viajesData ?? []) as Viaje[];
-    facturas = (factData ?? []) as Factura[];
-    gastos = (gastosData ?? []) as GastoVehiculo[];
+    viajes = (viajesData ?? []) as unknown as Viaje[];
+    facturas = (factData ?? []) as unknown as Factura[];
+    gastos = (gastosData ?? []) as unknown as GastoVehiculo[];
+    taxis = taxisData ?? [];
   }
 
   // Fila 1 — KPIs del periodo. Todos los estados son DERIVADOS:
@@ -105,11 +130,17 @@ export default async function DashboardPage() {
   );
   const porCobrar = porCobrarArr.reduce((a, f) => a + Number(f.total), 0);
 
+  // Ingresos = facturas pagadas en el periodo + servicios de taxi del periodo
+  // (los taxis se cobran al momento: su fecha ES la fecha de cobro).
   const pagadasEn = (p: Periodo) =>
     facturas.filter((f) => f.estado === "emitida" && enRango(f.fecha_pago, p));
+  const taxisEn = (p: Periodo) =>
+    taxis.filter((t) => enRango(t.fecha, p)).reduce((a, t) => a + Number(t.monto), 0);
   const pagadasPeriodo = pagadasEn(periodo);
-  const ingresos = pagadasPeriodo.reduce((a, f) => a + Number(f.total), 0);
-  const ingresosPrev = pagadasEn(prev).reduce((a, f) => a + Number(f.total), 0);
+  const ingresos =
+    pagadasPeriodo.reduce((a, f) => a + Number(f.total), 0) + taxisEn(periodo);
+  const ingresosPrev =
+    pagadasEn(prev).reduce((a, f) => a + Number(f.total), 0) + taxisEn(prev);
 
   // Fila 2 — mismas definiciones que Finanzas: cobrado vs egresos del periodo
   // (gastos de flota + costos directos de los viajes: peajes, viáticos, etc.)

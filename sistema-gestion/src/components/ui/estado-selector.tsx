@@ -74,7 +74,7 @@ export function EstadoSelector({
             disabled={pending}
             aria-pressed={activo}
             className={cn(
-              "flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold whitespace-nowrap transition-colors",
+              "flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold whitespace-nowrap transition-[background-color,color,transform] duration-150 active:scale-95",
               pending ? "cursor-wait" : "cursor-pointer",
               activo
                 ? tones[o.tone].wrap

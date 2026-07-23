@@ -1,4 +1,5 @@
 import type { Chofer, Vehiculo } from "@/types/db";
+import { hoyChile } from "@/lib/format";
 
 export type VencEstado = "vencido" | "por_vencer" | "ok";
 
@@ -10,8 +11,8 @@ export function evaluarVenc(
   diasAviso = DIAS_AVISO,
 ): { estado: VencEstado; dias: number } | null {
   if (!fecha) return null;
-  const hoy = new Date();
-  hoy.setHours(0, 0, 0, 0);
+  // Anclado al día de Chile (el servidor corre en UTC).
+  const hoy = new Date(`${hoyChile()}T00:00:00`);
   const d = new Date(fecha.length === 10 ? `${fecha}T00:00:00` : fecha);
   d.setHours(0, 0, 0, 0);
   const dias = Math.round((d.getTime() - hoy.getTime()) / 86400000);

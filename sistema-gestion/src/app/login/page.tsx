@@ -16,7 +16,7 @@ export default async function LoginPage({
   return (
     <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-brand to-brand-dark p-4">
       <div className="w-full max-w-sm">
-        <div className="mb-6 flex flex-col items-center text-center text-white">
+        <div className="animate-slide-up mb-6 flex flex-col items-center text-center text-white">
           <div className="mb-3 flex h-14 w-14 items-center justify-center rounded-2xl bg-white/15 ring-1 ring-white/25">
             <Bus className="h-7 w-7" />
           </div>
@@ -26,12 +26,12 @@ export default async function LoginPage({
           </p>
         </div>
 
-        <div className="rounded-2xl bg-card p-6 shadow-xl">
+        <div className="animate-scale-in rounded-2xl bg-card p-6 shadow-xl [animation-delay:80ms]">
           <h2 className="mb-4 text-lg font-semibold">Iniciar sesión</h2>
           <LoginForm redirectTo={redirectTo} />
         </div>
 
-        <p className="mt-4 text-center text-xs text-white/60">
+        <p className="animate-fade-in mt-4 text-center text-xs text-white/60 [animation-delay:200ms]">
           Acceso exclusivo para personal autorizado.
         </p>
       </div>

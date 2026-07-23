@@ -2,10 +2,17 @@ import { createClient } from "@/lib/supabase/server";
 import { Card, CardBody, CardHeader, CardTitle } from "@/components/ui/card";
 import { formatCLP } from "@/lib/format";
 import { getPeriodo, rangoPeriodo, enRango } from "@/lib/periodo";
-import { isDemo, demoFacturas, demoViajes, demoGastos } from "@/lib/demo";
+import {
+  isDemo,
+  demoFacturas,
+  demoViajes,
+  demoGastos,
+  demoServiciosTaxi,
+} from "@/lib/demo";
 import {
   GASTO_CATEGORIAS,
   costoTotalViaje,
+  taxiNombreCliente,
   type GastoCategoria,
   type GastoVehiculo,
 } from "@/types/db";
@@ -57,6 +64,15 @@ export async function FinanzasSecciones() {
     ingresosArr = demoFacturas
       .filter((f) => f.estado === "emitida" && enRango(f.fecha_pago, periodo))
       .map((f) => ({ monto: Number(f.total), cliente: f.cliente?.nombre ?? "—" }));
+    // Los servicios de taxi también son ingresos por cliente.
+    ingresosArr.push(
+      ...demoServiciosTaxi
+        .filter((t) => enRango(t.fecha, periodo))
+        .map((t) => ({
+          monto: Number(t.monto),
+          cliente: taxiNombreCliente(t) ?? "Taxis (particular)",
+        })),
+    );
     gastos = demoGastos.filter((g) => enRango(g.fecha, periodo));
     histIngresos = demoFacturas
       .filter(
@@ -67,6 +83,11 @@ export async function FinanzasSecciones() {
           f.fecha_pago <= chartHasta,
       )
       .map((f) => ({ fecha: f.fecha_pago!, monto: Number(f.total) }));
+    histIngresos.push(
+      ...demoServiciosTaxi
+        .filter((t) => t.fecha >= chartDesde && t.fecha <= chartHasta)
+        .map((t) => ({ fecha: t.fecha, monto: Number(t.monto) })),
+    );
     histGastos = demoGastos
       .filter((g) => g.fecha >= chartDesde && g.fecha <= chartHasta)
       .map((g) => ({ fecha: g.fecha, monto: Number(g.monto_total) }));
@@ -76,8 +97,15 @@ export async function FinanzasSecciones() {
   } else {
     const supabase = await createClient();
     /* eslint-disable @typescript-eslint/no-explicit-any */
-    const [{ data: fData }, { data: gData }, { data: hiData }, { data: hgData }, { data: vcData }] =
-      await Promise.all([
+    const [
+      { data: fData },
+      { data: gData },
+      { data: hiData },
+      { data: hgData },
+      { data: vcData },
+      { data: txData },
+      { data: htData },
+    ] = await Promise.all([
         supabase
           .from("facturas")
           .select("total, fecha_pago, cliente:clientes(nombre)")
@@ -106,16 +134,39 @@ export async function FinanzasSecciones() {
           .neq("estado", "cancelado")
           .gte("fecha_inicio", chartDesde)
           .lte("fecha_inicio", chartHasta),
+        supabase
+          .from("servicios_taxi")
+          .select("monto, cliente_texto, cliente:clientes(nombre)")
+          .gte("fecha", desde)
+          .lte("fecha", hasta),
+        supabase
+          .from("servicios_taxi")
+          .select("fecha, monto")
+          .gte("fecha", chartDesde)
+          .lte("fecha", chartHasta),
       ]);
     ingresosArr = ((fData ?? []) as any[]).map((f) => ({
       monto: Number(f.total),
       cliente: f.cliente?.nombre ?? "—",
     }));
+    // Los servicios de taxi también son ingresos por cliente.
+    ingresosArr.push(
+      ...((txData ?? []) as any[]).map((t) => ({
+        monto: Number(t.monto),
+        cliente: t.cliente?.nombre ?? t.cliente_texto ?? "Taxis (particular)",
+      })),
+    );
     gastos = (gData ?? []) as GastoVehiculo[];
     histIngresos = ((hiData ?? []) as any[]).map((f) => ({
       fecha: f.fecha_pago as string,
       monto: Number(f.total),
     }));
+    histIngresos.push(
+      ...((htData ?? []) as any[]).map((t) => ({
+        fecha: t.fecha as string,
+        monto: Number(t.monto),
+      })),
+    );
     histGastos = ((hgData ?? []) as any[]).map((g) => ({
       fecha: g.fecha as string,
       monto: Number(g.monto_total),
