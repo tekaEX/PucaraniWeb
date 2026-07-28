@@ -5,13 +5,14 @@ import Link from "next/link";
 import { guardarVehiculo, type FormState } from "./actions";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { Select } from "@/components/ui/select";
 import { Field } from "@/components/ui/label";
 import { Button, buttonClass } from "@/components/ui/button";
 import { Card, CardBody, CardHeader, CardTitle } from "@/components/ui/card";
 import { Save } from "lucide-react";
 import { toInputDate } from "@/lib/format";
 import { PATENTE_PATTERN, PATENTE_HINT } from "@/lib/patentes";
-import type { Vehiculo } from "@/types/db";
+import { VEHICULO_CATEGORIAS, type Vehiculo } from "@/types/db";
 
 export function VehiculoForm({ vehiculo }: { vehiculo?: Vehiculo }) {
   const [state, formAction, pending] = useActionState<FormState, FormData>(
@@ -59,6 +60,16 @@ export function VehiculoForm({ vehiculo }: { vehiculo?: Vehiculo }) {
           </Field>
           <Field label="Kilometraje actual" htmlFor="km_actual">
             <Input id="km_actual" name="km_actual" type="number" defaultValue={vehiculo?.km_actual ?? ""} />
+          </Field>
+          <Field label="Categoría" htmlFor="categoria" className="sm:col-span-2">
+            <Select id="categoria" name="categoria" defaultValue={vehiculo?.categoria ?? ""}>
+              <option value="">Sin categoría</option>
+              {Object.entries(VEHICULO_CATEGORIAS).map(([value, label]) => (
+                <option key={value} value={value}>
+                  {label}
+                </option>
+              ))}
+            </Select>
           </Field>
         </CardBody>
       </Card>

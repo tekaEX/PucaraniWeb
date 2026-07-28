@@ -12,6 +12,7 @@ import {
 } from "./actions";
 import { ConfirmForm } from "@/components/ui/confirm-form";
 import { Input } from "@/components/ui/input";
+import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { GastoForm } from "./gasto-form";
@@ -20,6 +21,7 @@ import { toInputDate, formatCLP, formatDate } from "@/lib/format";
 import { PATENTE_PATTERN, PATENTE_HINT } from "@/lib/patentes";
 import {
   GASTO_CATEGORIAS,
+  VEHICULO_CATEGORIAS,
   type GastoCategoria,
   type GastoVehiculo,
   type Vehiculo,
@@ -301,6 +303,20 @@ export function VehiculoPanel({
                 type="number"
                 defaultValue={vehiculo.km_actual ?? ""}
               />
+            </Campo>
+            <Campo label="Categoría" className="sm:col-span-2">
+              <Select
+                name="categoria"
+                defaultValue={vehiculo.categoria ?? ""}
+                onChange={autoguardar}
+              >
+                <option value="">Sin categoría</option>
+                {Object.entries(VEHICULO_CATEGORIAS).map(([value, label]) => (
+                  <option key={value} value={value}>
+                    {label}
+                  </option>
+                ))}
+              </Select>
             </Campo>
           </div>
 

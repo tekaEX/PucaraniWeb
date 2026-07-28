@@ -196,11 +196,20 @@ export interface Vehiculo {
   revision_tecnica_venc: string | null;
   soap_venc: string | null;
   permiso_circulacion_venc: string | null;
+  /** Línea de trabajo donde se ocupa; null = aún sin clasificar. */
+  categoria: VehiculoCategoria | null;
   activo: boolean;
   notas: string | null;
   created_at: string;
   updated_at: string;
 }
+
+export const VEHICULO_CATEGORIAS = {
+  operacion: "Operación",
+  taxis: "Taxis",
+  encomiendas: "Encomiendas",
+} as const;
+export type VehiculoCategoria = keyof typeof VEHICULO_CATEGORIAS;
 
 export interface SiiCredencial {
   id: string;

@@ -6,6 +6,7 @@ import { createClient } from "@/lib/supabase/server";
 import { hoyChile } from "@/lib/format";
 import { s, sReq, bool, intNull, num } from "@/lib/form-helpers";
 import { formatearPatente, PATENTE_HINT } from "@/lib/patentes";
+import { VEHICULO_CATEGORIAS } from "@/types/db";
 
 export type FormState = { error?: string; ok?: boolean };
 
@@ -20,6 +21,9 @@ export async function guardarVehiculo(
   const patente = formatearPatente(patenteRaw);
   if (!patente) return { error: `Patente inválida. ${PATENTE_HINT}.` };
 
+  const categoriaRaw = s(formData.get("categoria"));
+  const categoria = categoriaRaw && categoriaRaw in VEHICULO_CATEGORIAS ? categoriaRaw : null;
+
   const values = {
     patente,
     marca: s(formData.get("marca")),
@@ -30,6 +34,7 @@ export async function guardarVehiculo(
     revision_tecnica_venc: s(formData.get("revision_tecnica_venc")),
     soap_venc: s(formData.get("soap_venc")),
     permiso_circulacion_venc: s(formData.get("permiso_circulacion_venc")),
+    categoria,
     activo: bool(formData.get("activo")),
     notas: s(formData.get("notas")),
   };
