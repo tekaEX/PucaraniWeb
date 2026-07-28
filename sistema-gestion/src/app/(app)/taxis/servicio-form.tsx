@@ -114,10 +114,16 @@ export function ServicioTaxiForm({
           <CardBody>{fields}</CardBody>
         </Card>
       )}
-      <div className="mt-4 flex items-center gap-2">
+      <div
+        className={
+          inline
+            ? "mt-6 flex items-center justify-end gap-2 border-t border-border pt-5"
+            : "mt-4 flex items-center gap-2"
+        }
+      >
         <Button type="submit" disabled={pending}>
           <Save className="h-4 w-4" />
-          {pending ? "Guardando…" : "Guardar"}
+          {pending ? "Guardando…" : "Guardar servicio"}
         </Button>
         {!inline ? (
           <Link href="/taxis" className={buttonClass({ variant: "outline" })}>

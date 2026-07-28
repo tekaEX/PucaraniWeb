@@ -4,8 +4,7 @@ import { PageHeader } from "@/components/page-header";
 import { Card } from "@/components/ui/card";
 import { buttonClass } from "@/components/ui/button";
 import { Plus, Bus, Settings } from "lucide-react";
-import { isDemo, demoVehiculos, demoGastos } from "@/lib/demo";
-import { getPeriodo, rangoPeriodo, enRango } from "@/lib/periodo";
+import { getPeriodo, rangoPeriodo } from "@/lib/periodo";
 import type { Vehiculo, GastoVehiculo } from "@/types/db";
 import { SincronizarSiiButton } from "./sincronizar-sii";
 import { VehiculoAccordion } from "./vehiculo-accordion";
@@ -14,28 +13,20 @@ export const dynamic = "force-dynamic";
 export const metadata = { title: "Vehículos" };
 
 export default async function VehiculosPage() {
-  let vehiculos: Vehiculo[];
-  let gastos: GastoVehiculo[];
-
   const periodo = await getPeriodo();
   const { desde, hasta } = rangoPeriodo(periodo);
 
-  if (isDemo()) {
-    vehiculos = demoVehiculos;
-    gastos = demoGastos.filter((g) => enRango(g.fecha, periodo));
-  } else {
-    const supabase = await createClient();
-    const [{ data: vData }, { data: gData }] = await Promise.all([
-      supabase.from("vehiculos").select("*").order("patente"),
-      supabase
-        .from("gastos_vehiculo")
-        .select("*")
-        .gte("fecha", desde)
-        .lte("fecha", hasta),
-    ]);
-    vehiculos = (vData ?? []) as Vehiculo[];
-    gastos = (gData ?? []) as GastoVehiculo[];
-  }
+  const supabase = await createClient();
+  const [{ data: vData }, { data: gData }] = await Promise.all([
+    supabase.from("vehiculos").select("*").order("patente"),
+    supabase
+      .from("gastos_vehiculo")
+      .select("*")
+      .gte("fecha", desde)
+      .lte("fecha", hasta),
+  ]);
+  const vehiculos = (vData ?? []) as Vehiculo[];
+  const gastos = (gData ?? []) as GastoVehiculo[];
 
   return (
     <div>

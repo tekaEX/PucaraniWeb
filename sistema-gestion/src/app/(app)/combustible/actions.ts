@@ -3,7 +3,6 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { isDemo } from "@/lib/demo";
 import { encrypt } from "@/lib/crypto";
 import { sReq } from "@/lib/form-helpers";
 
@@ -15,13 +14,6 @@ export async function guardarCredencialesSii(
   _prev: FormState,
   formData: FormData,
 ): Promise<FormState> {
-  if (isDemo()) {
-    return {
-      error:
-        "Modo demostración: conecta Supabase para guardar credenciales reales.",
-    };
-  }
-
   const rut = sReq(formData.get("rut"));
   const password = sReq(formData.get("password"));
   const cert = formData.get("certificado");

@@ -3,20 +3,14 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { isDemo } from "@/lib/demo";
 import { s, sReq } from "@/lib/form-helpers";
 
 export type FormState = { error?: string; ok?: boolean };
-
-const DEMO_MSG =
-  "Modo demostración: conecta Supabase (ver README) para guardar datos reales.";
 
 export async function guardarCliente(
   _prev: FormState,
   formData: FormData,
 ): Promise<FormState> {
-  if (isDemo()) return { error: DEMO_MSG };
-
   const id = s(formData.get("id"));
   const nombre = sReq(formData.get("nombre"));
 
@@ -50,12 +44,23 @@ export async function guardarCliente(
   return { ok: true };
 }
 
-export async function eliminarCliente(formData: FormData) {
-  if (isDemo()) redirect("/clientes");
+export async function eliminarCliente(
+  _prev: FormState,
+  formData: FormData,
+): Promise<FormState> {
   const id = sReq(formData.get("id"));
-  if (!id) return;
+  if (!id) return { error: "Falta el identificador." };
   const supabase = await createClient();
-  await supabase.from("clientes").delete().eq("id", id);
+  const { error } = await supabase.from("clientes").delete().eq("id", id);
+  if (error) {
+    if (error.code === "23503") {
+      return {
+        error:
+          "No se puede eliminar: este cliente tiene facturas y/o viajes registrados en su historial.",
+      };
+    }
+    return { error: `No se pudo eliminar: ${error.message}` };
+  }
   revalidatePath("/clientes");
   redirect("/clientes");
 }

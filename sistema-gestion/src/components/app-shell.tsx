@@ -62,7 +62,6 @@ export function AppShell({
   periodoAnio,
   periodoMes,
   alertas,
-  demo = false,
 }: {
   children: React.ReactNode;
   userEmail: string;
@@ -70,7 +69,6 @@ export function AppShell({
   periodoAnio: number;
   periodoMes: number | null;
   alertas: Alerta[];
-  demo?: boolean;
 }) {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
@@ -204,12 +202,6 @@ export function AppShell({
         </div>
 
         <div className="p-4 sm:p-6 lg:p-8">
-          {demo ? (
-            <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-2.5 text-sm text-amber-800">
-              <strong>Modo demostración.</strong> Estás viendo datos de ejemplo —
-              explora con libertad, los cambios no se guardan.
-            </div>
-          ) : null}
           {children}
         </div>
       </main>

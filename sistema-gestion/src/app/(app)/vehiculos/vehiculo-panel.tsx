@@ -1,9 +1,12 @@
 "use client";
 
-import { useActionState, useRef } from "react";
+import { useActionState, useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import {
   guardarVehiculo,
   eliminarVehiculo,
+  desactivarVehiculo,
+  tieneHistorialVehiculo,
   eliminarGasto,
   type FormState,
 } from "./actions";
@@ -15,13 +18,142 @@ import { GastoForm } from "./gasto-form";
 import { Trash2, Check, Loader2 } from "lucide-react";
 import { toInputDate, formatCLP, formatDate } from "@/lib/format";
 import { PATENTE_PATTERN, PATENTE_HINT } from "@/lib/patentes";
-import { isDemo } from "@/lib/demo";
 import {
   GASTO_CATEGORIAS,
   type GastoCategoria,
   type GastoVehiculo,
   type Vehiculo,
 } from "@/types/db";
+
+// Diálogo al eliminar un vehículo: distingue "ya no se va a ocupar" (se
+// desactiva, se conserva todo) de "eliminar todo el registro" (borrado real,
+// avisando antes si tiene historial de viajes/gastos).
+function EliminarVehiculoDialog({
+  vehiculo,
+  onClose,
+}: {
+  vehiculo: Vehiculo;
+  onClose: () => void;
+}) {
+  const [historial, setHistorial] = useState<boolean | null>(null);
+  const [confirmarBorrado, setConfirmarBorrado] = useState(false);
+  const [desactivarState, desactivarAction, desactivarPending] = useActionState<
+    FormState,
+    FormData
+  >(desactivarVehiculo, {});
+  const [eliminarState, eliminarActionState, eliminarPending] = useActionState<
+    FormState,
+    FormData
+  >(eliminarVehiculo, {});
+
+  useEffect(() => {
+    let vivo = true;
+    tieneHistorialVehiculo(vehiculo.patente).then((tiene) => {
+      if (vivo) setHistorial(tiene);
+    });
+    return () => {
+      vivo = false;
+    };
+  }, [vehiculo.patente]);
+
+  useEffect(() => {
+    if (desactivarState.ok) onClose();
+  }, [desactivarState.ok, onClose]);
+
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") onClose();
+    }
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [onClose]);
+
+  if (typeof document === "undefined") return null;
+
+  return createPortal(
+    <div
+      className="animate-fade-in fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-[2px]"
+      onClick={onClose}
+      role="dialog"
+      aria-modal="true"
+      aria-label={`Eliminar ${vehiculo.patente}`}
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        className="animate-scale-in w-full max-w-md rounded-[18px] bg-white p-5 shadow-card"
+      >
+        <p className="text-base font-semibold">¿Qué quieres hacer con {vehiculo.patente}?</p>
+        {historial ? (
+          <p className="mt-1.5 text-sm text-amber-700">
+            Este vehículo tiene viajes y/o gastos registrados en su historial.
+          </p>
+        ) : null}
+
+        <div className="mt-4 flex flex-col gap-2">
+          <form action={desactivarAction}>
+            <input type="hidden" name="patente" value={vehiculo.patente} />
+            <button
+              type="submit"
+              disabled={desactivarPending}
+              className="w-full rounded-xl border border-border bg-white px-4 py-3 text-left text-sm font-medium hover:bg-background disabled:opacity-50"
+            >
+              Ya no se va a ocupar
+              <span className="block text-xs font-normal text-muted">
+                Se marca como inactivo. Se conserva junto con su historial.
+              </span>
+            </button>
+          </form>
+
+          {!confirmarBorrado ? (
+            <button
+              type="button"
+              onClick={() => setConfirmarBorrado(true)}
+              className="w-full rounded-xl border border-red-200 bg-white px-4 py-3 text-left text-sm font-medium text-red-600 hover:bg-red-50"
+            >
+              Eliminar todo el registro
+              <span className="block text-xs font-normal text-red-600/80">
+                Borra el vehículo del sistema. No se puede deshacer.
+              </span>
+            </button>
+          ) : (
+            <div className="rounded-xl border border-red-200 bg-red-50 p-3">
+              <p className="text-sm text-red-700">
+                ¿Confirmas eliminar {vehiculo.patente} y todo su registro
+                {historial ? "? Su historial de viajes quedará sin vehículo asignado." : "?"}
+              </p>
+              <form action={eliminarActionState} className="mt-2">
+                <input type="hidden" name="patente" value={vehiculo.patente} />
+                <button
+                  type="submit"
+                  disabled={eliminarPending}
+                  className="rounded-full bg-danger px-4 py-2 text-sm font-medium text-white hover:bg-[#a32a21] disabled:opacity-50"
+                >
+                  Sí, eliminar definitivamente
+                </button>
+              </form>
+            </div>
+          )}
+        </div>
+
+        {desactivarState.error ? (
+          <p className="mt-3 text-sm text-danger">{desactivarState.error}</p>
+        ) : null}
+        {eliminarState.error ? (
+          <p className="mt-3 text-sm text-danger">{eliminarState.error}</p>
+        ) : null}
+
+        <button
+          type="button"
+          onClick={onClose}
+          className="mt-4 text-sm text-muted hover:text-foreground"
+        >
+          Cancelar
+        </button>
+      </div>
+    </div>,
+    document.body,
+  );
+}
 
 const catTone: Record<GastoCategoria, "amber" | "blue" | "violet" | "gray"> = {
   combustible: "amber",
@@ -59,10 +191,9 @@ export function VehiculoPanel({
     {},
   );
   const formRef = useRef<HTMLFormElement>(null);
-  const demo = isDemo();
+  const [eliminarAbierto, setEliminarAbierto] = useState(false);
 
   function autoguardar() {
-    if (demo) return;
     formRef.current?.requestSubmit();
   }
   function onBlurForm(e: React.FocusEvent<HTMLFormElement>) {
@@ -94,25 +225,24 @@ export function VehiculoPanel({
               <Check className="h-3.5 w-3.5 text-ok" />
               Guardado
             </>
-          ) : demo ? (
-            "Autoguardado (no en demo)"
           ) : (
             ""
           )}
         </span>
-        <ConfirmForm
-          action={eliminarVehiculo}
-          mensaje={`¿Eliminar el vehículo ${vehiculo.patente} y sus gastos? Esta acción no se puede deshacer.`}
+        <button
+          type="button"
+          onClick={() => setEliminarAbierto(true)}
+          className="inline-flex items-center gap-1.5 rounded-full border border-red-200 bg-white px-3 py-2 text-sm font-medium text-red-600 hover:bg-red-50"
         >
-          <input type="hidden" name="patente" value={vehiculo.patente} />
-          <button
-            type="submit"
-            className="inline-flex items-center gap-1.5 rounded-full border border-red-200 bg-white px-3 py-2 text-sm font-medium text-red-600 hover:bg-red-50"
-          >
-            <Trash2 className="h-4 w-4" />
-            Eliminar
-          </button>
-        </ConfirmForm>
+          <Trash2 className="h-4 w-4" />
+          Eliminar
+        </button>
+        {eliminarAbierto ? (
+          <EliminarVehiculoDialog
+            vehiculo={vehiculo}
+            onClose={() => setEliminarAbierto(false)}
+          />
+        ) : null}
       </div>
 
       <div className="grid items-start gap-5 lg:grid-cols-2">
@@ -213,7 +343,7 @@ export function VehiculoPanel({
             <Textarea name="notas" defaultValue={vehiculo.notas ?? ""} />
           </Campo>
 
-          {state.error && !demo ? (
+          {state.error ? (
             <p className="text-sm text-danger">{state.error}</p>
           ) : null}
         </form>

@@ -4,7 +4,6 @@ import { useActionState, useRef, useState } from "react";
 import Link from "next/link";
 import { guardarFactura, type FormState } from "./actions";
 import { createClient } from "@/lib/supabase/client";
-import { isDemo } from "@/lib/demo";
 import { Input } from "@/components/ui/input";
 import { MoneyInput, formatMiles } from "@/components/ui/money-input";
 import { Textarea } from "@/components/ui/textarea";
@@ -68,7 +67,6 @@ export function FacturaForm({
 
   // Autoguardado al editar (viaje/factura existente); botón solo al crear.
   const formRef = useRef<HTMLFormElement>(null);
-  const demo = isDemo();
   const editando = !!factura;
 
   // La pastilla del acordeón también cambia estado/pago: re-sincroniza al
@@ -83,7 +81,7 @@ export function FacturaForm({
   }
 
   function autoguardar() {
-    if (demo || !editando || uploading) return;
+    if (!editando || uploading) return;
     formRef.current?.requestSubmit();
   }
   function onBlurForm(e: React.FocusEvent<HTMLFormElement>) {
@@ -399,8 +397,6 @@ export function FacturaForm({
               <Check className="h-3.5 w-3.5 text-ok" />
               Guardado
             </>
-          ) : demo ? (
-            "Autoguardado (no en demo)"
           ) : (
             "Los cambios se guardan solos"
           )}

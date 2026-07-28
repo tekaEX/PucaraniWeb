@@ -10,7 +10,6 @@ import {
 } from "./actions";
 import { formatCLP, toInputDate } from "@/lib/format";
 import { formatMiles } from "@/components/ui/money-input";
-import { isDemo } from "@/lib/demo";
 import type { Empresa } from "@/types/db";
 import type { CotRow } from "./cotizacion-accordion";
 
@@ -50,7 +49,6 @@ export function CotizacionEditor({
     {},
   );
   const formRef = useRef<HTMLFormElement>(null);
-  const demo = isDemo();
   const [estadoPending, startEstado] = useTransition();
 
   const [items, setItems] = useState<ItemRow[]>(() =>
@@ -66,7 +64,6 @@ export function CotizacionEditor({
   const [exento, setExento] = useState(cot.exento_iva);
 
   function autoguardar() {
-    if (demo) return;
     formRef.current?.requestSubmit();
   }
   function onBlurForm(e: React.FocusEvent<HTMLFormElement>) {
@@ -128,8 +125,6 @@ export function CotizacionEditor({
               <Check className="h-3.5 w-3.5 text-ok" />
               Guardado
             </>
-          ) : demo ? (
-            "Autoguardado (no en demo)"
           ) : (
             "Edita directo sobre el documento"
           )}
@@ -343,7 +338,7 @@ export function CotizacionEditor({
         />
       </div>
 
-      {state.error && !demo ? (
+      {state.error ? (
         <p className="mx-auto mt-2 max-w-3xl text-sm text-danger">{state.error}</p>
       ) : null}
     </form>

@@ -116,7 +116,7 @@ export function TaxisTabla({
 
                   {open ? (
                     <tr>
-                      <td colSpan={7} className="bg-gray-50/50 px-4 py-5">
+                      <td colSpan={7} className="bg-gray-50/40 px-4 pb-5 pt-1">
                         <div className="animate-expand">
                           <TaxiPanel servicio={s} clientes={clientes} choferes={choferes} />
                         </div>

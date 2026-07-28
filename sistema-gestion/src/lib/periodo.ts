@@ -47,7 +47,7 @@ export function rangoPeriodo(p: Periodo): { desde: string; hasta: string } {
   };
 }
 
-// ¿La fecha cae dentro del periodo? (para filtrar en memoria / modo demo)
+// ¿La fecha cae dentro del periodo? (para filtrar en memoria)
 export function enRango(fecha: string | null | undefined, p: Periodo): boolean {
   if (!fecha) return false;
   const f = fecha.slice(0, 10);

@@ -5,7 +5,6 @@ import { useRouter } from "next/navigation";
 import { Upload, Loader2 } from "lucide-react";
 import { buttonClass } from "@/components/ui/button";
 import { importarRespaldoTaxis, type ResumenImport } from "./actions";
-import { isDemo } from "@/lib/demo";
 
 const LOTE = 200; // límite de tamaño de las Server Actions
 
@@ -21,7 +20,6 @@ export function ImportarRespaldo() {
   const inputRef = useRef<HTMLInputElement>(null);
   const router = useRouter();
   const [estado, setEstado] = useState<Estado>({ fase: "idle" });
-  const demo = isDemo();
 
   async function onArchivo(file: File) {
     try {
@@ -82,12 +80,8 @@ export function ImportarRespaldo() {
       <button
         type="button"
         onClick={() => inputRef.current?.click()}
-        disabled={ocupado || demo}
-        title={
-          demo
-            ? "No disponible en modo demostración"
-            : "Importar el respaldo JSON de la app antigua de taxis"
-        }
+        disabled={ocupado}
+        title="Importar el respaldo JSON de la app antigua de taxis"
         className={buttonClass({ variant: "outline" })}
       >
         {ocupado ? (

@@ -8,7 +8,6 @@ import { Textarea } from "@/components/ui/textarea";
 import { InitialsAvatar } from "@/components/ui/avatar";
 import { EstadoCuenta } from "@/components/estado-cuenta";
 import { Trash2, Check, Loader2 } from "lucide-react";
-import { isDemo } from "@/lib/demo";
 import type { CuentaCliente } from "@/lib/cobranza";
 import type { Cliente } from "@/types/db";
 
@@ -25,10 +24,8 @@ export function ClientePanel({
   );
   const formRef = useRef<HTMLFormElement>(null);
   const formId = `cliente-form-${cliente.id}`;
-  const demo = isDemo();
 
   function autoguardar() {
-    if (demo) return;
     formRef.current?.requestSubmit();
   }
   function onBlurForm(e: React.FocusEvent<HTMLFormElement>) {
@@ -87,7 +84,7 @@ export function ClientePanel({
                 className="sm:col-span-2"
               />
             </div>
-            {state.error && !demo ? (
+            {state.error ? (
               <p className="text-sm text-danger">{state.error}</p>
             ) : null}
           </div>
@@ -118,8 +115,6 @@ export function ClientePanel({
                 <Check className="h-3.5 w-3.5 text-ok" />
                 Guardado
               </>
-            ) : demo ? (
-              "Autoguardado (no en demo)"
             ) : (
               ""
             )}

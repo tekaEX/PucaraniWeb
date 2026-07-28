@@ -6,14 +6,6 @@ import { ViajeForm } from "../viaje-form";
 import { eliminarViaje } from "../actions";
 import { ConfirmForm } from "@/components/ui/confirm-form";
 import { Trash2, ArrowLeft } from "lucide-react";
-import {
-  isDemo,
-  demoViajeById,
-  demoClientes,
-  demoCotizacionesLite,
-  demoChoferes,
-  demoVehiculos,
-} from "@/lib/demo";
 import type { ViajeConRelaciones } from "@/types/db";
 
 export const dynamic = "force-dynamic";
@@ -25,43 +17,29 @@ export default async function ViajeDetallePage({
 }) {
   const { id } = await params;
 
-  let viaje: ViajeConRelaciones | null;
-  let clientes: { id: string; nombre: string; codigo: string | null }[];
-  let cotizaciones: { id: string; numero: number; cliente_id: string | null; total: number }[];
-  let choferes: { id: string; nombre: string }[];
-  let vehiculos: { patente: string }[];
-
-  if (isDemo()) {
-    viaje = demoViajeById(id);
-    clientes = demoClientes.map((c) => ({ id: c.id, nombre: c.nombre, codigo: c.codigo }));
-    cotizaciones = demoCotizacionesLite();
-    choferes = demoChoferes.map((c) => ({ id: c.id, nombre: c.nombre }));
-    vehiculos = demoVehiculos.map((v) => ({ patente: v.patente }));
-  } else {
-    const supabase = await createClient();
-    const [{ data: via }, { data: cl }, { data: cot }, { data: cho }, { data: veh }] =
-      await Promise.all([
-        supabase
-          .from("viajes")
-          .select(
-            "*, cliente:clientes(id,nombre,codigo), cotizacion:cotizaciones(id,numero), factura:facturas(id,folio,tipo_dte,estado,fecha_pago), asignaciones:viaje_asignaciones(id,viaje_id,chofer_id,vehiculo_id,fecha,notas,created_at, chofer:choferes(id,nombre), vehiculo:vehiculos(patente))",
-          )
-          .eq("id", id)
-          .maybeSingle(),
-        supabase.from("clientes").select("id,nombre,codigo").order("nombre"),
-        supabase
-          .from("cotizaciones")
-          .select("id,numero,cliente_id,total")
-          .order("numero", { ascending: false }),
-        supabase.from("choferes").select("id,nombre").order("nombre"),
-        supabase.from("vehiculos").select("patente").order("patente"),
-      ]);
-    viaje = (via as ViajeConRelaciones) ?? null;
-    clientes = cl ?? [];
-    cotizaciones = cot ?? [];
-    choferes = cho ?? [];
-    vehiculos = veh ?? [];
-  }
+  const supabase = await createClient();
+  const [{ data: via }, { data: cl }, { data: cot }, { data: cho }, { data: veh }] =
+    await Promise.all([
+      supabase
+        .from("viajes")
+        .select(
+          "*, cliente:clientes(id,nombre,codigo), cotizacion:cotizaciones(id,numero), factura:facturas(id,folio,tipo_dte,estado,fecha_pago), asignaciones:viaje_asignaciones(id,viaje_id,chofer_id,vehiculo_id,fecha,notas,created_at, chofer:choferes(id,nombre), vehiculo:vehiculos(patente))",
+        )
+        .eq("id", id)
+        .maybeSingle(),
+      supabase.from("clientes").select("id,nombre,codigo").order("nombre"),
+      supabase
+        .from("cotizaciones")
+        .select("id,numero,cliente_id,total")
+        .order("numero", { ascending: false }),
+      supabase.from("choferes").select("id,nombre").order("nombre"),
+      supabase.from("vehiculos").select("patente").order("patente"),
+    ]);
+  const viaje = (via as ViajeConRelaciones) ?? null;
+  const clientes = cl ?? [];
+  const cotizaciones = cot ?? [];
+  const choferes = cho ?? [];
+  const vehiculos = veh ?? [];
 
   if (!viaje) notFound();
   const v = viaje;

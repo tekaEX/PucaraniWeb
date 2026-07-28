@@ -3,15 +3,11 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { isDemo } from "@/lib/demo";
 import { hoyChile } from "@/lib/format";
 import { s, sReq, num, intNull } from "@/lib/form-helpers";
 import type { FacturaEstado } from "@/types/db";
 
 export type FormState = { error?: string; ok?: boolean };
-
-const DEMO_MSG =
-  "Modo demostración: conecta Supabase (ver README) para guardar datos reales.";
 
 const ESTADOS: FacturaEstado[] = ["borrador", "emitida", "anulada"];
 const TIPOS_DTE = [33, 34, 56, 61];
@@ -41,8 +37,6 @@ export async function guardarFactura(
   _prev: FormState,
   formData: FormData,
 ): Promise<FormState> {
-  if (isDemo()) return { error: DEMO_MSG };
-
   const id = s(formData.get("id"));
 
   const cliente_id = s(formData.get("cliente_id"));
@@ -126,11 +120,6 @@ export async function guardarFactura(
 // Registra el pago de hoy desde la lista (acción rápida).
 export async function marcarPagada(formData: FormData) {
   const id = sReq(formData.get("id"));
-
-  if (isDemo()) {
-    revalidatePath("/facturas");
-    return;
-  }
   if (!id) return;
 
   const supabase = await createClient();
@@ -155,11 +144,6 @@ export async function actualizarEstadoFactura(formData: FormData) {
   const id = sReq(formData.get("id"));
   const nuevo = sReq(formData.get("estado"));
   if (!id) return;
-
-  if (isDemo()) {
-    revalidatePath("/facturas");
-    return;
-  }
 
   const supabase = await createClient();
   const hoy = hoyChile();
@@ -189,14 +173,16 @@ export async function actualizarEstadoFactura(formData: FormData) {
   revalidatePath("/");
 }
 
-export async function eliminarFactura(formData: FormData) {
-  if (isDemo()) redirect("/facturas");
+export async function eliminarFactura(
+  _prev: FormState,
+  formData: FormData,
+): Promise<FormState> {
   const id = sReq(formData.get("id"));
-  if (!id) return;
+  if (!id) return { error: "Falta el identificador." };
   const supabase = await createClient();
   // Los viajes vinculados vuelven solos a "por facturar" (FK on delete set null).
   const { error } = await supabase.from("facturas").delete().eq("id", id);
-  if (error) return;
+  if (error) return { error: `No se pudo eliminar: ${error.message}` };
   revalidatePath("/facturas");
   revalidatePath("/viajes");
   revalidatePath("/");

@@ -5,8 +5,7 @@ import { Card } from "@/components/ui/card";
 import { Kpi } from "@/components/ui/kpi";
 import { buttonClass } from "@/components/ui/button";
 import { Plus, Car, CircleDollarSign } from "lucide-react";
-import { isDemo, demoServiciosTaxi } from "@/lib/demo";
-import { getPeriodo, rangoPeriodo, enRango, etiquetaPeriodo } from "@/lib/periodo";
+import { getPeriodo, rangoPeriodo, etiquetaPeriodo } from "@/lib/periodo";
 import { formatCLP } from "@/lib/format";
 import type { ServicioTaxiConRelaciones } from "@/types/db";
 import { TaxisTabla } from "./taxis-tabla";
@@ -22,22 +21,15 @@ export const metadata = { title: "Taxis" };
 export default async function TaxisPage() {
   const periodo = await getPeriodo();
 
-  let servicios: ServicioTaxiConRelaciones[];
-  if (isDemo()) {
-    servicios = demoServiciosTaxi
-      .filter((s) => enRango(s.fecha, periodo))
-      .sort((a, b) => a.fecha.localeCompare(b.fecha));
-  } else {
-    const supabase = await createClient();
-    const { desde, hasta } = rangoPeriodo(periodo);
-    const { data } = await supabase
-      .from("servicios_taxi")
-      .select("*, cliente:clientes(id,nombre,codigo), chofer:choferes(id,nombre)")
-      .gte("fecha", desde)
-      .lte("fecha", hasta)
-      .order("fecha");
-    servicios = (data ?? []) as ServicioTaxiConRelaciones[];
-  }
+  const supabase = await createClient();
+  const { desde, hasta } = rangoPeriodo(periodo);
+  const { data } = await supabase
+    .from("servicios_taxi")
+    .select("*, cliente:clientes(id,nombre,codigo), chofer:choferes(id,nombre)")
+    .gte("fecha", desde)
+    .lte("fecha", hasta)
+    .order("fecha");
+  const servicios = (data ?? []) as ServicioTaxiConRelaciones[];
 
   const { clientes, choferes } = await datosNuevoTaxi();
 
@@ -57,7 +49,7 @@ export default async function TaxisPage() {
         </Link>
       </PageHeader>
 
-      <div className="mb-5 grid gap-4 sm:grid-cols-2">
+      <div className="stagger-in mb-5 grid gap-4 sm:grid-cols-2">
         <Kpi
           label="Monto del periodo"
           value={formatCLP(total)}

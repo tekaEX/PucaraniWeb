@@ -3,15 +3,11 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { isDemo } from "@/lib/demo";
 import { z } from "zod";
 import { s, sReq, num } from "@/lib/form-helpers";
 import { TAXI_TIPOS, type TaxiTipo } from "@/types/db";
 
 export type FormState = { error?: string; ok?: boolean };
-
-const DEMO_MSG =
-  "Modo demostración: conecta Supabase (ver README) para guardar datos reales.";
 
 // Los taxis suman a los ingresos por cliente, así que además de /taxis hay
 // que refrescar el Dashboard y Clientes.
@@ -25,8 +21,6 @@ export async function guardarServicioTaxi(
   _prev: FormState,
   formData: FormData,
 ): Promise<FormState> {
-  if (isDemo()) return { error: DEMO_MSG };
-
   const id = s(formData.get("id"));
   const fecha = sReq(formData.get("fecha"));
   if (!fecha) return { error: "La fecha es obligatoria." };
@@ -66,12 +60,15 @@ export async function guardarServicioTaxi(
   return { ok: true };
 }
 
-export async function eliminarServicioTaxi(formData: FormData) {
-  if (isDemo()) redirect("/taxis");
+export async function eliminarServicioTaxi(
+  _prev: FormState,
+  formData: FormData,
+): Promise<FormState> {
   const id = sReq(formData.get("id"));
-  if (!id) return;
+  if (!id) return { error: "Falta el identificador." };
   const supabase = await createClient();
-  await supabase.from("servicios_taxi").delete().eq("id", id);
+  const { error } = await supabase.from("servicios_taxi").delete().eq("id", id);
+  if (error) return { error: `No se pudo eliminar: ${error.message}` };
   revalidarTaxis();
   redirect("/taxis");
 }
@@ -120,7 +117,6 @@ export async function importarRespaldoTaxis(
     sinMatchEmpresa: 0,
     sinMatchChofer: 0,
   };
-  if (isDemo()) return { ...vacio, error: DEMO_MSG };
 
   const supabase = await createClient();
 

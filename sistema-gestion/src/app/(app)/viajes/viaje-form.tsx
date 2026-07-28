@@ -11,7 +11,6 @@ import { Field } from "@/components/ui/label";
 import { Button, buttonClass } from "@/components/ui/button";
 import { Card, CardBody, CardHeader, CardTitle } from "@/components/ui/card";
 import { Save, Plus, X, Check, Loader2 } from "lucide-react";
-import { isDemo } from "@/lib/demo";
 import { toInputDate, todayInput, formatCLP } from "@/lib/format";
 import { VIAJE_ESTADOS } from "@/types/db";
 import type { ViajeConRelaciones, ViajeEstado } from "@/types/db";
@@ -62,11 +61,10 @@ export function ViajeForm({
   // Al editar (viaje existente) los cambios se autoguardan al salir del campo;
   // al crear se usa el botón. Mismo patrón que Vehículos/Choferes/Clientes.
   const formRef = useRef<HTMLFormElement>(null);
-  const demo = isDemo();
   const editando = !!viaje;
 
   function autoguardar() {
-    if (demo || !editando) return;
+    if (!editando) return;
     formRef.current?.requestSubmit();
   }
   function onBlurForm(e: React.FocusEvent<HTMLFormElement>) {
@@ -419,8 +417,6 @@ export function ViajeForm({
               <Check className="h-3.5 w-3.5 text-ok" />
               Guardado
             </>
-          ) : demo ? (
-            "Autoguardado (no en demo)"
           ) : (
             "Los cambios se guardan solos"
           )}

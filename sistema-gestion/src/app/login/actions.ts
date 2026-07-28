@@ -2,7 +2,6 @@
 
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { isDemo } from "@/lib/demo";
 
 export type LoginState = { error?: string };
 
@@ -29,7 +28,6 @@ export async function login(
 }
 
 export async function logout() {
-  if (isDemo()) redirect("/");
   const supabase = await createClient();
   await supabase.auth.signOut();
   redirect("/login");

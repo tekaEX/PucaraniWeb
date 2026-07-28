@@ -4,8 +4,7 @@ import { PageHeader } from "@/components/page-header";
 import { Card } from "@/components/ui/card";
 import { buttonClass } from "@/components/ui/button";
 import { Plus, FileText } from "lucide-react";
-import { isDemo, demoCotizaciones, demoViajes, demoEmpresa } from "@/lib/demo";
-import { getPeriodo, rangoPeriodo, enRango, etiquetaPeriodo } from "@/lib/periodo";
+import { getPeriodo, rangoPeriodo, etiquetaPeriodo } from "@/lib/periodo";
 import type { Empresa, Viaje } from "@/types/db";
 import { datosNuevaCotizacion } from "./nueva/datos";
 import { CotizacionAccordion, type CotRow } from "./cotizacion-accordion";
@@ -14,49 +13,36 @@ export const dynamic = "force-dynamic";
 export const metadata = { title: "Cotizaciones" };
 
 export default async function CotizacionesPage() {
-  let cotizaciones: CotRow[];
-  let empresa: Empresa | null;
-  let viajes: Viaje[];
-
   // El periodo global (selector de arriba) define el rango de fechas.
   const periodo = await getPeriodo();
   const { desde, hasta } = rangoPeriodo(periodo);
 
-  if (isDemo()) {
-    cotizaciones = (demoCotizaciones as unknown as CotRow[]).filter((c) =>
-      enRango(c.fecha, periodo),
-    );
-    empresa = demoEmpresa;
-    viajes = demoViajes;
-  } else {
-    const supabase = await createClient();
-    const [{ data: cData }, { data: emp }] = await Promise.all([
-      supabase
-        .from("cotizaciones")
-        .select("*, cliente:clientes(id,nombre,codigo), items:cotizacion_items(*)")
-        .gte("fecha", desde)
-        .lte("fecha", hasta)
-        .order("numero", { ascending: false }),
-      supabase
-        .from("empresa")
-        .select("*")
-        .order("created_at", { ascending: true })
-        .limit(1)
-        .maybeSingle(),
-    ]);
-    cotizaciones = (cData ?? []) as CotRow[];
-    empresa = (emp as Empresa) ?? null;
+  const supabase = await createClient();
+  const [{ data: cData }, { data: emp }] = await Promise.all([
+    supabase
+      .from("cotizaciones")
+      .select("*, cliente:clientes(id,nombre,codigo), items:cotizacion_items(*)")
+      .gte("fecha", desde)
+      .lte("fecha", hasta)
+      .order("numero", { ascending: false }),
+    supabase
+      .from("empresa")
+      .select("*")
+      .order("created_at", { ascending: true })
+      .limit(1)
+      .maybeSingle(),
+  ]);
+  const cotizaciones = (cData ?? []) as CotRow[];
+  const empresa = (emp as Empresa) ?? null;
 
-    // Solo los viajes de las cotizaciones visibles (no toda la tabla).
-    if (cotizaciones.length > 0) {
-      const { data: vData } = await supabase
-        .from("viajes")
-        .select("*")
-        .in("cotizacion_id", cotizaciones.map((c) => c.id));
-      viajes = (vData ?? []) as Viaje[];
-    } else {
-      viajes = [];
-    }
+  // Solo los viajes de las cotizaciones visibles (no toda la tabla).
+  let viajes: Viaje[] = [];
+  if (cotizaciones.length > 0) {
+    const { data: vData } = await supabase
+      .from("viajes")
+      .select("*")
+      .in("cotizacion_id", cotizaciones.map((c) => c.id));
+    viajes = (vData ?? []) as Viaje[];
   }
 
   // Para la edición inline en el acordeón.

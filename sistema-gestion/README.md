@@ -19,8 +19,8 @@ Permite:
   y el detalle de facturas y viajes por facturar.
 - **Gastos de flota** por vehículo (manual o importados del SII) y alertas de vencimientos
   de documentos (revisión técnica, SOAP, permiso, licencias) en una **campana** siempre visible.
-- **Periodo global** (mes/año) que filtra toda la app, edición **inline con autoguardado**
-  en cada lista, y **modo demostración** con datos de ejemplo cuando no hay Supabase configurado.
+- **Periodo global** (mes/año) que filtra toda la app y edición **inline con autoguardado**
+  en cada lista.
 - **Inicio de sesión** con roles (admin / operador / contador / chofer) para proteger los datos.
 
 Construido con **Next.js 16** (App Router), **React 19**, **Supabase** (PostgreSQL + login +
@@ -159,8 +159,6 @@ botones "Nuevo…" abren una **ventana modal**.
 - **Patente = identificador del vehículo:** la patente es la clave primaria de `vehiculos`
   (formato `ABCD-12` / `AB-1234`, validado en la app y en la base). Los gastos del SII se
   vinculan solos por patente.
-- **Modo demostración:** si `NEXT_PUBLIC_SUPABASE_URL` está vacío, la app corre con datos
-  de ejemplo (no persiste). Útil para presentar sin configurar nada.
 - Usuarios: Supabase → **Authentication → Users → Add user**. Roles en la tabla `perfiles`.
 - Archivos (logo, fotos, PDF de facturas, certificados) en **Supabase Storage**; los
   buckets `adjuntos` y `certificados` son privados (se acceden con URL firmada).

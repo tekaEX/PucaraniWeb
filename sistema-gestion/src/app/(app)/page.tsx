@@ -14,14 +14,6 @@ import {
   TrendingDown,
 } from "lucide-react";
 import {
-  isDemo,
-  demoCotizaciones,
-  demoViajes,
-  demoFacturas,
-  demoGastos,
-  demoServiciosTaxi,
-} from "@/lib/demo";
-import {
   getPeriodo,
   rangoPeriodo,
   periodoAnterior,
@@ -52,68 +44,52 @@ export default async function DashboardPage() {
   const prev = periodoAnterior(periodo);
   const { desde, hasta } = rangoPeriodo(periodo);
 
-  let cotPeriodo: { total: number }[];
-  let viajes: Viaje[];
-  let facturas: Factura[];
-  let gastos: GastoVehiculo[];
-  let taxis: { fecha: string; monto: number }[];
-
-  if (isDemo()) {
-    cotPeriodo = demoCotizaciones
-      .filter((c) => enRango(c.fecha, periodo))
-      .map((c) => ({ total: c.total }));
-    viajes = demoViajes;
-    facturas = demoFacturas;
-    gastos = demoGastos;
-    taxis = demoServiciosTaxi;
-  } else {
-    const supabase = await createClient();
-    // Todas las cifras del Dashboard son del periodo o del anterior (deltas),
-    // así que se trae SOLO ese rango — nunca tablas completas, que además del
-    // costo quedarían truncadas por el tope de filas de Supabase al crecer.
-    const rangoDesde = rangoPeriodo(prev).desde;
-    const [
-      { data: cotData },
-      { data: viajesData },
-      { data: factData },
-      { data: gastosData },
-      { data: taxisData },
-    ] = await Promise.all([
-      supabase
-        .from("cotizaciones")
-        .select("total")
-        .gte("fecha", desde)
-        .lte("fecha", hasta),
-      supabase
-        .from("viajes")
-        .select(
-          "estado, factura_id, fecha_inicio, valor, costo_combustible, costo_peajes, costo_viaticos, costo_otros",
-        )
-        .gte("fecha_inicio", rangoDesde)
-        .lte("fecha_inicio", hasta),
-      supabase
-        .from("facturas")
-        .select("estado, total, fecha_emision, fecha_pago")
-        .or(
-          `and(fecha_pago.gte.${rangoDesde},fecha_pago.lte.${hasta}),and(fecha_emision.gte.${rangoDesde},fecha_emision.lte.${hasta})`,
-        ),
-      supabase
-        .from("gastos_vehiculo")
-        .select("fecha, monto_total")
-        .gte("fecha", rangoDesde)
-        .lte("fecha", hasta),
-      supabase
-        .from("servicios_taxi")
-        .select("fecha, monto")
-        .gte("fecha", rangoDesde)
-        .lte("fecha", hasta),
-    ]);
-    cotPeriodo = cotData ?? [];
-    viajes = (viajesData ?? []) as unknown as Viaje[];
-    facturas = (factData ?? []) as unknown as Factura[];
-    gastos = (gastosData ?? []) as unknown as GastoVehiculo[];
-    taxis = taxisData ?? [];
-  }
+  const supabase = await createClient();
+  // Todas las cifras del Dashboard son del periodo o del anterior (deltas),
+  // así que se trae SOLO ese rango — nunca tablas completas, que además del
+  // costo quedarían truncadas por el tope de filas de Supabase al crecer.
+  const rangoDesde = rangoPeriodo(prev).desde;
+  const [
+    { data: cotData },
+    { data: viajesData },
+    { data: factData },
+    { data: gastosData },
+    { data: taxisData },
+  ] = await Promise.all([
+    supabase
+      .from("cotizaciones")
+      .select("total")
+      .gte("fecha", desde)
+      .lte("fecha", hasta),
+    supabase
+      .from("viajes")
+      .select(
+        "estado, factura_id, fecha_inicio, valor, costo_combustible, costo_peajes, costo_viaticos, costo_otros",
+      )
+      .gte("fecha_inicio", rangoDesde)
+      .lte("fecha_inicio", hasta),
+    supabase
+      .from("facturas")
+      .select("estado, total, fecha_emision, fecha_pago")
+      .or(
+        `and(fecha_pago.gte.${rangoDesde},fecha_pago.lte.${hasta}),and(fecha_emision.gte.${rangoDesde},fecha_emision.lte.${hasta})`,
+      ),
+    supabase
+      .from("gastos_vehiculo")
+      .select("fecha, monto_total")
+      .gte("fecha", rangoDesde)
+      .lte("fecha", hasta),
+    supabase
+      .from("servicios_taxi")
+      .select("fecha, monto")
+      .gte("fecha", rangoDesde)
+      .lte("fecha", hasta),
+  ]);
+  const cotPeriodo: { total: number }[] = cotData ?? [];
+  const viajes = (viajesData ?? []) as unknown as Viaje[];
+  const facturas = (factData ?? []) as unknown as Factura[];
+  const gastos = (gastosData ?? []) as unknown as GastoVehiculo[];
+  const taxis: { fecha: string; monto: number }[] = taxisData ?? [];
 
   // Fila 1 — KPIs del periodo. Todos los estados son DERIVADOS:
   // "por facturar" = viaje realizado sin factura; "por cobrar" = emitida sin
@@ -178,7 +154,7 @@ export default async function DashboardPage() {
       </PageHeader>
 
       {/* Fila 1 — KPIs */}
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="stagger-in grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <Kpi
           label="Cotizaciones"
           value={formatCLP(totalCotizado)}
@@ -212,7 +188,7 @@ export default async function DashboardPage() {
       </div>
 
       {/* Fila 2 — mismas cifras que Finanzas */}
-      <div className="mt-4 grid gap-4 sm:grid-cols-3">
+      <div className="stagger-in mt-4 grid gap-4 sm:grid-cols-3">
         <Kpi
           label="Ingresos"
           value={formatCLP(ingresos)}

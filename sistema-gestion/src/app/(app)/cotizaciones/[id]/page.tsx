@@ -17,12 +17,6 @@ import {
   ArrowLeft,
 } from "lucide-react";
 import { formatCLP, formatDate } from "@/lib/format";
-import {
-  isDemo,
-  demoCotizacionCompleta,
-  demoViajesPorCotizacion,
-  demoEmpresa,
-} from "@/lib/demo";
 import type {
   Cotizacion,
   CotizacionItem,
@@ -45,38 +39,28 @@ export default async function CotizacionDetallePage({
 }) {
   const { id } = await params;
 
-  let cot: Row | null;
-  let viajes: Viaje[];
-  let empresa: Empresa | null;
-
-  if (isDemo()) {
-    cot = demoCotizacionCompleta(id) as Row | null;
-    viajes = demoViajesPorCotizacion(id);
-    empresa = demoEmpresa;
-  } else {
-    const supabase = await createClient();
-    const { data } = await supabase
-      .from("cotizaciones")
-      .select("*, cliente:clientes(id,nombre,codigo), items:cotizacion_items(*)")
-      .eq("id", id)
-      .maybeSingle();
-    cot = (data as Row) ?? null;
-    const [{ data: viajesData }, { data: emp }] = await Promise.all([
-      supabase
-        .from("viajes")
-        .select("*")
-        .eq("cotizacion_id", id)
-        .order("fecha_inicio", { ascending: false }),
-      supabase
-        .from("empresa")
-        .select("*")
-        .order("created_at", { ascending: true })
-        .limit(1)
-        .maybeSingle(),
-    ]);
-    viajes = (viajesData ?? []) as Viaje[];
-    empresa = (emp as Empresa) ?? null;
-  }
+  const supabase = await createClient();
+  const { data } = await supabase
+    .from("cotizaciones")
+    .select("*, cliente:clientes(id,nombre,codigo), items:cotizacion_items(*)")
+    .eq("id", id)
+    .maybeSingle();
+  const cot = (data as Row) ?? null;
+  const [{ data: viajesData }, { data: emp }] = await Promise.all([
+    supabase
+      .from("viajes")
+      .select("*")
+      .eq("cotizacion_id", id)
+      .order("fecha_inicio", { ascending: false }),
+    supabase
+      .from("empresa")
+      .select("*")
+      .order("created_at", { ascending: true })
+      .limit(1)
+      .maybeSingle(),
+  ]);
+  const viajes = (viajesData ?? []) as Viaje[];
+  const empresa = (emp as Empresa) ?? null;
 
   if (!cot) notFound();
   const items = [...(cot.items ?? [])].sort((a, b) => a.orden - b.orden);

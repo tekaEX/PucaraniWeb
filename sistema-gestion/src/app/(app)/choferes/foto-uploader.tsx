@@ -4,7 +4,6 @@ import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Camera } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
-import { isDemo } from "@/lib/demo";
 import { actualizarFotoChofer } from "./actions";
 import { ChoferAvatar } from "@/components/ui/avatar";
 
@@ -30,11 +29,6 @@ export function FotoUploader({
     // Vista previa inmediata en cualquier modo.
     setSrc(URL.createObjectURL(file));
     setMsg("");
-
-    if (isDemo()) {
-      setMsg("No se guarda en modo demo");
-      return;
-    }
 
     setUploading(true);
     try {

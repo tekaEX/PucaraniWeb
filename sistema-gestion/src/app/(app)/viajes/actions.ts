@@ -3,15 +3,11 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { isDemo } from "@/lib/demo";
 import { hoyChile } from "@/lib/format";
 import { s, sReq, num } from "@/lib/form-helpers";
 import type { ViajeEstado } from "@/types/db";
 
 export type FormState = { error?: string; ok?: boolean };
-
-const DEMO_MSG =
-  "Modo demostración: conecta Supabase (ver README) para guardar datos reales.";
 
 const ESTADOS: ViajeEstado[] = ["programado", "realizado", "cancelado"];
 
@@ -45,8 +41,6 @@ export async function guardarViaje(
   _prev: FormState,
   formData: FormData,
 ): Promise<FormState> {
-  if (isDemo()) return { error: DEMO_MSG };
-
   const id = s(formData.get("id"));
   const estadoRaw = sReq(formData.get("estado")) as ViajeEstado;
   const estado: ViajeEstado = ESTADOS.includes(estadoRaw) ? estadoRaw : "programado";
@@ -113,11 +107,6 @@ export async function actualizarEstadoViaje(formData: FormData) {
   const id = sReq(formData.get("id"));
   const estadoRaw = sReq(formData.get("estado")) as ViajeEstado;
   if (!ESTADOS.includes(estadoRaw)) return;
-
-  if (isDemo()) {
-    revalidatePath("/viajes");
-    return;
-  }
   if (!id) return;
 
   const supabase = await createClient();
@@ -126,13 +115,15 @@ export async function actualizarEstadoViaje(formData: FormData) {
   revalidatePath("/");
 }
 
-export async function eliminarViaje(formData: FormData) {
-  if (isDemo()) redirect("/viajes");
+export async function eliminarViaje(
+  _prev: FormState,
+  formData: FormData,
+): Promise<FormState> {
   const id = sReq(formData.get("id"));
-  if (!id) return;
+  if (!id) return { error: "Falta el identificador." };
   const supabase = await createClient();
   const { error } = await supabase.from("viajes").delete().eq("id", id);
-  if (error) return;
+  if (error) return { error: `No se pudo eliminar: ${error.message}` };
   revalidatePath("/viajes");
   revalidatePath("/");
   redirect("/viajes");

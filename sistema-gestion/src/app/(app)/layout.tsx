@@ -1,7 +1,6 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { AppShell } from "@/components/app-shell";
-import { isDemo, demoEmpresa, demoChoferes, demoVehiculos } from "@/lib/demo";
 import { getPeriodo } from "@/lib/periodo";
 import { construirAlertas } from "@/lib/vencimientos";
 import type { Chofer, Vehiculo } from "@/types/db";
@@ -15,22 +14,6 @@ export default async function AppLayout({
   modal: React.ReactNode;
 }) {
   const periodo = await getPeriodo();
-
-  if (isDemo()) {
-    return (
-      <AppShell
-        userEmail="demostración"
-        empresaNombre={demoEmpresa.nombre}
-        periodoAnio={periodo.anio}
-        periodoMes={periodo.mes}
-        alertas={construirAlertas(demoChoferes, demoVehiculos)}
-        demo
-      >
-        {children}
-        {modal}
-      </AppShell>
-    );
-  }
 
   const supabase = await createClient();
   const {

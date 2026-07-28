@@ -3,15 +3,11 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { isDemo } from "@/lib/demo";
 import { hoyChile } from "@/lib/format";
 import { s, sReq, bool } from "@/lib/form-helpers";
 import type { CotizacionEstado } from "@/types/db";
 
 export type FormState = { error?: string; ok?: boolean };
-
-const DEMO_MSG =
-  "Modo demostración: conecta Supabase (ver README) para guardar datos reales.";
 
 type ItemInput = {
   descripcion: string;
@@ -130,8 +126,6 @@ export async function crearCotizacion(
   _prev: FormState,
   formData: FormData,
 ): Promise<FormState> {
-  if (isDemo()) return { error: DEMO_MSG };
-
   const header = readHeader(formData);
   const items = parseItems(s(formData.get("itemsJson")));
   if (items.length === 0) {
@@ -175,8 +169,6 @@ export async function actualizarCotizacion(
   _prev: FormState,
   formData: FormData,
 ): Promise<FormState> {
-  if (isDemo()) return { error: DEMO_MSG };
-
   const id = sReq(formData.get("id"));
   if (!id) return { error: "Falta el identificador de la cotización." };
 
@@ -219,11 +211,6 @@ export async function actualizarEstadoCotizacion(formData: FormData) {
   const estado: CotizacionEstado = ESTADOS.includes(estadoRaw) ? estadoRaw : "borrador";
   if (!id) return;
 
-  if (isDemo()) {
-    revalidatePath("/cotizaciones");
-    return;
-  }
-
   const supabase = await createClient();
   await supabase.from("cotizaciones").update({ estado }).eq("id", id);
 
@@ -236,12 +223,15 @@ export async function actualizarEstadoCotizacion(formData: FormData) {
   revalidatePath("/");
 }
 
-export async function eliminarCotizacion(formData: FormData) {
-  if (isDemo()) redirect("/cotizaciones");
+export async function eliminarCotizacion(
+  _prev: FormState,
+  formData: FormData,
+): Promise<FormState> {
   const id = sReq(formData.get("id"));
-  if (!id) return;
+  if (!id) return { error: "Falta el identificador." };
   const supabase = await createClient();
-  await supabase.from("cotizaciones").delete().eq("id", id);
+  const { error } = await supabase.from("cotizaciones").delete().eq("id", id);
+  if (error) return { error: `No se pudo eliminar: ${error.message}` };
   revalidatePath("/cotizaciones");
   redirect("/cotizaciones");
 }

@@ -6,15 +6,13 @@ import { Select } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import { buttonClass } from "@/components/ui/button";
 import { Plus, Receipt, Filter, Eye } from "lucide-react";
-import { isDemo, demoClientes, demoFacturas } from "@/lib/demo";
 import {
   FACTURA_ESTADOS_DERIVADOS,
-  facturaEstadoDerivado,
   type Cliente,
   type FacturaConRelaciones,
   type FacturaEstadoDerivado,
 } from "@/types/db";
-import { getPeriodo, rangoPeriodo, enRango, etiquetaPeriodo } from "@/lib/periodo";
+import { getPeriodo, rangoPeriodo, etiquetaPeriodo } from "@/lib/periodo";
 import { datosNuevaFactura } from "./nueva/datos";
 import { FacturaAccordion } from "./factura-accordion";
 
@@ -32,64 +30,39 @@ export default async function FacturasPage({
   const periodo = await getPeriodo();
   const { desde, hasta } = rangoPeriodo(periodo);
 
-  let clientes: Cliente[];
-  let facturas: FacturaConRelaciones[];
+  const supabase = await createClient();
+  const { data: clientesData } = await supabase.from("clientes").select("*").order("nombre");
+  const clientes = (clientesData ?? []) as Cliente[];
 
-  if (isDemo()) {
-    clientes = demoClientes;
-    facturas = demoFacturas.filter((f) => {
-      const derivado = facturaEstadoDerivado(f);
-      if (sp.estado && ESTADOS.includes(sp.estado as FacturaEstadoDerivado) && derivado !== sp.estado)
-        return false;
-      if (sp.cliente && f.cliente_id !== sp.cliente) return false;
-      if (
-        sp.q &&
-        !String(f.folio ?? "").includes(sp.q) &&
-        !f.viajes.some((v) => v.descripcion.toLowerCase().includes(sp.q!.toLowerCase()))
-      )
-        return false;
-      // Los borradores (sin fecha de emisión) se muestran siempre.
-      if (f.fecha_emision && !enRango(f.fecha_emision, periodo)) return false;
-      return true;
-    });
-    facturas = [...facturas].sort((a, b) =>
-      (b.fecha_emision ?? "9999") < (a.fecha_emision ?? "9999") ? -1 : 1,
+  let query = supabase
+    .from("facturas")
+    .select("*, cliente:clientes(id,nombre,codigo), viajes:viajes(id,cliente_id,descripcion,fecha_inicio,valor)")
+    .order("fecha_emision", { ascending: false, nullsFirst: true });
+
+  if (sp.estado === "borrador") query = query.eq("estado", "borrador");
+  else if (sp.estado === "anulada") query = query.eq("estado", "anulada");
+  else if (sp.estado === "por_cobrar")
+    query = query.eq("estado", "emitida").is("fecha_pago", null);
+  else if (sp.estado === "pagada")
+    query = query.eq("estado", "emitida").not("fecha_pago", "is", null);
+
+  if (sp.cliente) query = query.eq("cliente_id", sp.cliente);
+  // Los borradores (sin fecha de emisión) se muestran siempre; el resto
+  // respeta el periodo global.
+  query = query.or(
+    `fecha_emision.is.null,and(fecha_emision.gte.${desde},fecha_emision.lte.${hasta})`,
+  );
+
+  const { data } = await query;
+  let facturas = (data ?? []) as FacturaConRelaciones[];
+
+  if (sp.q) {
+    const q = sp.q.toLowerCase();
+    facturas = facturas.filter(
+      (f) =>
+        String(f.folio ?? "").includes(q) ||
+        f.viajes.some((v) => v.descripcion.toLowerCase().includes(q)),
     );
-  } else {
-    const supabase = await createClient();
-    const { data: clientesData } = await supabase.from("clientes").select("*").order("nombre");
-    clientes = (clientesData ?? []) as Cliente[];
-
-    let query = supabase
-      .from("facturas")
-      .select("*, cliente:clientes(id,nombre,codigo), viajes:viajes(id,cliente_id,descripcion,fecha_inicio,valor)")
-      .order("fecha_emision", { ascending: false, nullsFirst: true });
-
-    if (sp.estado === "borrador") query = query.eq("estado", "borrador");
-    else if (sp.estado === "anulada") query = query.eq("estado", "anulada");
-    else if (sp.estado === "por_cobrar")
-      query = query.eq("estado", "emitida").is("fecha_pago", null);
-    else if (sp.estado === "pagada")
-      query = query.eq("estado", "emitida").not("fecha_pago", "is", null);
-
-    if (sp.cliente) query = query.eq("cliente_id", sp.cliente);
-    // Los borradores (sin fecha de emisión) se muestran siempre; el resto
-    // respeta el periodo global.
-    query = query.or(
-      `fecha_emision.is.null,and(fecha_emision.gte.${desde},fecha_emision.lte.${hasta})`,
-    );
-
-    const { data } = await query;
-    facturas = (data ?? []) as FacturaConRelaciones[];
-
-    if (sp.q) {
-      const q = sp.q.toLowerCase();
-      facturas = facturas.filter(
-        (f) =>
-          String(f.folio ?? "").includes(q) ||
-          f.viajes.some((v) => v.descripcion.toLowerCase().includes(q)),
-      );
-    }
   }
 
   // Para editar inline en el acordeón: viajes aún por facturar (se suman a

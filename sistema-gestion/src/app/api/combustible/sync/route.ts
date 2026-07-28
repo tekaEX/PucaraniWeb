@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { isDemo } from "@/lib/demo";
 import { decrypt } from "@/lib/crypto";
 import { extraerPatente, normalizar } from "@/lib/patentes";
 
@@ -20,16 +19,6 @@ const RUTS_COMBUSTIBLE = new Set<string>([
 ]);
 
 export async function POST(req: Request) {
-  if (isDemo()) {
-    return NextResponse.json(
-      {
-        error:
-          "Modo demostración: conecta Supabase y configura las credenciales SII para sincronizar de verdad.",
-      },
-      { status: 400 },
-    );
-  }
-
   let body: { dia?: number; mes?: number; anio?: number } = {};
   try {
     body = await req.json();

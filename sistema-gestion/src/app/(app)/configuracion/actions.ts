@@ -2,7 +2,6 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
-import { isDemo } from "@/lib/demo";
 import { s, sReq, intNull } from "@/lib/form-helpers";
 
 export type FormState = { error?: string; ok?: boolean };
@@ -11,11 +10,6 @@ export async function guardarEmpresa(
   _prev: FormState,
   formData: FormData,
 ): Promise<FormState> {
-  if (isDemo())
-    return {
-      error: "Modo demostración: conecta Supabase (ver README) para guardar datos reales.",
-    };
-
   const id = s(formData.get("id"));
 
   const values = {

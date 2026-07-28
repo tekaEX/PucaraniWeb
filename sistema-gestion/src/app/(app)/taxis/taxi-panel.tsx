@@ -8,7 +8,6 @@ import { MoneyInput } from "@/components/ui/money-input";
 import { Select } from "@/components/ui/select";
 import { Field } from "@/components/ui/label";
 import { Trash2, Check, Loader2 } from "lucide-react";
-import { isDemo } from "@/lib/demo";
 import { toInputDate } from "@/lib/format";
 import {
   TAXI_TIPOS,
@@ -33,13 +32,11 @@ export function TaxiPanel({
     {},
   );
   const formRef = useRef<HTMLFormElement>(null);
-  const demo = isDemo();
 
   const [tipo, setTipo] = useState<TaxiTipo>(servicio.tipo);
   const [monto, setMonto] = useState(String(servicio.monto));
 
   function autoguardar() {
-    if (demo) return; // en modo demo no se persiste
     formRef.current?.requestSubmit();
   }
 
@@ -63,7 +60,7 @@ export function TaxiPanel({
   }
 
   return (
-    <div className="space-y-4">
+    <div className="rounded-xl border border-border bg-white p-4 shadow-[0_1px_2px_rgba(0,0,0,0.04)]">
       <div className="flex items-start gap-3">
         <form
           ref={formRef}
@@ -149,7 +146,7 @@ export function TaxiPanel({
               ))}
             </Select>
           </Field>
-          {state.error && !demo ? (
+          {state.error ? (
             <p className="text-sm text-danger sm:col-span-2 lg:col-span-3">{state.error}</p>
           ) : null}
         </form>
@@ -181,8 +178,6 @@ export function TaxiPanel({
                 <Check className="h-3.5 w-3.5 text-ok" />
                 Guardado
               </>
-            ) : demo ? (
-              "Autoguardado (no en demo)"
             ) : (
               ""
             )}

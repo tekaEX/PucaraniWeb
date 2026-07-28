@@ -6,12 +6,6 @@ import { FacturaForm, type ViajeOpt } from "../factura-form";
 import { eliminarFactura } from "../actions";
 import { ConfirmForm } from "@/components/ui/confirm-form";
 import { Trash2, ArrowLeft } from "lucide-react";
-import {
-  isDemo,
-  demoFacturaById,
-  demoClientes,
-  demoViajesPorFacturar,
-} from "@/lib/demo";
 import type { FacturaConRelaciones } from "@/types/db";
 
 export const dynamic = "force-dynamic";
@@ -23,40 +17,24 @@ export default async function FacturaDetallePage({
 }) {
   const { id } = await params;
 
-  let factura: FacturaConRelaciones | null;
-  let clientes: { id: string; nombre: string; codigo: string | null }[];
-  let porFacturar: ViajeOpt[];
-
-  if (isDemo()) {
-    factura = demoFacturaById(id);
-    clientes = demoClientes.map((c) => ({ id: c.id, nombre: c.nombre, codigo: c.codigo }));
-    porFacturar = demoViajesPorFacturar().map((v) => ({
-      id: v.id,
-      cliente_id: v.cliente_id,
-      descripcion: v.descripcion,
-      fecha_inicio: v.fecha_inicio,
-      valor: v.valor,
-    }));
-  } else {
-    const supabase = await createClient();
-    const [{ data: fac }, { data: cl }, { data: via }] = await Promise.all([
-      supabase
-        .from("facturas")
-        .select("*, cliente:clientes(id,nombre,codigo), viajes:viajes(*)")
-        .eq("id", id)
-        .maybeSingle(),
-      supabase.from("clientes").select("id,nombre,codigo").order("nombre"),
-      supabase
-        .from("viajes")
-        .select("id,cliente_id,descripcion,fecha_inicio,valor")
-        .eq("estado", "realizado")
-        .is("factura_id", null)
-        .order("fecha_inicio", { ascending: false }),
-    ]);
-    factura = (fac as FacturaConRelaciones) ?? null;
-    clientes = cl ?? [];
-    porFacturar = (via ?? []) as ViajeOpt[];
-  }
+  const supabase = await createClient();
+  const [{ data: fac }, { data: cl }, { data: via }] = await Promise.all([
+    supabase
+      .from("facturas")
+      .select("*, cliente:clientes(id,nombre,codigo), viajes:viajes(*)")
+      .eq("id", id)
+      .maybeSingle(),
+    supabase.from("clientes").select("id,nombre,codigo").order("nombre"),
+    supabase
+      .from("viajes")
+      .select("id,cliente_id,descripcion,fecha_inicio,valor")
+      .eq("estado", "realizado")
+      .is("factura_id", null)
+      .order("fecha_inicio", { ascending: false }),
+  ]);
+  const factura = (fac as FacturaConRelaciones) ?? null;
+  const clientes = cl ?? [];
+  const porFacturar = (via ?? []) as ViajeOpt[];
 
   if (!factura) notFound();
   const f = factura;

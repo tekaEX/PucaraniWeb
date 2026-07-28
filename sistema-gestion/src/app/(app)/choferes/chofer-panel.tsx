@@ -1,16 +1,151 @@
 "use client";
 
-import { useActionState, useRef } from "react";
-import { guardarChofer, eliminarChofer, type FormState } from "./actions";
-import { ConfirmForm } from "@/components/ui/confirm-form";
+import { useActionState, useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
+import {
+  guardarChofer,
+  eliminarChofer,
+  desactivarChofer,
+  tieneHistorialChofer,
+  type FormState,
+} from "./actions";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { VencimientoBadge } from "@/components/ui/badge";
 import { FotoUploader } from "./foto-uploader";
 import { LicenciaForm } from "./licencia-form";
 import { Trash2, Check, Loader2 } from "lucide-react";
-import { isDemo } from "@/lib/demo";
 import type { Chofer } from "@/types/db";
+
+// Diálogo al eliminar un chofer: distingue "ya no trabaja aquí" (se
+// desactiva, se conserva todo) de "eliminar todo el registro" (borrado real,
+// avisando antes si tiene historial de viajes asignados).
+function EliminarChoferDialog({
+  chofer,
+  onClose,
+}: {
+  chofer: Chofer;
+  onClose: () => void;
+}) {
+  const [historial, setHistorial] = useState<boolean | null>(null);
+  const [confirmarBorrado, setConfirmarBorrado] = useState(false);
+  const [desactivarState, desactivarAction, desactivarPending] = useActionState<
+    FormState,
+    FormData
+  >(desactivarChofer, {});
+  const [eliminarState, eliminarActionState, eliminarPending] = useActionState<
+    FormState,
+    FormData
+  >(eliminarChofer, {});
+
+  useEffect(() => {
+    let vivo = true;
+    tieneHistorialChofer(chofer.id).then((tiene) => {
+      if (vivo) setHistorial(tiene);
+    });
+    return () => {
+      vivo = false;
+    };
+  }, [chofer.id]);
+
+  useEffect(() => {
+    if (desactivarState.ok) onClose();
+  }, [desactivarState.ok, onClose]);
+
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") onClose();
+    }
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [onClose]);
+
+  if (typeof document === "undefined") return null;
+
+  return createPortal(
+    <div
+      className="animate-fade-in fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-[2px]"
+      onClick={onClose}
+      role="dialog"
+      aria-modal="true"
+      aria-label={`Eliminar ${chofer.nombre}`}
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        className="animate-scale-in w-full max-w-md rounded-[18px] bg-white p-5 shadow-card"
+      >
+        <p className="text-base font-semibold">¿Qué quieres hacer con {chofer.nombre}?</p>
+        {historial ? (
+          <p className="mt-1.5 text-sm text-amber-700">
+            Este chofer tiene viajes asignados en su historial.
+          </p>
+        ) : null}
+
+        <div className="mt-4 flex flex-col gap-2">
+          <form action={desactivarAction}>
+            <input type="hidden" name="id" value={chofer.id} />
+            <button
+              type="submit"
+              disabled={desactivarPending}
+              className="w-full rounded-xl border border-border bg-white px-4 py-3 text-left text-sm font-medium hover:bg-background disabled:opacity-50"
+            >
+              Ya no trabaja aquí
+              <span className="block text-xs font-normal text-muted">
+                Se marca como inactivo. Se conserva junto con su historial.
+              </span>
+            </button>
+          </form>
+
+          {!confirmarBorrado ? (
+            <button
+              type="button"
+              onClick={() => setConfirmarBorrado(true)}
+              className="w-full rounded-xl border border-red-200 bg-white px-4 py-3 text-left text-sm font-medium text-red-600 hover:bg-red-50"
+            >
+              Eliminar todo el registro
+              <span className="block text-xs font-normal text-red-600/80">
+                Borra al chofer del sistema. No se puede deshacer.
+              </span>
+            </button>
+          ) : (
+            <div className="rounded-xl border border-red-200 bg-red-50 p-3">
+              <p className="text-sm text-red-700">
+                ¿Confirmas eliminar a {chofer.nombre} y todo su registro
+                {historial ? "? Su historial de viajes quedará sin chofer asignado." : "?"}
+              </p>
+              <form action={eliminarActionState} className="mt-2">
+                <input type="hidden" name="id" value={chofer.id} />
+                <button
+                  type="submit"
+                  disabled={eliminarPending}
+                  className="rounded-full bg-danger px-4 py-2 text-sm font-medium text-white hover:bg-[#a32a21] disabled:opacity-50"
+                >
+                  Sí, eliminar definitivamente
+                </button>
+              </form>
+            </div>
+          )}
+        </div>
+
+        {desactivarState.error ? (
+          <p className="mt-3 text-sm text-danger">{desactivarState.error}</p>
+        ) : null}
+        {eliminarState.error ? (
+          <p className="mt-3 text-sm text-danger">{eliminarState.error}</p>
+        ) : null}
+
+        <button
+          type="button"
+          onClick={onClose}
+          className="mt-4 text-sm text-muted hover:text-foreground"
+        >
+          Cancelar
+        </button>
+      </div>
+    </div>,
+    document.body,
+  );
+}
 
 export function ChoferPanel({ chofer }: { chofer: Chofer }) {
   const [state, formAction, pending] = useActionState<FormState, FormData>(
@@ -19,11 +154,10 @@ export function ChoferPanel({ chofer }: { chofer: Chofer }) {
   );
   const formRef = useRef<HTMLFormElement>(null);
   const formId = `chofer-form-${chofer.id}`;
-  const demo = isDemo();
+  const [eliminarAbierto, setEliminarAbierto] = useState(false);
 
   // Guarda automáticamente cuando el foco sale del formulario (o de las notas).
   function autoguardar() {
-    if (demo) return; // en modo demo no se persiste
     formRef.current?.requestSubmit();
   }
 
@@ -79,26 +213,27 @@ export function ChoferPanel({ chofer }: { chofer: Chofer }) {
                 Activo
               </label>
             </div>
-            {state.error && !demo ? (
+            {state.error ? (
               <p className="text-sm text-danger">{state.error}</p>
             ) : null}
           </div>
         </form>
 
         <div className="flex flex-col items-end gap-2">
-          <ConfirmForm
-            action={eliminarChofer}
-            mensaje={`¿Eliminar a ${chofer.nombre}? Esta acción no se puede deshacer.`}
+          <button
+            type="button"
+            onClick={() => setEliminarAbierto(true)}
+            className="inline-flex items-center gap-1.5 rounded-full border border-red-200 bg-white px-3 py-2 text-sm font-medium text-red-600 hover:bg-red-50"
           >
-            <input type="hidden" name="id" value={chofer.id} />
-            <button
-              type="submit"
-              className="inline-flex items-center gap-1.5 rounded-full border border-red-200 bg-white px-3 py-2 text-sm font-medium text-red-600 hover:bg-red-50"
-            >
-              <Trash2 className="h-4 w-4" />
-              Eliminar
-            </button>
-          </ConfirmForm>
+            <Trash2 className="h-4 w-4" />
+            Eliminar
+          </button>
+          {eliminarAbierto ? (
+            <EliminarChoferDialog
+              chofer={chofer}
+              onClose={() => setEliminarAbierto(false)}
+            />
+          ) : null}
           <span className="flex h-4 items-center gap-1.5 text-xs text-muted">
             {pending ? (
               <>
@@ -110,8 +245,6 @@ export function ChoferPanel({ chofer }: { chofer: Chofer }) {
                 <Check className="h-3.5 w-3.5 text-ok" />
                 Guardado
               </>
-            ) : demo ? (
-              "Autoguardado (no en demo)"
             ) : (
               ""
             )}

@@ -1,12 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
 import {
-  isDemo,
-  demoEmpresa,
-  demoCotizaciones,
-  demoViajes,
-  demoClientes,
-} from "@/lib/demo";
-import {
   VIAJE_ESTADOS,
   facturaEstadoDerivado,
   type Empresa,
@@ -29,12 +22,6 @@ export type CotizacionDocumento = {
 export async function getCotizacionParaDocumento(
   id: string,
 ): Promise<CotizacionDocumento | null> {
-  if (isDemo()) {
-    const c = demoCotizaciones.find((x) => x.id === id) ?? demoCotizaciones[0];
-    if (!c) return null;
-    return { empresa: demoEmpresa, cotizacion: c };
-  }
-
   const supabase = await createClient();
 
   const [{ data: empresa }, { data: cot }] = await Promise.all([
@@ -143,39 +130,7 @@ export async function getViajesInforme(
   let filas: ViajeInformeRow[];
   let empresaLabel = "Todas las empresas";
 
-  if (isDemo()) {
-    empresa = demoEmpresa;
-    filas = demoViajes
-      .filter((v) => {
-        if (estado === "por_facturar") {
-          if (!(v.estado === "realizado" && v.factura_id === null)) return false;
-        } else if (estado && v.estado !== estado) return false;
-        if (filtros.cliente && v.cliente_id !== filtros.cliente) return false;
-        if (filtros.q && !v.descripcion.toLowerCase().includes(filtros.q.toLowerCase()))
-          return false;
-        if (
-          filtros.mes &&
-          /^\d{4}-\d{2}$/.test(filtros.mes) &&
-          !v.fecha_inicio.startsWith(filtros.mes)
-        )
-          return false;
-        return true;
-      })
-      .map((v) => ({
-        id: v.id,
-        fecha_inicio: v.fecha_inicio,
-        descripcion: v.descripcion,
-        orden_compra: v.orden_compra,
-        valor: Number(v.valor),
-        clienteNombre: v.cliente?.nombre ?? "—",
-        folio: v.factura?.folio ?? null,
-        estadoLabel: estadoViajeLabel(v.estado, v.factura),
-      }));
-    if (filtros.cliente) {
-      const c = demoClientes.find((x) => x.id === filtros.cliente);
-      if (c) empresaLabel = c.nombre;
-    }
-  } else {
+  {
     const supabase = await createClient();
     const { data: emp } = await supabase
       .from("empresa")

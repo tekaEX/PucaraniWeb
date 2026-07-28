@@ -3,22 +3,16 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { isDemo } from "@/lib/demo";
 import { hoyChile } from "@/lib/format";
 import { s, sReq, bool, intNull, num } from "@/lib/form-helpers";
 import { formatearPatente, PATENTE_HINT } from "@/lib/patentes";
 
 export type FormState = { error?: string; ok?: boolean };
 
-const DEMO_MSG =
-  "Modo demostración: conecta Supabase (ver README) para guardar datos reales.";
-
 export async function guardarVehiculo(
   _prev: FormState,
   formData: FormData,
 ): Promise<FormState> {
-  if (isDemo()) return { error: DEMO_MSG };
-
   // La patente ES el identificador: se guarda solo en formato canónico.
   const patenteOriginal = s(formData.get("patente_original"));
   const patenteRaw = sReq(formData.get("patente"));
@@ -54,14 +48,57 @@ export async function guardarVehiculo(
   return { ok: true };
 }
 
-export async function eliminarVehiculo(formData: FormData) {
-  if (isDemo()) redirect("/vehiculos");
+// Borrado total: elimina el vehículo y su historial de asignaciones queda
+// sin vehículo (o desaparece si esa fila era solo de este vehículo — ver
+// migración 0014). El dueño lo pide para casos donde el vehículo debe dejar
+// de existir en el sistema, no solo dejar de usarse (para eso, desactivarVehiculo).
+export async function eliminarVehiculo(
+  _prev: FormState,
+  formData: FormData,
+): Promise<FormState> {
   const patente = sReq(formData.get("patente"));
-  if (!patente) return;
+  if (!patente) return { error: "Falta la patente." };
   const supabase = await createClient();
-  await supabase.from("vehiculos").delete().eq("patente", patente);
+  const { error } = await supabase.from("vehiculos").delete().eq("patente", patente);
+  if (error) return { error: `No se pudo eliminar: ${error.message}` };
   revalidatePath("/vehiculos");
+  revalidatePath("/");
   redirect("/vehiculos");
+}
+
+// El vehículo deja de usarse, pero se conserva junto con su historial.
+export async function desactivarVehiculo(
+  _prev: FormState,
+  formData: FormData,
+): Promise<FormState> {
+  const patente = sReq(formData.get("patente"));
+  if (!patente) return { error: "Falta la patente." };
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("vehiculos")
+    .update({ activo: false })
+    .eq("patente", patente);
+  if (error) return { error: `No se pudo desactivar: ${error.message}` };
+  revalidatePath("/vehiculos");
+  revalidatePath("/");
+  return { ok: true };
+}
+
+// Antes de eliminar, se consulta al vuelo si el vehículo tiene historial
+// (viajes o gastos) para decidir qué advertencia mostrar en el diálogo.
+export async function tieneHistorialVehiculo(patente: string): Promise<boolean> {
+  const supabase = await createClient();
+  const [asig, gastos] = await Promise.all([
+    supabase
+      .from("viaje_asignaciones")
+      .select("id", { count: "exact", head: true })
+      .eq("vehiculo_id", patente),
+    supabase
+      .from("gastos_vehiculo")
+      .select("id", { count: "exact", head: true })
+      .eq("vehiculo_id", patente),
+  ]);
+  return (asig.count ?? 0) > 0 || (gastos.count ?? 0) > 0;
 }
 
 // ---- Gastos por vehículo ----
@@ -71,8 +108,6 @@ export async function agregarGasto(
   _prev: FormState,
   formData: FormData,
 ): Promise<FormState> {
-  if (isDemo()) return { error: DEMO_MSG };
-
   const vehiculo_id = sReq(formData.get("vehiculo_id"));
   if (!vehiculo_id) return { error: "Falta el vehículo." };
 
@@ -108,11 +143,15 @@ export async function agregarGasto(
   return { ok: true };
 }
 
-export async function eliminarGasto(formData: FormData) {
-  if (isDemo()) return;
+export async function eliminarGasto(
+  _prev: FormState,
+  formData: FormData,
+): Promise<FormState> {
   const id = sReq(formData.get("id"));
-  if (!id) return;
+  if (!id) return { error: "Falta el identificador." };
   const supabase = await createClient();
-  await supabase.from("gastos_vehiculo").delete().eq("id", id);
+  const { error } = await supabase.from("gastos_vehiculo").delete().eq("id", id);
+  if (error) return { error: `No se pudo eliminar: ${error.message}` };
   revalidatePath("/vehiculos");
+  return { ok: true };
 }

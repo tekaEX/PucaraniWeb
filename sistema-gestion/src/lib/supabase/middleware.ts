@@ -1,15 +1,9 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
-import { isDemo } from "@/lib/demo";
 
 // Refresca la sesión de Supabase en cada request y protege las rutas privadas.
 // Se invoca desde proxy.ts (el "middleware" de Next.js 16).
 export async function updateSession(request: NextRequest) {
-  // En modo demostración no hay login: dejamos pasar todo.
-  if (isDemo()) {
-    return NextResponse.next({ request });
-  }
-
   let supabaseResponse = NextResponse.next({ request });
 
   const supabase = createServerClient(

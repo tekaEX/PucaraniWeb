@@ -8,7 +8,9 @@ export const Label = React.forwardRef<
   <label
     ref={ref}
     className={cn(
-      "mb-1.5 block text-xs font-semibold tracking-[0.01em] text-[#48484d]",
+      // Dentro de un <Field>, la etiqueta se tiñe de marca cuando su campo
+      // toma el foco (group/field). Fuera de Field, el modificador no aplica.
+      "mb-1.5 block text-xs font-semibold tracking-[0.01em] text-[#48484d] transition-colors duration-150 group-focus-within/field:text-brand",
       className,
     )}
     {...props}
@@ -30,7 +32,7 @@ export function Field({
   className?: string;
 }) {
   return (
-    <div className={className}>
+    <div className={cn("group/field", className)}>
       <Label htmlFor={htmlFor}>{label}</Label>
       {children}
       {hint ? <p className="mt-1 text-xs text-muted">{hint}</p> : null}

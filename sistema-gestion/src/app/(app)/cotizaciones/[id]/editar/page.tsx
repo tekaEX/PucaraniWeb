@@ -3,7 +3,6 @@ import { createClient } from "@/lib/supabase/server";
 import { PageHeader } from "@/components/page-header";
 import { CotizacionForm } from "../../cotizacion-form";
 import { actualizarCotizacion } from "../../actions";
-import { isDemo, demoCotizacionConItems, demoClientes } from "@/lib/demo";
 import type { Cotizacion, CotizacionItem } from "@/types/db";
 
 export const dynamic = "force-dynamic";
@@ -16,25 +15,17 @@ export default async function EditarCotizacionPage({
 }) {
   const { id } = await params;
 
-  let cot: (Cotizacion & { items: CotizacionItem[] }) | null;
-  let clientes: { id: string; nombre: string; codigo: string | null }[];
-
-  if (isDemo()) {
-    cot = demoCotizacionConItems(id);
-    clientes = demoClientes.map((c) => ({ id: c.id, nombre: c.nombre, codigo: c.codigo }));
-  } else {
-    const supabase = await createClient();
-    const [{ data }, { data: cl }] = await Promise.all([
-      supabase
-        .from("cotizaciones")
-        .select("*, items:cotizacion_items(*)")
-        .eq("id", id)
-        .maybeSingle(),
-      supabase.from("clientes").select("id,nombre,codigo").order("nombre"),
-    ]);
-    cot = (data as Cotizacion & { items: CotizacionItem[] }) ?? null;
-    clientes = cl ?? [];
-  }
+  const supabase = await createClient();
+  const [{ data }, { data: cl }] = await Promise.all([
+    supabase
+      .from("cotizaciones")
+      .select("*, items:cotizacion_items(*)")
+      .eq("id", id)
+      .maybeSingle(),
+    supabase.from("clientes").select("id,nombre,codigo").order("nombre"),
+  ]);
+  const cot = (data as Cotizacion & { items: CotizacionItem[] }) ?? null;
+  const clientes = cl ?? [];
 
   if (!cot) notFound();
   const cotizacion = cot;

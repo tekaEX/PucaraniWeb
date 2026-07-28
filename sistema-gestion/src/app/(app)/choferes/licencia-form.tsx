@@ -5,7 +5,6 @@ import { actualizarLicencia, type FormState } from "./actions";
 import { Input } from "@/components/ui/input";
 import { Check, Loader2 } from "lucide-react";
 import { toInputDate } from "@/lib/format";
-import { isDemo } from "@/lib/demo";
 import type { Chofer } from "@/types/db";
 
 export function LicenciaForm({ chofer }: { chofer: Chofer }) {
@@ -14,10 +13,8 @@ export function LicenciaForm({ chofer }: { chofer: Chofer }) {
     {},
   );
   const formRef = useRef<HTMLFormElement>(null);
-  const demo = isDemo();
 
   function onBlurForm(e: React.FocusEvent<HTMLFormElement>) {
-    if (demo) return;
     if (!e.currentTarget.contains(e.relatedTarget as Node | null)) {
       formRef.current?.requestSubmit();
     }
@@ -51,7 +48,7 @@ export function LicenciaForm({ chofer }: { chofer: Chofer }) {
           />
         </div>
       </div>
-      {state.error && !demo ? <p className="text-sm text-danger">{state.error}</p> : null}
+      {state.error ? <p className="text-sm text-danger">{state.error}</p> : null}
       <span className="mt-auto flex h-4 items-center gap-1.5 text-xs text-muted">
         {pending ? (
           <>

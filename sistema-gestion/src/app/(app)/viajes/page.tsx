@@ -6,15 +6,13 @@ import { Select } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import { buttonClass } from "@/components/ui/button";
 import { Plus, Route, Filter } from "lucide-react";
-import { isDemo, demoClientes, demoViajes } from "@/lib/demo";
 import {
   VIAJE_ESTADOS,
-  viajePorFacturar,
   type Cliente,
   type ViajeConRelaciones,
   type ViajeEstado,
 } from "@/types/db";
-import { getPeriodo, rangoPeriodo, enRango, etiquetaPeriodo } from "@/lib/periodo";
+import { getPeriodo, rangoPeriodo, etiquetaPeriodo } from "@/lib/periodo";
 import { datosNuevoViaje } from "./nueva/datos";
 import { ViajeAccordion } from "./viaje-accordion";
 
@@ -32,45 +30,28 @@ export default async function ViajesPage({
   const periodo = await getPeriodo();
   const { desde, hasta } = rangoPeriodo(periodo);
 
-  let clientes: Cliente[];
-  let viajes: ViajeConRelaciones[];
+  const supabase = await createClient();
+  const { data: clientesData } = await supabase.from("clientes").select("*").order("nombre");
+  const clientes = (clientesData ?? []) as Cliente[];
 
-  if (isDemo()) {
-    clientes = demoClientes;
-    viajes = demoViajes.filter((v) => {
-      if (sp.estado === "por_facturar" && !viajePorFacturar(v)) return false;
-      if (sp.estado && sp.estado !== "por_facturar" && ESTADOS.includes(sp.estado as ViajeEstado) && v.estado !== sp.estado)
-        return false;
-      if (sp.cliente && v.cliente_id !== sp.cliente) return false;
-      if (sp.q && !v.descripcion.toLowerCase().includes(sp.q.toLowerCase())) return false;
-      if (!enRango(v.fecha_inicio, periodo)) return false;
-      return true;
-    });
-    viajes = [...viajes].sort((a, b) => (a.fecha_inicio < b.fecha_inicio ? 1 : -1));
-  } else {
-    const supabase = await createClient();
-    const { data: clientesData } = await supabase.from("clientes").select("*").order("nombre");
-    clientes = (clientesData ?? []) as Cliente[];
+  let query = supabase
+    .from("viajes")
+    .select(
+      "*, cliente:clientes(id,nombre,codigo), cotizacion:cotizaciones(id,numero), factura:facturas(id,folio,tipo_dte,estado,fecha_pago), asignaciones:viaje_asignaciones(id,viaje_id,chofer_id,vehiculo_id,fecha,notas,created_at, chofer:choferes(id,nombre), vehiculo:vehiculos(patente))",
+    )
+    .order("fecha_inicio", { ascending: false });
 
-    let query = supabase
-      .from("viajes")
-      .select(
-        "*, cliente:clientes(id,nombre,codigo), cotizacion:cotizaciones(id,numero), factura:facturas(id,folio,tipo_dte,estado,fecha_pago), asignaciones:viaje_asignaciones(id,viaje_id,chofer_id,vehiculo_id,fecha,notas,created_at, chofer:choferes(id,nombre), vehiculo:vehiculos(patente))",
-      )
-      .order("fecha_inicio", { ascending: false });
-
-    if (sp.estado === "por_facturar") {
-      query = query.eq("estado", "realizado").is("factura_id", null);
-    } else if (sp.estado && ESTADOS.includes(sp.estado as ViajeEstado)) {
-      query = query.eq("estado", sp.estado);
-    }
-    if (sp.cliente) query = query.eq("cliente_id", sp.cliente);
-    if (sp.q) query = query.ilike("descripcion", `%${sp.q}%`);
-    query = query.gte("fecha_inicio", desde).lte("fecha_inicio", hasta);
-
-    const { data } = await query;
-    viajes = (data ?? []) as ViajeConRelaciones[];
+  if (sp.estado === "por_facturar") {
+    query = query.eq("estado", "realizado").is("factura_id", null);
+  } else if (sp.estado && ESTADOS.includes(sp.estado as ViajeEstado)) {
+    query = query.eq("estado", sp.estado);
   }
+  if (sp.cliente) query = query.eq("cliente_id", sp.cliente);
+  if (sp.q) query = query.ilike("descripcion", `%${sp.q}%`);
+  query = query.gte("fecha_inicio", desde).lte("fecha_inicio", hasta);
+
+  const { data } = await query;
+  const viajes = (data ?? []) as ViajeConRelaciones[];
 
   // Catálogos para la edición inline en el acordeón (mismo cargador que
   // usa el modal de "Nuevo viaje").

@@ -6,7 +6,7 @@ export type LogoData = { buffer: Buffer; ext: "png" | "jpeg" };
 
 // Obtiene el logo para incrustar en documentos:
 // 1) el logo subido por la empresa (URL en Supabase Storage), si existe;
-// 2) si no, un archivo local en public/logo.png (útil en modo demostración).
+// 2) si no, un archivo local en public/logo.png.
 export async function loadLogo(empresa: Empresa | null): Promise<LogoData | null> {
   const url = empresa?.logo_url;
   if (url && /^https?:\/\//i.test(url)) {

@@ -89,6 +89,25 @@
   from { opacity: 0; transform: translateY(16px); }
   to { opacity: 1; transform: none; }
 }
+/* Entrada suave para hijos escalonados (KPIs, listas cortas). Corta y leve
+   para que componga bien con la transición de página, sin sensación de "doble
+   viaje". */
+@keyframes rise-in {
+  from { opacity: 0; transform: translateY(9px); }
+  to { opacity: 1; transform: none; }
+}
+
+/* Entrada escalonada: cada hijo aparece con un pequeño retardo incremental.
+   Se aplica al contenedor (p. ej. la rejilla de KPIs). */
+.stagger-in > * { animation: rise-in 0.42s var(--ease-suave) both; }
+.stagger-in > *:nth-child(1) { animation-delay: 0.02s; }
+.stagger-in > *:nth-child(2) { animation-delay: 0.07s; }
+.stagger-in > *:nth-child(3) { animation-delay: 0.12s; }
+.stagger-in > *:nth-child(4) { animation-delay: 0.17s; }
+.stagger-in > *:nth-child(5) { animation-delay: 0.22s; }
+.stagger-in > *:nth-child(6) { animation-delay: 0.27s; }
+.stagger-in > *:nth-child(7) { animation-delay: 0.32s; }
+.stagger-in > *:nth-child(8) { animation-delay: 0.37s; }
 
 * {
   border-color: var(--border);
@@ -130,6 +149,18 @@ body {
     system-ui, sans-serif;
   letter-spacing: -0.01em;
   -webkit-font-smoothing: antialiased;
+}
+
+/* Detalles de marca: el cursor de texto y la selección usan el teal.
+   Pequeño, pero se nota que "todo es de la misma app". */
+input,
+textarea,
+select {
+  caret-color: var(--brand);
+}
+::selection {
+  background: var(--brand-soft);
+  color: var(--brand-dark);
 }
 
 /* Estados de impresión para los PDF/Excel se generan aparte; aquí solo UI. */
