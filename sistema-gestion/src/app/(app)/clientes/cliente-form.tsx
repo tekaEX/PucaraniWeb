@@ -85,7 +85,7 @@ export function ClienteForm({ cliente }: { cliente?: Cliente }) {
           </Field>
 
           {state.error ? (
-            <p className="sm:col-span-2 rounded-lg bg-red-50 border border-red-200 px-3 py-2 text-sm text-red-700">
+            <p className="sm:col-span-2 rounded-lg bg-danger-bg border border-danger/20 px-3 py-2 text-sm text-danger">
               {state.error}
             </p>
           ) : null}

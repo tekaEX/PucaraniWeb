@@ -76,7 +76,7 @@ export function Modal({
             type="button"
             onClick={() => router.back()}
             aria-label="Cerrar"
-            className="flex h-8 w-8 items-center justify-center rounded-full text-muted transition-colors hover:bg-gray-200/70 hover:text-foreground"
+            className="flex h-8 w-8 items-center justify-center rounded-full text-muted transition-colors hover:bg-background hover:text-foreground"
           >
             <X className="h-4 w-4" />
           </button>

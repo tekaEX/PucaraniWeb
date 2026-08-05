@@ -73,7 +73,7 @@ export function ChoferAvatar({
   return (
     <span
       style={{ width: size, height: size }}
-      className="inline-flex shrink-0 items-center justify-center rounded-full bg-gray-200 text-gray-400"
+      className="inline-flex shrink-0 items-center justify-center rounded-full bg-border/60 text-muted/70"
       aria-hidden
     >
       <UserRound style={{ width: Math.round(size * 0.58), height: Math.round(size * 0.58) }} />

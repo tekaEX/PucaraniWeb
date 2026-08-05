@@ -1,11 +1,12 @@
+import { Truck, Wallet, FileText } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { Card, CardBody, CardHeader, CardTitle } from "@/components/ui/card";
+import { Vacio } from "@/components/ui/vacio";
 import { formatCLP } from "@/lib/format";
 import { getPeriodo, rangoPeriodo } from "@/lib/periodo";
 import {
   GASTO_CATEGORIAS,
   costoTotalViaje,
-  taxiNombreCliente,
   type GastoCategoria,
   type GastoVehiculo,
 } from "@/types/db";
@@ -250,7 +251,7 @@ export async function FinanzasSecciones() {
           </CardHeader>
           <CardBody>
             {porVehiculo.length === 0 ? (
-              <p className="text-sm text-muted">Sin egresos en el periodo.</p>
+              <Vacio titulo="Sin egresos en el periodo." icono={<Truck className="h-7 w-7" />} />
             ) : (
               <div className="space-y-3">
                 {porVehiculo.map((v) => (
@@ -261,7 +262,7 @@ export async function FinanzasSecciones() {
                         {formatCLP(v.total)}
                       </span>
                     </div>
-                    <div className="h-1.5 rounded-full bg-gray-100">
+                    <div className="h-1.5 rounded-full bg-border/40">
                       <div
                         className="h-1.5 rounded-full bg-brand"
                         style={{ width: `${Math.round((v.total / maxVeh) * 100)}%` }}
@@ -280,7 +281,7 @@ export async function FinanzasSecciones() {
           </CardHeader>
           <CardBody>
             {porCategoria.length === 0 ? (
-              <p className="text-sm text-muted">Sin egresos en el periodo.</p>
+              <Vacio titulo="Sin egresos en el periodo." icono={<Wallet className="h-7 w-7" />} />
             ) : (
               <div className="flex flex-col gap-2.5">
                 {porCategoria.map((x) => (
@@ -305,16 +306,17 @@ export async function FinanzasSecciones() {
         </CardHeader>
         {porCliente.length === 0 ? (
           <CardBody>
-            <p className="text-sm text-muted">
-              No hay facturas pagadas en este periodo.
-            </p>
+            <Vacio
+              titulo="No hay facturas pagadas en este periodo."
+              icono={<FileText className="h-7 w-7" />}
+            />
           </CardBody>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <tbody className="divide-y divide-border">
                 {porCliente.map((c) => (
-                  <tr key={c.cliente} className="hover:bg-gray-50">
+                  <tr key={c.cliente} className="hover:bg-background">
                     <td className="px-5 py-3">{c.cliente}</td>
                     <td className="px-5 py-3 text-right tabular-nums font-medium text-ok">
                       {formatCLP(c.total)}

@@ -190,7 +190,7 @@ export function CotizacionEditor({
         </div>
 
         {/* Cliente */}
-        <div className="mt-4 rounded-lg bg-gray-50 px-4 py-3">
+        <div className="mt-4 rounded-lg bg-background px-4 py-3">
           <div className="text-[11px] uppercase tracking-wide text-muted">
             Presupuesto para
           </div>
@@ -271,7 +271,7 @@ export function CotizacionEditor({
                         setItems((rows) => rows.filter((_, idx) => idx !== i))
                       }
                       title="Quitar línea"
-                      className="text-muted hover:text-red-600"
+                      className="text-muted hover:text-danger"
                     >
                       <Trash2 className="h-4 w-4" />
                     </button>
@@ -290,7 +290,7 @@ export function CotizacionEditor({
             }
             className="flex w-full items-center gap-1.5 border-t border-border px-3 py-2 text-xs font-medium text-brand hover:bg-brand-soft/50"
           >
-            <Plus className="h-3.5 w-3.5" />
+            <Plus className="h-4 w-4" />
             Agregar línea
           </button>
         </div>
@@ -321,7 +321,7 @@ export function CotizacionEditor({
                   setExento(e.target.checked);
                   autoguardar();
                 }}
-                className="h-3.5 w-3.5"
+                className="h-4 w-4 accent-brand"
               />
               Exento de IVA
             </label>

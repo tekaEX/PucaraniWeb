@@ -78,7 +78,7 @@ export function EstadoSelector({
               pending ? "cursor-wait" : "cursor-pointer",
               activo
                 ? tones[o.tone].wrap
-                : "text-muted hover:bg-gray-100 hover:text-foreground",
+                : "text-muted hover:bg-background hover:text-foreground",
             )}
           >
             {activo && pending ? (

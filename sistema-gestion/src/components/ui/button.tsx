@@ -1,7 +1,7 @@
 import * as React from "react";
 import { cn } from "@/lib/utils";
 
-type Variant = "primary" | "secondary" | "outline" | "ghost" | "danger";
+type Variant = "primary" | "secondary" | "outline" | "ghost" | "danger" | "dangerOutline";
 type Size = "sm" | "md" | "lg" | "icon";
 
 const variantClasses: Record<Variant, string> = {
@@ -13,6 +13,11 @@ const variantClasses: Record<Variant, string> = {
   ghost: "text-brand hover:bg-brand-soft",
   danger:
     "bg-danger text-white shadow-[0_1px_2px_rgba(192,54,44,0.3)] hover:bg-[#a32a21] hover:shadow-[0_4px_14px_rgba(192,54,44,0.28)]",
+  // Acción destructiva secundaria (el "Eliminar" que convive con otros
+  // controles en un panel): pesa menos que el rojo sólido, pero usa el rojo
+  // del sistema y la misma altura que el resto de los botones.
+  dangerOutline:
+    "border border-danger/25 bg-card text-danger shadow-[0_1px_2px_rgba(0,0,0,0.04)] hover:border-danger/40 hover:bg-danger-bg",
 };
 
 const sizeClasses: Record<Size, string> = {

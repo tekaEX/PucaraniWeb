@@ -4,10 +4,12 @@ import {
   COTIZACION_ESTADOS,
   FACTURA_ESTADOS_DERIVADOS,
   VIAJE_ESTADOS,
+  ENCOMIENDA_ESTADOS,
   viajePorFacturar,
   type CotizacionEstado,
   type FacturaEstadoDerivado,
   type Viaje,
+  type EncomiendaEstado,
 } from "@/types/db";
 import { evaluarVenc } from "@/lib/vencimientos";
 import { formatDate } from "@/lib/format";
@@ -81,6 +83,15 @@ export function CotizacionBadge({ estado }: { estado: CotizacionEstado }) {
   return (
     <Badge tone={cotizacionTone[estado]}>{COTIZACION_ESTADOS[estado]}</Badge>
   );
+}
+
+const encomiendaTone: Record<EncomiendaEstado, Tone> = {
+  pendiente: "gray",
+  entregado: "green",
+};
+
+export function EncomiendaBadge({ estado }: { estado: EncomiendaEstado }) {
+  return <Badge tone={encomiendaTone[estado]}>{ENCOMIENDA_ESTADOS[estado]}</Badge>;
 }
 
 export function VencimientoBadge({ fecha }: { fecha: string | null }) {

@@ -19,7 +19,7 @@ export function ClienteAccordion({
 
   return (
     <table className="w-full text-sm">
-      <thead className="bg-gray-50 text-left text-xs uppercase tracking-wide text-muted">
+      <thead className="bg-background text-left text-xs uppercase tracking-wide text-muted">
         <tr>
           <th className="px-4 py-3 font-medium">Nombre</th>
           <th className="px-4 py-3 font-medium">Código</th>
@@ -37,7 +37,7 @@ export function ClienteAccordion({
             <Fragment key={c.id}>
               <tr
                 onClick={() => setOpenId(open ? null : c.id)}
-                className="cursor-pointer transition-colors hover:bg-gray-100/60"
+                className="cursor-pointer transition-colors hover:bg-brand-soft/50"
               >
                 <td className="px-4 py-3">
                   <div className="flex items-center gap-3">
@@ -68,7 +68,7 @@ export function ClienteAccordion({
 
               {open ? (
                 <tr>
-                  <td colSpan={6} className="bg-gray-50/50 px-4 py-5">
+                  <td colSpan={6} className="bg-background px-4 py-5">
                     <div className="animate-expand">
                       <ClientePanel cliente={c} cuenta={cuenta} />
                     </div>

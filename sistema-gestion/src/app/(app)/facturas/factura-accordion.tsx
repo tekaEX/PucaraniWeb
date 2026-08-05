@@ -14,6 +14,7 @@ import {
 } from "@/types/db";
 import { actualizarEstadoFactura, eliminarFactura } from "./actions";
 import { FacturaForm, type ViajeOpt } from "./factura-form";
+import { buttonClass } from "@/components/ui/button";
 
 const ESTADOS_FACTURA: EstadoOpcion[] = [
   { value: "por_cobrar", label: "Por cobrar", tone: "amber" },
@@ -74,7 +75,7 @@ export function FacturaAccordion({
 
   return (
     <table className="w-full text-sm">
-      <thead className="bg-gray-50 text-left text-xs uppercase tracking-wide text-muted">
+      <thead className="bg-background text-left text-xs uppercase tracking-wide text-muted">
         <tr>
           <th className="px-4 py-3 font-medium">Folio</th>
           <th className="px-4 py-3 font-medium">Emisión</th>
@@ -93,7 +94,7 @@ export function FacturaAccordion({
             <Fragment key={f.id}>
               <tr
                 onClick={() => setOpenId(open ? null : f.id)}
-                className={`cursor-pointer transition-colors hover:bg-gray-100/60 ${open ? "bg-gray-100/60" : rowTone(derivado)}`}
+                className={`cursor-pointer transition-colors hover:bg-brand-soft/50 ${open ? "bg-brand-soft/70" : rowTone(derivado)}`}
               >
                 <td className="whitespace-nowrap px-4 py-3">
                   <span className="font-semibold text-foreground">
@@ -136,7 +137,7 @@ export function FacturaAccordion({
 
               {open ? (
                 <tr>
-                  <td colSpan={7} className="bg-gray-50/50 px-4 py-5">
+                  <td colSpan={7} className="bg-background px-4 py-5">
                     <div className="animate-expand">
                     <div className="mb-4 flex flex-wrap items-center gap-2">
                       <FacturaEstadoControl factura={f} />
@@ -148,7 +149,7 @@ export function FacturaAccordion({
                         <input type="hidden" name="id" value={f.id} />
                         <button
                           type="submit"
-                          className="inline-flex items-center gap-1.5 rounded-full border border-red-200 bg-white px-3 py-2 text-sm font-medium text-red-600 hover:bg-red-50"
+                          className={buttonClass({ variant: "dangerOutline", size: "sm" })}
                         >
                           <Trash2 className="h-4 w-4" />
                           Eliminar

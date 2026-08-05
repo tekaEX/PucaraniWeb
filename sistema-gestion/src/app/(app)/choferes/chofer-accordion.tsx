@@ -7,12 +7,18 @@ import { ChoferAvatar } from "@/components/ui/avatar";
 import { ChoferPanel } from "./chofer-panel";
 import type { Chofer } from "@/types/db";
 
-export function ChoferAccordion({ choferes }: { choferes: Chofer[] }) {
+export function ChoferAccordion({
+  choferes,
+  categoriasPorChofer,
+}: {
+  choferes: Chofer[];
+  categoriasPorChofer: Record<string, string[]>;
+}) {
   const [openId, setOpenId] = useState<string | null>(null);
 
   return (
     <table className="w-full text-sm">
-      <thead className="bg-gray-50 text-left text-xs uppercase tracking-wide text-muted">
+      <thead className="bg-background text-left text-xs uppercase tracking-wide text-muted">
         <tr>
           <th className="px-4 py-3 font-medium">Nombre</th>
           <th className="px-4 py-3 font-medium">RUT</th>
@@ -30,7 +36,7 @@ export function ChoferAccordion({ choferes }: { choferes: Chofer[] }) {
             <Fragment key={c.id}>
               <tr
                 onClick={() => setOpenId(open ? null : c.id)}
-                className="cursor-pointer transition-colors hover:bg-gray-100/60"
+                className="cursor-pointer transition-colors hover:bg-brand-soft/50"
               >
                 <td className="px-4 py-3">
                   <div className="flex items-center gap-3">
@@ -63,9 +69,12 @@ export function ChoferAccordion({ choferes }: { choferes: Chofer[] }) {
 
               {open ? (
                 <tr>
-                  <td colSpan={7} className="bg-gray-50/50 px-4 py-5">
+                  <td colSpan={7} className="bg-background px-4 py-5">
                     <div className="animate-expand">
-                      <ChoferPanel chofer={c} />
+                      <ChoferPanel
+                        chofer={c}
+                        categorias={categoriasPorChofer[c.id] ?? []}
+                      />
                     </div>
                   </td>
                 </tr>

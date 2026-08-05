@@ -12,8 +12,18 @@ export const metadata = { title: "Choferes" };
 
 export default async function ChoferesPage() {
   const supabase = await createClient();
-  const { data } = await supabase.from("choferes").select("*").order("nombre");
+  const [{ data }, { data: catData }] = await Promise.all([
+    supabase.from("choferes").select("*").order("nombre"),
+    supabase.from("chofer_categorias").select("chofer_id, categoria"),
+  ]);
   const choferes = (data ?? []) as Chofer[];
+
+  // Objeto plano (no Map): los props de un Server a un Client Component
+  // deben ser serializables.
+  const categoriasPorChofer: Record<string, string[]> = {};
+  for (const c of catData ?? []) {
+    (categoriasPorChofer[c.chofer_id] ??= []).push(c.categoria);
+  }
 
   return (
     <div>
@@ -39,7 +49,7 @@ export default async function ChoferesPage() {
       ) : (
         <Card className="overflow-hidden">
           <div className="overflow-x-auto">
-            <ChoferAccordion choferes={choferes} />
+            <ChoferAccordion choferes={choferes} categoriasPorChofer={categoriasPorChofer} />
           </div>
         </Card>
       )}

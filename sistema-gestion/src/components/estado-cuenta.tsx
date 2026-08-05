@@ -3,6 +3,7 @@ import { FacturaBadge } from "@/components/ui/badge";
 import { formatCLP, formatDate } from "@/lib/format";
 import { facturaEstadoDerivado } from "@/types/db";
 import { DIAS_VENCE, diasDesde, type CuentaCliente } from "@/lib/cobranza";
+import { Vacio } from "@/components/ui/vacio";
 
 function Monto({
   label,
@@ -81,11 +82,11 @@ export function EstadoCuenta({ cuenta }: { cuenta: CuentaCliente }) {
       <div>
         <p className="mb-2 text-sm font-semibold">Facturas</p>
         {cuenta.facturas.length === 0 ? (
-          <p className="text-sm text-muted">Sin facturas en el periodo.</p>
+          <Vacio titulo="Sin facturas en el periodo." />
         ) : (
           <div className="overflow-x-auto rounded-xl border border-border bg-white">
             <table className="w-full text-sm">
-              <thead className="bg-gray-50 text-left text-xs uppercase tracking-wide text-muted">
+              <thead className="bg-background text-left text-xs uppercase tracking-wide text-muted">
                 <tr>
                   <th className="px-4 py-2.5 font-medium">Emisión</th>
                   <th className="px-4 py-2.5 font-medium">Folio</th>

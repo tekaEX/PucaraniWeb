@@ -268,7 +268,7 @@ export function FacturaForm({
                     type="checkbox"
                     checked={seleccionVisible.includes(v.id)}
                     onChange={() => toggleViaje(v.id)}
-                    className="h-4 w-4 accent-[var(--brand)]"
+                    className="h-4 w-4 accent-brand"
                   />
                   <span className="w-24 shrink-0 text-muted">{formatDate(v.fecha_inicio)}</span>
                   <span className="flex-1">{v.descripcion}</span>
@@ -368,7 +368,7 @@ export function FacturaForm({
               )}
             </div>
             {uploadError ? (
-              <p className="mt-1 text-xs text-red-600">{uploadError}</p>
+              <p className="mt-1 text-xs text-danger">{uploadError}</p>
             ) : null}
           </div>
 
@@ -380,7 +380,7 @@ export function FacturaForm({
       </div>
 
       {state.error ? (
-        <p className="rounded-lg bg-red-50 border border-red-200 px-3 py-2 text-sm text-red-700">
+        <p className="rounded-lg bg-danger-bg border border-danger/20 px-3 py-2 text-sm text-danger">
           {state.error}
         </p>
       ) : null}

@@ -39,7 +39,7 @@ export function ChoferForm({
           type="checkbox"
           name="activo"
           defaultChecked={chofer?.activo ?? true}
-          className="h-4 w-4"
+          className="h-4 w-4 accent-brand"
         />
         <span className="text-sm font-medium">Chofer activo</span>
       </label>
@@ -47,7 +47,7 @@ export function ChoferForm({
         <Textarea id="notas" name="notas" defaultValue={chofer?.notas ?? ""} />
       </Field>
       {state.error ? (
-        <p className="sm:col-span-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+        <p className="sm:col-span-2 rounded-lg border border-danger/20 bg-danger-bg px-3 py-2 text-sm text-danger">
           {state.error}
         </p>
       ) : null}

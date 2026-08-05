@@ -27,7 +27,7 @@ export function Notificaciones({ alertas }: { alertas: Alerta[] }) {
         type="button"
         onClick={() => setOpen((v) => !v)}
         aria-label={`Notificaciones (${alertas.length})`}
-        className="relative flex h-9 w-9 items-center justify-center rounded-full text-muted transition-colors hover:bg-gray-200/70 hover:text-foreground"
+        className="relative flex h-9 w-9 items-center justify-center rounded-full text-muted transition-colors hover:bg-background hover:text-foreground"
       >
         <Bell className="h-4.5 w-4.5" />
         {alertas.length > 0 ? (

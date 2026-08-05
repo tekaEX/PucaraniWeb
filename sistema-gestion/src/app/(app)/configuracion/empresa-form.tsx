@@ -4,6 +4,7 @@ import { useActionState, useRef, useState } from "react";
 import { guardarEmpresa, type FormState } from "./actions";
 import { createClient } from "@/lib/supabase/client";
 import { Input } from "@/components/ui/input";
+import { DireccionInput } from "@/components/ui/direccion-input";
 import { Field } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Card, CardBody, CardHeader, CardTitle } from "@/components/ui/card";
@@ -16,6 +17,10 @@ export function EmpresaForm({ empresa }: { empresa?: Empresa }) {
     {},
   );
   const [logoUrl, setLogoUrl] = useState<string>(empresa?.logo_url ?? "");
+  // El único campo controlado del formulario: el de dirección ofrece
+  // sugerencias mientras se escribe y necesita poder reescribir su propio valor
+  // al elegir una. El resto viaja como FormData, igual que siempre.
+  const [direccion, setDireccion] = useState(empresa?.direccion ?? "");
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState<string>("");
   const fileRef = useRef<HTMLInputElement>(null);
@@ -66,8 +71,17 @@ export function EmpresaForm({ empresa }: { empresa?: Empresa }) {
           <Field label="Giro" htmlFor="giro">
             <Input id="giro" name="giro" defaultValue={empresa?.giro ?? ""} />
           </Field>
+          {/* Con sugerencias: de acá sale el punto de partida de la ruta de
+              reparto (ver generar-ruta.ts), así que si esta dirección no se
+              puede ubicar en el mapa, el chofer arranca desde otro lado. */}
           <Field label="Dirección" htmlFor="direccion">
-            <Input id="direccion" name="direccion" defaultValue={empresa?.direccion ?? ""} />
+            <DireccionInput
+              id="direccion"
+              name="direccion"
+              value={direccion}
+              onChange={setDireccion}
+              placeholder="Calle y número"
+            />
           </Field>
           <Field label="Ciudad" htmlFor="ciudad">
             <Input id="ciudad" name="ciudad" defaultValue={empresa?.ciudad ?? ""} />
@@ -96,7 +110,7 @@ export function EmpresaForm({ empresa }: { empresa?: Empresa }) {
           <div>
             <p className="mb-1.5 block text-sm font-medium">Logo</p>
             <div className="flex items-center gap-4">
-              <div className="flex h-20 w-20 items-center justify-center overflow-hidden rounded-lg border border-border bg-gray-50">
+              <div className="flex h-20 w-20 items-center justify-center overflow-hidden rounded-lg border border-border bg-background">
                 {logoUrl ? (
                   // eslint-disable-next-line @next/next/no-img-element
                   <img src={logoUrl} alt="Logo" className="h-full w-full object-contain" />
@@ -123,7 +137,7 @@ export function EmpresaForm({ empresa }: { empresa?: Empresa }) {
                   {uploading ? "Subiendo…" : "Subir logo"}
                 </Button>
                 {uploadError ? (
-                  <p className="mt-1 text-xs text-red-600">{uploadError}</p>
+                  <p className="mt-1 text-xs text-danger">{uploadError}</p>
                 ) : (
                   <p className="mt-1 text-xs text-muted">PNG o JPG, fondo claro.</p>
                 )}
@@ -147,12 +161,12 @@ export function EmpresaForm({ empresa }: { empresa?: Empresa }) {
       </Card>
 
       {state.error ? (
-        <p className="rounded-lg bg-red-50 border border-red-200 px-3 py-2 text-sm text-red-700">
+        <p className="rounded-lg bg-danger-bg border border-danger/20 px-3 py-2 text-sm text-danger">
           {state.error}
         </p>
       ) : null}
       {state.ok ? (
-        <p className="flex items-center gap-2 rounded-lg bg-green-50 border border-green-200 px-3 py-2 text-sm text-green-700">
+        <p className="flex items-center gap-2 rounded-lg bg-ok-bg border border-ok/20 px-3 py-2 text-sm text-ok">
           <CheckCircle2 className="h-4 w-4" />
           Cambios guardados.
         </p>

@@ -31,6 +31,33 @@ export function formatDate(d: string | Date | null | undefined): string {
   }).format(toDate(d));
 }
 
+// Distancia corta, para navegación: metros hasta el kilómetro y de ahí en km
+// con un decimal (nadie necesita "1348 m" manejando).
+export function formatDistancia(metros: number): string {
+  return metros >= 1000 ? `${(metros / 1000).toFixed(1)} km` : `${Math.round(metros)} m`;
+}
+
+// Duración de un trayecto, redondeada al minuto: "45 min", "1 h 20 min". Los
+// segundos no le sirven a nadie para planificar una jornada de reparto.
+export function formatDuracion(segundos: number): string {
+  const minutos = Math.max(1, Math.round(segundos / 60));
+  if (minutos < 60) return `${minutos} min`;
+  const horas = Math.floor(minutos / 60);
+  const resto = minutos % 60;
+  return resto === 0 ? `${horas} h` : `${horas} h ${resto} min`;
+}
+
+// Hora local (Chile) de un timestamp — para listas donde la fecha ya se
+// sabe de antemano (ej. "pendientes de hoy") y lo útil es a qué hora entró.
+export function formatTime(d: string | Date | null | undefined): string {
+  if (!d) return "—";
+  return new Intl.DateTimeFormat("es-CL", {
+    hour: "2-digit",
+    minute: "2-digit",
+    timeZone: "America/Santiago",
+  }).format(toDate(d));
+}
+
 export function formatDateLong(d: string | Date | null | undefined): string {
   if (!d) return "—";
   return new Intl.DateTimeFormat("es-CL", {
@@ -52,6 +79,14 @@ export function toInputDate(d: string | Date | null | undefined): string {
 
 export function todayInput(): string {
   return toInputDate(new Date());
+}
+
+// Suma (o resta, con negativo) días a una fecha "YYYY-MM-DD" y devuelve el
+// resultado en el mismo formato — para la navegación día a día de Encomiendas.
+export function sumarDias(fecha: string, dias: number): string {
+  const d = toDate(fecha);
+  d.setDate(d.getDate() + dias);
+  return toInputDate(d);
 }
 
 // Fecha de HOY (YYYY-MM-DD) en la zona horaria del negocio (Chile).

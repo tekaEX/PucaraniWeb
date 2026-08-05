@@ -171,6 +171,8 @@ export interface Chofer {
   empresa_id: string;
   /** Cuenta de acceso del chofer (rol 'chofer'), si la tiene. */
   user_id: string | null;
+  /** Correo con el que se invitó/vinculó su login (no viene de auth.users). */
+  email: string | null;
   nombre: string;
   rut: string | null;
   telefono: string | null;
@@ -410,3 +412,163 @@ export const GASTO_CATEGORIAS: Record<GastoCategoria, string> = {
   seguros: "Seguros y permisos",
   otros: "Otros",
 };
+
+// ----------------------------------------------------------------------------
+// Encomiendas: pedidos, rutas diarias, paradas, reglas y pago a conductores.
+// Los destinatarios NO son "clientes" de la empresa (son personas puntuales);
+// el conductor SÍ es un chofer más del sistema (tabla choferes).
+// ----------------------------------------------------------------------------
+
+// Se empieza con el mínimo de estados posible; se agregan más (ej.
+// "programado", "cancelado") solo cuando realmente se necesiten.
+export const ENCOMIENDA_ESTADOS = {
+  pendiente: "Pendiente",
+  entregado: "Entregado",
+} as const;
+export type EncomiendaEstado = keyof typeof ENCOMIENDA_ESTADOS;
+
+export interface EncomiendaPedido {
+  id: string;
+  empresa_id: string;
+  fecha_pedido: string;
+  destinatario_nombre: string;
+  destinatario_telefono: string;
+  destinatario_direccion: string;
+  destinatario_lat: number | null;
+  destinatario_lng: number | null;
+  estado: EncomiendaEstado;
+  notas: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export const ENCOMIENDA_RUTA_ESTADOS = {
+  generada: "Generada",
+  en_curso: "En curso",
+  finalizada: "Finalizada",
+} as const;
+export type EncomiendaRutaEstado = keyof typeof ENCOMIENDA_RUTA_ESTADOS;
+
+export interface EncomiendaRuta {
+  id: string;
+  empresa_id: string;
+  chofer_id: string | null;
+  fecha: string;
+  estado: EncomiendaRutaEstado;
+  distancia_total_m: number | null;
+  duracion_total_s: number | null;
+  /** Trazado real por calles (OSRM), [lng, lat] por punto — formato GeoJSON.
+   *  null si OSRM no respondió al generar la ruta (el mapa se queda solo
+   *  con los puntos, sin el trazado). */
+  geometria: [number, number][] | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export const ENCOMIENDA_ESTADO_LLAMADA = {
+  pendiente: "Pendiente",
+  contesto: "Contestó",
+  no_contesto: "No contestó",
+} as const;
+export type EncomiendaEstadoLlamada = keyof typeof ENCOMIENDA_ESTADO_LLAMADA;
+
+export const ENCOMIENDA_ESTADO_ENTREGA = {
+  pendiente: "Pendiente",
+  entregado: "Entregado",
+  omitido: "Omitido",
+} as const;
+export type EncomiendaEstadoEntrega = keyof typeof ENCOMIENDA_ESTADO_ENTREGA;
+
+export interface EncomiendaParada {
+  id: string;
+  ruta_id: string;
+  pedido_id: string;
+  secuencia: number;
+  estado_llamada: EncomiendaEstadoLlamada;
+  estado_entrega: EncomiendaEstadoEntrega;
+  hora_llamada: string | null;
+  hora_entrega: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface EncomiendaParadaConPedido extends EncomiendaParada {
+  pedido: EncomiendaPedido;
+}
+
+export interface EncomiendaRutaConParadas extends EncomiendaRuta {
+  chofer: { id: string; nombre: string } | null;
+  paradas: EncomiendaParadaConPedido[];
+}
+
+// ----------------------------------------------------------------------------
+// Actividad en terreno (0026) — reemplaza pedidos/rutas/paradas del lado del
+// servidor. Los datos del destinatario y el orden de la ruta viven en el
+// teléfono del chofer: acá solo queda el hecho de que la acción ocurrió, que es
+// lo único que la empresa necesita para el ingreso estimado y la liquidación.
+// ----------------------------------------------------------------------------
+export const ENCOMIENDA_ACTIVIDAD_TIPOS = {
+  entrega: "Entregado",
+  omision: "Omitido",
+  llamada: "Llamada",
+} as const;
+export type EncomiendaActividadTipo = keyof typeof ENCOMIENDA_ACTIVIDAD_TIPOS;
+
+export interface EncomiendaActividad {
+  /** Generado en el TELÉFONO (UUIDv7), no en la base: es la clave de
+   *  idempotencia que hace que reenviar un evento desde la cola offline no
+   *  pueda contarlo dos veces (ver 0026). */
+  id: string;
+  empresa_id: string;
+  chofer_id: string | null;
+  /** Día de trabajo en fecha local de Chile (hoyChile()), no derivada de la
+   *  hora del servidor: una entrega de las 21:30 en Arica ya es del día
+   *  siguiente en UTC y el pago se movería de día. */
+  fecha: string;
+  tipo: EncomiendaActividadTipo;
+  /** Cuándo ocurrió según el teléfono — puede ser bastante anterior a
+   *  created_at si se marcó sin señal. */
+  hora: string;
+  /** Cuándo llegó al servidor. */
+  created_at: string;
+}
+
+export const ENCOMIENDA_TIPO_PAGO = {
+  porcentaje: "% por pedido entregado",
+  monto_fijo: "Monto fijo por pedido entregado",
+} as const;
+export type EncomiendaTipoPago = keyof typeof ENCOMIENDA_TIPO_PAGO;
+
+export interface EncomiendaReglaPago {
+  id: string;
+  empresa_id: string;
+  chofer_id: string | null;
+  tipo_pago: EncomiendaTipoPago;
+  /** numeric en Postgres: PostgREST lo devuelve como string ("15.00"). */
+  valor_pago: number;
+  /** Fijo en CLP por día trabajado, aparte de lo que pague por pedido (0024). */
+  monto_dia: number;
+  meta_entregas_dia: number | null;
+  bono_monto: number | null;
+  vigente_desde: string;
+  created_at: string;
+}
+
+export interface EncomiendaPago {
+  id: string;
+  empresa_id: string;
+  chofer_id: string | null;
+  fecha: string;
+  pedidos_entregados: number;
+  pedidos_no_entregados: number;
+  ingresos_totales: number;
+  /** Por cantidad de pedidos entregados. */
+  pago_base: number;
+  /** Fijo por el día trabajado (0024). */
+  pago_dia: number;
+  pago_bono: number;
+  /** Columna generada: pago_base + pago_bono + pago_dia. */
+  pago_total: number;
+  regla_id: string | null;
+  calculado_en: string;
+}

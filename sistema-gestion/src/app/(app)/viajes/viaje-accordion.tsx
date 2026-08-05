@@ -20,6 +20,7 @@ import {
   type ViajeConRelaciones,
 } from "@/types/db";
 import { actualizarEstadoViaje, eliminarViaje } from "./actions";
+import { buttonClass } from "@/components/ui/button";
 
 const ESTADOS_VIAJE: EstadoOpcion[] = [
   { value: "programado", label: "Programado", tone: "blue" },
@@ -72,7 +73,7 @@ export function ViajeAccordion({
 
   return (
     <table className="w-full text-sm">
-      <thead className="bg-gray-50 text-left text-xs uppercase tracking-wide text-muted">
+      <thead className="bg-background text-left text-xs uppercase tracking-wide text-muted">
         <tr>
           <th className="px-4 py-3 font-medium">Fecha</th>
           <th className="px-4 py-3 font-medium">Servicio</th>
@@ -93,7 +94,7 @@ export function ViajeAccordion({
             <Fragment key={v.id}>
               <tr
                 onClick={() => setOpenId(open ? null : v.id)}
-                className={`cursor-pointer transition-colors hover:bg-gray-100/60 ${open ? "bg-gray-100/60" : rowTone(v)}`}
+                className={`cursor-pointer transition-colors hover:bg-brand-soft/50 ${open ? "bg-brand-soft/70" : rowTone(v)}`}
               >
                 <td className="whitespace-nowrap px-4 py-3 text-muted">
                   {formatDate(v.fecha_inicio)}
@@ -155,7 +156,7 @@ export function ViajeAccordion({
 
               {open ? (
                 <tr>
-                  <td colSpan={9} className="bg-gray-50/50 px-4 py-5">
+                  <td colSpan={9} className="bg-background px-4 py-5">
                     <div className="animate-expand">
                     <div className="mb-4 flex flex-wrap items-center gap-2">
                       <EstadoViajeControl viaje={v} />
@@ -167,7 +168,7 @@ export function ViajeAccordion({
                         <input type="hidden" name="id" value={v.id} />
                         <button
                           type="submit"
-                          className="inline-flex items-center gap-1.5 rounded-full border border-red-200 bg-white px-3 py-2 text-sm font-medium text-red-600 hover:bg-red-50"
+                          className={buttonClass({ variant: "dangerOutline", size: "sm" })}
                         >
                           <Trash2 className="h-4 w-4" />
                           Eliminar

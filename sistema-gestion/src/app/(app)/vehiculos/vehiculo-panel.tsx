@@ -19,6 +19,8 @@ import { GastoForm } from "./gasto-form";
 import { Trash2, Check, Loader2 } from "lucide-react";
 import { toInputDate, formatCLP, formatDate } from "@/lib/format";
 import { PATENTE_PATTERN, PATENTE_HINT } from "@/lib/patentes";
+import { buttonClass } from "@/components/ui/button";
+import { Vacio } from "@/components/ui/vacio";
 import {
   GASTO_CATEGORIAS,
   VEHICULO_CATEGORIAS,
@@ -86,7 +88,7 @@ function EliminarVehiculoDialog({
       >
         <p className="text-base font-semibold">¿Qué quieres hacer con {vehiculo.patente}?</p>
         {historial ? (
-          <p className="mt-1.5 text-sm text-amber-700">
+          <p className="mt-1.5 text-sm text-warn">
             Este vehículo tiene viajes y/o gastos registrados en su historial.
           </p>
         ) : null}
@@ -110,16 +112,16 @@ function EliminarVehiculoDialog({
             <button
               type="button"
               onClick={() => setConfirmarBorrado(true)}
-              className="w-full rounded-xl border border-red-200 bg-white px-4 py-3 text-left text-sm font-medium text-red-600 hover:bg-red-50"
+              className="w-full rounded-xl border border-danger/20 bg-white px-4 py-3 text-left text-sm font-medium text-danger hover:bg-danger-bg"
             >
               Eliminar todo el registro
-              <span className="block text-xs font-normal text-red-600/80">
+              <span className="block text-xs font-normal text-danger/80">
                 Borra el vehículo del sistema. No se puede deshacer.
               </span>
             </button>
           ) : (
-            <div className="rounded-xl border border-red-200 bg-red-50 p-3">
-              <p className="text-sm text-red-700">
+            <div className="rounded-xl border border-danger/20 bg-danger-bg p-3">
+              <p className="text-sm text-danger">
                 ¿Confirmas eliminar {vehiculo.patente} y todo su registro
                 {historial ? "? Su historial de viajes quedará sin vehículo asignado." : "?"}
               </p>
@@ -234,7 +236,7 @@ export function VehiculoPanel({
         <button
           type="button"
           onClick={() => setEliminarAbierto(true)}
-          className="inline-flex items-center gap-1.5 rounded-full border border-red-200 bg-white px-3 py-2 text-sm font-medium text-red-600 hover:bg-red-50"
+          className={buttonClass({ variant: "dangerOutline", size: "sm" })}
         >
           <Trash2 className="h-4 w-4" />
           Eliminar
@@ -276,7 +278,7 @@ export function VehiculoPanel({
                   name="activo"
                   defaultChecked={vehiculo.activo}
                   onChange={autoguardar}
-                  className="h-4 w-4"
+                  className="h-4 w-4 accent-brand"
                 />
                 Vehículo activo
               </label>
@@ -378,7 +380,7 @@ export function VehiculoPanel({
               {porCategoria.map((x) => (
                 <span
                   key={x.cat}
-                  className="inline-flex items-center gap-2 rounded-full bg-gray-100 px-3 py-1 text-xs font-medium"
+                  className="inline-flex items-center gap-2 rounded-full bg-background px-3 py-1 text-xs font-medium"
                 >
                   {GASTO_CATEGORIAS[x.cat]}
                   <span className="tabular-nums text-muted">{formatCLP(x.total)}</span>
@@ -388,7 +390,7 @@ export function VehiculoPanel({
           ) : null}
 
           {gastos.length === 0 ? (
-            <p className="text-sm text-muted">Sin gastos registrados.</p>
+            <Vacio titulo="Sin gastos registrados." />
           ) : (
             <div className="max-h-44 overflow-y-auto rounded-lg border border-[#f0f0f2]">
               <table className="w-full text-sm">
@@ -420,7 +422,7 @@ export function VehiculoPanel({
                           <input type="hidden" name="id" value={gx.id} />
                           <button
                             type="submit"
-                            className="text-muted hover:text-red-600"
+                            className="text-muted hover:text-danger"
                             title="Eliminar gasto"
                           >
                             <Trash2 className="h-4 w-4" />

@@ -98,7 +98,7 @@ export function ServicioTaxiForm({
         </Select>
       </Field>
       {state.error ? (
-        <p className="sm:col-span-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+        <p className="sm:col-span-2 rounded-lg border border-danger/20 bg-danger-bg px-3 py-2 text-sm text-danger">
           {state.error}
         </p>
       ) : null}

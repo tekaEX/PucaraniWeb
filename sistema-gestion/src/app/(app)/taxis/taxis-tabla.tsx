@@ -68,7 +68,7 @@ export function TaxisTabla({
 
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
-          <thead className="bg-gray-50 text-left text-xs uppercase tracking-wide text-muted">
+          <thead className="bg-background text-left text-xs uppercase tracking-wide text-muted">
             <tr>
               <th className="px-4 py-3 font-medium">Fecha</th>
               <th className="px-4 py-3 font-medium">Tipo</th>
@@ -86,7 +86,7 @@ export function TaxisTabla({
                 <Fragment key={s.id}>
                   <tr
                     onClick={() => setOpenId(open ? null : s.id)}
-                    className="cursor-pointer transition-colors hover:bg-gray-100/60"
+                    className="cursor-pointer transition-colors hover:bg-brand-soft/50"
                   >
                     <td className="px-4 py-3 whitespace-nowrap text-muted">
                       {formatDate(s.fecha)}
@@ -116,7 +116,7 @@ export function TaxisTabla({
 
                   {open ? (
                     <tr>
-                      <td colSpan={7} className="bg-gray-50/40 px-4 pb-5 pt-1">
+                      <td colSpan={7} className="bg-background px-4 pb-5 pt-1">
                         <div className="animate-expand">
                           <TaxiPanel servicio={s} clientes={clientes} choferes={choferes} />
                         </div>

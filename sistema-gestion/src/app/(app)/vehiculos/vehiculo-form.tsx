@@ -118,7 +118,7 @@ export function VehiculoForm({ vehiculo }: { vehiculo?: Vehiculo }) {
               type="checkbox"
               name="activo"
               defaultChecked={vehiculo?.activo ?? true}
-              className="h-4 w-4"
+              className="h-4 w-4 accent-brand"
             />
             <span className="text-sm font-medium">Vehículo activo</span>
           </label>
@@ -126,7 +126,7 @@ export function VehiculoForm({ vehiculo }: { vehiculo?: Vehiculo }) {
             <Textarea id="notas" name="notas" defaultValue={vehiculo?.notas ?? ""} />
           </Field>
           {state.error ? (
-            <p className="rounded-lg bg-red-50 border border-red-200 px-3 py-2 text-sm text-red-700">
+            <p className="rounded-lg bg-danger-bg border border-danger/20 px-3 py-2 text-sm text-danger">
               {state.error}
             </p>
           ) : null}

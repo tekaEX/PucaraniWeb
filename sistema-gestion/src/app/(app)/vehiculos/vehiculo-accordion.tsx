@@ -57,7 +57,7 @@ export function VehiculoAccordion({
 
   return (
     <div>
-      <div className="flex flex-wrap gap-1.5 border-b border-border bg-gray-50 px-4 py-2.5">
+      <div className="flex flex-wrap gap-1.5 border-b border-border bg-background px-4 py-2.5">
         {PESTANAS.map((p) => (
           <button
             key={p.value}
@@ -66,7 +66,7 @@ export function VehiculoAccordion({
             className={`rounded-full px-3 py-1.5 text-xs font-medium transition-colors ${
               pestana === p.value
                 ? "bg-brand text-brand-foreground"
-                : "bg-white text-muted hover:bg-gray-100"
+                : "bg-card text-muted hover:bg-background"
             }`}
           >
             {p.label}
@@ -74,7 +74,7 @@ export function VehiculoAccordion({
         ))}
       </div>
       <table className="w-full text-sm">
-      <thead className="bg-gray-50 text-left text-xs uppercase tracking-wide text-muted">
+      <thead className="bg-background text-left text-xs uppercase tracking-wide text-muted">
         <tr>
           <th className="px-4 py-3 font-medium">Patente</th>
           <th className="px-4 py-3 font-medium">Vehículo</th>
@@ -103,7 +103,7 @@ export function VehiculoAccordion({
             <Fragment key={v.patente}>
               <tr
                 onClick={() => setOpenId(open ? null : v.patente)}
-                className="cursor-pointer transition-colors hover:bg-gray-100/60"
+                className="cursor-pointer transition-colors hover:bg-brand-soft/50"
               >
                 <td className="px-4 py-3">
                   <span className="font-semibold text-foreground">{v.patente}</span>
@@ -149,7 +149,7 @@ export function VehiculoAccordion({
 
               {open ? (
                 <tr>
-                  <td colSpan={9} className="bg-gray-50/50 px-4 py-5">
+                  <td colSpan={9} className="bg-background px-4 py-5">
                     <div className="animate-expand">
                       <VehiculoPanel vehiculo={v} gastos={vGastos} />
                     </div>

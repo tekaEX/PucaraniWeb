@@ -1,6 +1,6 @@
-import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { AppShell } from "@/components/app-shell";
+import { exigirPanel } from "@/lib/auth";
 import { getPeriodo } from "@/lib/periodo";
 import { construirAlertas } from "@/lib/vencimientos";
 import type { Chofer, Vehiculo } from "@/types/db";
@@ -13,16 +13,13 @@ export default async function AppLayout({
   // Slot paralelo: rutas interceptadas de creación (ver src/app/(app)/@modal).
   modal: React.ReactNode;
 }) {
+  // Puerta del panel: sin sesión → login; con rol chofer → su app (/conductor).
+  // Va ANTES de cualquier consulta: al chofer, RLS le negaría igual choferes y
+  // vehículos, y no tiene sentido pagar esos viajes para después redirigirlo.
+  const sesion = await exigirPanel();
+
   const periodo = await getPeriodo();
-
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) {
-    redirect("/login");
-  }
 
   const [{ data: empresa }, { data: choferes }, { data: vehiculos }] =
     await Promise.all([
@@ -33,7 +30,7 @@ export default async function AppLayout({
 
   return (
     <AppShell
-      userEmail={user.email ?? ""}
+      userEmail={sesion.email}
       empresaNombre={empresa?.nombre ?? "Transportes Pucarani"}
       periodoAnio={periodo.anio}
       periodoMes={periodo.mes}

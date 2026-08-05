@@ -400,7 +400,7 @@ export function ViajeForm({
       </div>
 
       {state.error ? (
-        <p className="rounded-lg bg-red-50 border border-red-200 px-3 py-2 text-sm text-red-700">
+        <p className="rounded-lg bg-danger-bg border border-danger/20 px-3 py-2 text-sm text-danger">
           {state.error}
         </p>
       ) : null}

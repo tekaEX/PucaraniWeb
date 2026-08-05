@@ -17,6 +17,7 @@ import {
   CalendarDays,
   Route,
   Car,
+  Package,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { logout } from "@/app/login/actions";
@@ -44,6 +45,10 @@ const grupos: { label?: string; items: NavItem[] }[] = [
   {
     label: "Taxis",
     items: [{ href: "/taxis", label: "Gestión de taxis", icon: Car }],
+  },
+  {
+    label: "Encomiendas",
+    items: [{ href: "/encomiendas", label: "Gestión de encomiendas", icon: Package }],
   },
   {
     label: "Datos",

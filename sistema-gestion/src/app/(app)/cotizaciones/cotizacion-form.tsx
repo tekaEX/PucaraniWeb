@@ -210,7 +210,7 @@ export function CotizacionForm({
               <button
                 type="button"
                 onClick={() => removeRow(r.key)}
-                className="flex h-10 w-10 items-center justify-center rounded-lg text-muted hover:bg-red-50 hover:text-red-600"
+                className="flex h-10 w-10 items-center justify-center rounded-lg text-muted hover:bg-danger-bg hover:text-danger"
                 aria-label="Quitar línea"
               >
                 <Trash2 className="h-4 w-4" />
@@ -241,7 +241,7 @@ export function CotizacionForm({
                 type="checkbox"
                 checked={exento}
                 onChange={(e) => setExento(e.target.checked)}
-                className="h-4 w-4"
+                className="h-4 w-4 accent-brand"
               />
               <span className="font-medium">Servicio exento de IVA</span>
             </label>
@@ -267,7 +267,7 @@ export function CotizacionForm({
       </div>
 
       {state.error ? (
-        <p className="rounded-lg bg-red-50 border border-red-200 px-3 py-2 text-sm text-red-700">
+        <p className="rounded-lg bg-danger-bg border border-danger/20 px-3 py-2 text-sm text-danger">
           {state.error}
         </p>
       ) : null}

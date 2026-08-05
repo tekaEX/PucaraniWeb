@@ -9,6 +9,7 @@ import { Select } from "@/components/ui/select";
 import { Field } from "@/components/ui/label";
 import { Trash2, Check, Loader2 } from "lucide-react";
 import { toInputDate } from "@/lib/format";
+import { buttonClass } from "@/components/ui/button";
 import {
   TAXI_TIPOS,
   taxiNombreCliente,
@@ -161,7 +162,7 @@ export function TaxiPanel({
             <input type="hidden" name="id" value={servicio.id} />
             <button
               type="submit"
-              className="inline-flex items-center gap-1.5 rounded-full border border-red-200 bg-white px-3 py-2 text-sm font-medium text-red-600 hover:bg-red-50"
+              className={buttonClass({ variant: "dangerOutline", size: "sm" })}
             >
               <Trash2 className="h-4 w-4" />
               Eliminar

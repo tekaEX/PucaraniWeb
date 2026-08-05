@@ -42,7 +42,21 @@ export async function updateSession(request: NextRequest) {
   const isPublic =
     path.startsWith("/login") ||
     path.startsWith("/auth") ||
-    path === "/favicon.ico";
+    // La sesión del link de invitación llega en el fragmento de la URL
+    // (#access_token=...), que el servidor nunca ve — así que esta ruta
+    // debe ser pública para que el cliente alcance a procesarla.
+    path.startsWith("/set-password") ||
+    path === "/favicon.ico" ||
+    // El navegador pide el manifest SIN cookies (el <link rel="manifest"> que
+    // emite Next no lleva crossorigin="use-credentials"), así que si no es
+    // pública recibe el HTML del login en vez del JSON y la PWA del conductor
+    // deja de ser instalable.
+    path === "/manifest.webmanifest" ||
+    // Meta llama a este endpoint sin cookies de sesión (verificación del
+    // webhook y eventos de WhatsApp); la propia ruta valida el token/origen.
+    // Coincidencia EXACTA a propósito: futuras rutas /api/whatsapp/* (ej. un
+    // endpoint de envío) deben seguir exigiendo sesión.
+    path === "/api/whatsapp/webhook";
 
   if (!user && !isPublic) {
     const url = request.nextUrl.clone();
