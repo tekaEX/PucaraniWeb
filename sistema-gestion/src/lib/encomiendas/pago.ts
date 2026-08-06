@@ -9,7 +9,11 @@
 // la proyección y lo confirmado divergirían sin que nadie se entere.
 
 import { VALOR_APROXIMADO_PEDIDO } from "./config";
-import type { EncomiendaActividadTipo, EncomiendaReglaPago } from "@/types/db";
+import type {
+  EncomiendaActividadOrigen,
+  EncomiendaActividadTipo,
+  EncomiendaReglaPago,
+} from "@/types/db";
 
 /** Cómo cerró el día un conductor. Sale de contar los eventos que el teléfono
  *  registró en encomienda_actividad para ese (chofer, fecha) — ver 0026.
@@ -122,6 +126,7 @@ export type EventoActividad = {
   chofer_id: string | null;
   fecha: string;
   tipo: EncomiendaActividadTipo;
+  origen: EncomiendaActividadOrigen;
 };
 
 export type DiaActividad<T extends EventoActividad> = {
@@ -132,6 +137,12 @@ export type DiaActividad<T extends EventoActividad> = {
   conteo: ConteoDia;
   /** Los eventos crudos del día, para las pantallas que muestran horas. */
   eventos: T[];
+  /** Cuántos de esos eventos los cargó la oficina a mano (0028). 0 = día
+   *  íntegro del teléfono; igual a eventos.length = día íntegro de oficina;
+   *  algo en medio = el teléfono alcanzó a mandar una parte y la oficina
+   *  completó el resto. La distinción no cambia el pago, pero sí lo que la
+   *  pantalla puede afirmar sobre el día (ver el badge "Carga manual"). */
+  manuales: number;
 };
 
 // Agrupa los eventos por (conductor, día), más nuevo primero. Solo aparecen los
@@ -153,12 +164,14 @@ export function agruparPorDia<T extends EventoActividad>(eventos: T[]): DiaActiv
         fecha: evento.fecha,
         conteo: { entregados: 0, omitidos: 0 },
         eventos: [],
+        manuales: 0,
       };
       mapa.set(clave, dia);
     }
     dia.eventos.push(evento);
     if (evento.tipo === "entrega") dia.conteo.entregados++;
     if (evento.tipo === "omision") dia.conteo.omitidos++;
+    if (evento.origen === "manual") dia.manuales++;
   }
 
   return [...mapa.values()].sort((a, b) => (a.fecha < b.fecha ? 1 : a.fecha > b.fecha ? -1 : 0));

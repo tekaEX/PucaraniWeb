@@ -514,6 +514,14 @@ export const ENCOMIENDA_ACTIVIDAD_TIPOS = {
 } as const;
 export type EncomiendaActividadTipo = keyof typeof ENCOMIENDA_ACTIVIDAD_TIPOS;
 
+// De dónde salió el evento (0028). 'app' es el default en la base: la app del
+// chofer no manda esta columna.
+export const ENCOMIENDA_ACTIVIDAD_ORIGENES = {
+  app: "App del conductor",
+  manual: "Carga manual",
+} as const;
+export type EncomiendaActividadOrigen = keyof typeof ENCOMIENDA_ACTIVIDAD_ORIGENES;
+
 export interface EncomiendaActividad {
   /** Generado en el TELÉFONO (UUIDv7), no en la base: es la clave de
    *  idempotencia que hace que reenviar un evento desde la cola offline no
@@ -527,10 +535,14 @@ export interface EncomiendaActividad {
   fecha: string;
   tipo: EncomiendaActividadTipo;
   /** Cuándo ocurrió según el teléfono — puede ser bastante anterior a
-   *  created_at si se marcó sin señal. */
+   *  created_at si se marcó sin señal. En las filas de origen 'manual' es de
+   *  relleno (mediodía UTC del día cargado): nadie sabe la hora real. */
   hora: string;
   /** Cuándo llegó al servidor. */
   created_at: string;
+  /** 'app' = lo envió el teléfono del chofer · 'manual' = lo cargó la oficina
+   *  (ver 0028). Los dos cuentan igual para el pago. */
+  origen: EncomiendaActividadOrigen;
 }
 
 export const ENCOMIENDA_TIPO_PAGO = {

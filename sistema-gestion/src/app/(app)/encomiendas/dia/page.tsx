@@ -36,7 +36,7 @@ export default async function EncomiendasDiaPage({
   const [{ data: actividadData }, { data: pagosData }] = await Promise.all([
     supabase
       .from("encomienda_actividad")
-      .select("id, chofer_id, fecha, tipo, hora, created_at, chofer:choferes(id,nombre)")
+      .select("id, chofer_id, fecha, tipo, origen, hora, created_at, chofer:choferes(id,nombre)")
       .eq("fecha", fecha)
       .returns<Fila[]>(),
     supabase.from("encomienda_pagos").select("*").eq("fecha", fecha),

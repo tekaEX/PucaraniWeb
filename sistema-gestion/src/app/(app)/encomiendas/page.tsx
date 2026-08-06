@@ -7,7 +7,7 @@ import { Kpi } from "@/components/ui/kpi";
 import { Vacio } from "@/components/ui/vacio";
 import { buttonClass } from "@/components/ui/button";
 import { Package, Settings, CalendarRange, Truck, Wallet, CircleDollarSign } from "lucide-react";
-import { formatCLP, formatDate, formatNumber } from "@/lib/format";
+import { formatCLP, formatDate, formatNumber, hoyChile } from "@/lib/format";
 import { getPeriodo, rangoPeriodo, etiquetaPeriodo } from "@/lib/periodo";
 import {
   agruparPorDia,
@@ -21,6 +21,7 @@ import {
 import { VALOR_APROXIMADO_PEDIDO } from "@/lib/encomiendas/config";
 import type { EncomiendaPago, EncomiendaReglaPago } from "@/types/db";
 import { ConfirmarPagos } from "./confirmar-pagos";
+import { AgregarDia, type ChoferOpcion } from "./agregar-dia";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Encomiendas" };
@@ -45,6 +46,11 @@ type Dia = {
   snapshot: EncomiendaPago | null;
   /** No hay regla de pago vigente a esa fecha: el día NO se puede liquidar. */
   sinRegla: boolean;
+  /** Eventos cargados a mano desde la oficina (0028) y total del día: con los
+   *  dos se distingue un día íntegramente manual de uno que el teléfono mandó
+   *  a medias y la oficina completó. */
+  manuales: number;
+  total: number;
 };
 
 /** Lo que hay que pagar: manda lo confirmado; si no hay, la proyección. */
@@ -64,19 +70,40 @@ export default async function EncomiendasPage() {
   // Una fila por acción en terreno (ver 0026). Se agrupan por (conductor, día)
   // acá abajo: cada grupo que existe es, por definición, un día trabajado — un
   // día en que nadie salió no tiene filas y simplemente no aparece.
-  const [{ data: actividadData }, { data: reglasData }, { data: pagosData }] = await Promise.all([
+  const [
+    { data: actividadData },
+    { data: reglasData },
+    { data: pagosData },
+    { data: choferesData },
+  ] = await Promise.all([
     supabase
       .from("encomienda_actividad")
-      .select("chofer_id, fecha, tipo, chofer:choferes(id,nombre)")
+      .select("chofer_id, fecha, tipo, origen, chofer:choferes(id,nombre)")
       .gte("fecha", desde)
       .lte("fecha", hasta)
       .returns<EventoFila[]>(),
     supabase.from("encomienda_reglas_pago").select("*"),
     supabase.from("encomienda_pagos").select("*").gte("fecha", desde).lte("fecha", hasta),
+    // Para el selector de "Agregar día". Se piden por categoría y no todos los
+    // choferes: cargarle un día de encomiendas a un conductor de taxis o de
+    // operación metería a otra área en esta liquidación.
+    supabase
+      .from("chofer_categorias")
+      .select("chofer:choferes(id, nombre, activo)")
+      .eq("categoria", "encomiendas")
+      .returns<{ chofer: { id: string; nombre: string; activo: boolean } | null }[]>(),
   ]);
 
   const reglas = (reglasData ?? []) as EncomiendaReglaPago[];
   const pagos = (pagosData ?? []) as EncomiendaPago[];
+
+  // Solo conductores activos: uno dado de baja no debería aparecer como opción
+  // para cargarle días nuevos. Su historial y sus liquidaciones ya cargadas
+  // siguen intactos — eso sale de la actividad, no de esta lista.
+  const choferesEncomiendas: ChoferOpcion[] = (choferesData ?? [])
+    .flatMap((f) => (f.chofer && f.chofer.activo ? [f.chofer] : []))
+    .map((c) => ({ id: c.id, nombre: c.nombre }))
+    .sort((a, b) => a.nombre.localeCompare(b.nombre, "es"));
 
   const dias: Dia[] = agruparPorDia(actividadData ?? []).map((d) => {
     const regla = reglaVigente(reglas, d.choferId, d.fecha);
@@ -89,6 +116,8 @@ export default async function EncomiendasPage() {
       calculado: calcularPagoDia(d.conteo, regla),
       snapshot: pagos.find((p) => p.fecha === d.fecha && p.chofer_id === d.choferId) ?? null,
       sinRegla: regla == null,
+      manuales: d.manuales,
+      total: d.eventos.length,
     };
   });
 
@@ -266,7 +295,24 @@ export default async function EncomiendasPage() {
         <Card className="overflow-hidden">
           <CardHeader>
             <CardTitle>Detalle por día</CardTitle>
-            {dias.length > 0 ? <ConfirmarPagos desde={desde} hasta={hasta} /> : null}
+            <div className="flex flex-wrap items-start justify-end gap-2">
+              {/* Va acá y no en la cabecera de la página porque es esta tabla
+                  la que va a cambiar: se carga un día y aparece una fila. */}
+              <AgregarDia
+                choferes={choferesEncomiendas}
+                reglas={reglas}
+                hoy={hoyChile()}
+                diasConocidos={dias.map((d) => ({
+                  fecha: d.fecha,
+                  choferId: d.choferId,
+                  entregados: d.conteo.entregados,
+                  omitidos: d.conteo.omitidos,
+                  manuales: d.manuales,
+                  total: d.total,
+                }))}
+              />
+              {dias.length > 0 ? <ConfirmarPagos desde={desde} hasta={hasta} /> : null}
+            </div>
           </CardHeader>
           {dias.length === 0 ? (
             <CardBody>
@@ -310,6 +356,19 @@ export default async function EncomiendasPage() {
                           >
                             {formatDate(d.fecha)}
                           </Link>
+                          {/* Un día cargado desde la oficina paga igual que uno
+                              registrado en terreno, pero no es la misma prueba:
+                              son números que alguien recordó, no entregas con
+                              hora. Quien mira la liquidación tiene que poder
+                              distinguirlos de un vistazo. */}
+                          {/* "Manual parcial" es el caso que más confunde: el
+                              teléfono alcanzó a mandar una parte del día y la
+                              oficina completó el resto. */}
+                          {d.manuales > 0 ? (
+                            <Badge tone="violet" className="ml-2">
+                              {d.manuales === d.total ? "Carga manual" : "Manual parcial"}
+                            </Badge>
+                          ) : null}
                         </td>
                         <td className="px-4 py-3 text-muted">{d.choferNombre}</td>
                         <td className="px-4 py-3 text-right tabular-nums">
