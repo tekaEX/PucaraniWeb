@@ -1,12 +1,25 @@
-// Cálculo de ingresos y de lo que se le debe al conductor. Funciones puras,
-// en un archivo SIN "use server" (ver la nota de ./actions.ts: un módulo
-// "use server" solo puede exportar funciones async).
+// Agrupación de la actividad por día, y la cuenta del ingreso y del pago.
+// Funciones puras, en un archivo SIN "use server" (ver la nota de ./actions.ts:
+// un módulo "use server" solo puede exportar funciones async).
 //
-// Una sola implementación para los dos usos: el panel del periodo la corre AL
-// VUELO sobre cada día (para poder decir "esto es lo que hay que pagar este
-// mes" sin que nadie haya apretado nada), y calcularPagoChofer la corre para
-// PERSISTIR el snapshot en encomienda_pagos. Si fueran dos cuentas separadas,
-// la proyección y lo confirmado divergirían sin que nadie se entere.
+// ⚠️ LA CUENTA DE ACÁ NO ES LA QUE MANDA (0031).
+//
+// Lo que vale un día lo calcula y lo escribe la BASE, en
+// private.encomienda_congelar_dia(), apenas cambia la actividad de ese día. Las
+// pantallas leen esas cifras ya congeladas de encomienda_pagos; no recalculan
+// nada.
+//
+// La cuenta tiene que vivir allá porque el teléfono del conductor inserta su
+// actividad directo contra Postgres (ver 0026) y no pasa por el servidor de la
+// app: en ese momento no hay TypeScript que pueda correr.
+//
+// calcularPagoDia e ingresoEstimado sobreviven acá para UNA cosa: la vista
+// previa del diálogo "Agregar día", que muestra cuánto va a quedar el día
+// ANTES de guardarlo, mientras se teclean los números. Eso no puede salir de la
+// base sin una consulta por tecla.
+//
+// O sea que son dos copias de la misma aritmética. Si cambia una, hay que
+// cambiar la otra — está anotado también en la 0031.
 
 import { VALOR_APROXIMADO_PEDIDO } from "./config";
 import type {
@@ -27,13 +40,12 @@ export type ConteoDia = {
   omitidos: number;
 };
 
-/** Cuánto se estima que entra por cada entrega, según la regla que rige ese
- *  día (0029). Sin regla vigente no hay valor configurado y se cae al respaldo:
- *  el día igual muestra un ingreso estimado, aunque no se pueda liquidar.
+/** Cuánto se estima que entra por cada entrega, según la regla configurada
+ *  (0029). Sin regla no hay valor y se cae al respaldo, para que la vista
+ *  previa muestre algo en vez de un hueco.
  *
- *  numeric/integer de PostgREST puede llegar como string, y una regla anterior
- *  a la 0029 no trae la columna: los dos casos terminan en el respaldo en vez
- *  de en un NaN paseándose por la pantalla. */
+ *  numeric/integer de PostgREST puede llegar como string: sin este Number() y
+ *  su comprobación, un NaN se pasearía por la pantalla. */
 export function valorPedido(regla: EncomiendaReglaPago | null | undefined): number {
   const valor = Number(regla?.valor_pedido);
   return Number.isFinite(valor) && valor > 0 ? valor : VALOR_APROXIMADO_PEDIDO;
@@ -44,8 +56,8 @@ export function valorPedido(regla: EncomiendaReglaPago | null | undefined): numb
 // mano por mes y se contrasta contra esto (encomienda_ingresos_reales, 0029).
 //
 // El valor por entrega se pide explícito y no se toma de una constante: es
-// configurable y cambia con la regla vigente, así que cada pantalla tiene que
-// decir con cuál está calculando en vez de suponerlo.
+// configurable, así que quien llame tiene que decir con cuál está calculando
+// en vez de suponerlo.
 export function ingresoEstimado(entregados: number, valorPorEntrega: number): number {
   return Math.round(entregados * valorPorEntrega);
 }
@@ -61,33 +73,10 @@ export function ingresoEstimado(entregados: number, valorPorEntrega: number): nu
 // simplemente no aparece. Así que todo lo que llega hasta acá es un día
 // trabajado, por definición.
 
-// Regla que corresponde a (chofer, fecha). Precedencia: un override del
-// propio chofer gana sobre la regla general aunque sea más antiguo (así lo
-// documenta la 0017). Dentro de cada grupo manda la más nueva, y ante empate
-// de vigente_desde desempata created_at — sin ese segundo criterio, guardar
-// dos reglas el mismo día hace que Postgres devuelva cualquiera de las dos y
-// el pago salga distinto en cada recálculo.
-export function reglaVigente(
-  reglas: EncomiendaReglaPago[],
-  choferId: string | null,
-  fecha: string,
-): EncomiendaReglaPago | null {
-  // Comparación de strings a secas, no localeCompare: la colación ICU ordena
-  // los símbolos de forma distinta a ASCII y PostgREST omite los microsegundos
-  // cuando son exactamente 0, así que "…T14:23:05+00:00" se declaraba MÁS
-  // NUEVO que "…T14:23:05.000001+00:00" y el desempate elegía la regla vieja.
-  const desc = (a: string, b: string) => (a < b ? 1 : a > b ? -1 : 0);
-  const masNueva = (a: EncomiendaReglaPago, b: EncomiendaReglaPago) =>
-    desc(a.vigente_desde, b.vigente_desde) || desc(a.created_at, b.created_at);
-
-  const aplicables = reglas.filter((r) => r.vigente_desde <= fecha);
-  const delChofer = choferId
-    ? aplicables.filter((r) => r.chofer_id === choferId).sort(masNueva)
-    : [];
-  if (delChofer.length > 0) return delChofer[0];
-
-  return aplicables.filter((r) => r.chofer_id == null).sort(masNueva)[0] ?? null;
-}
+// Ya no existe reglaVigente(). Resolvía cuál de las reglas del historial regía
+// una fecha, con precedencia por conductor y desempate por created_at. Todo eso
+// se fue con el historial (0031): ahora hay una sola regla y lo que protege al
+// pasado no es la vigencia, son las cifras ya escritas de cada día.
 
 export type PagoDesglose = {
   /** Por cantidad de pedidos entregados. */
@@ -101,9 +90,13 @@ export type PagoDesglose = {
 
 export const PAGO_CERO: PagoDesglose = { base: 0, dia: 0, bono: 0, total: 0 };
 
-// Solo se llama para un (chofer, fecha) que tiene actividad registrada: eso es
-// lo que hace que el fijo diario se pague sin condición acá (ver la nota de
-// arriba sobre diaTrabajado).
+/** VISTA PREVIA del pago de un día. La cifra que se guarda NO sale de acá: la
+ *  escribe private.encomienda_congelar_dia() en la base (ver la cabecera).
+ *  Tiene que dar exactamente lo mismo que esa función — si tocás una, tocá la
+ *  otra.
+ *
+ *  El fijo diario se paga sin condición porque esto solo se usa para un día que
+ *  tiene (o va a tener) actividad, y eso ES la definición de día trabajado. */
 export function calcularPagoDia(
   conteo: ConteoDia,
   regla: EncomiendaReglaPago | null,
@@ -114,10 +107,9 @@ export function calcularPagoDia(
   const valor = Number(regla.valor_pago);
   const base =
     regla.tipo_pago === "porcentaje"
-      ? // El porcentaje se calcula sobre el ingreso estimado CON EL VALOR DE
-        // ESTA MISMA REGLA. Por eso valor_pedido vive en la regla y no en una
-        // configuración aparte: si no, cambiarlo reescribiría en silencio lo
-        // que se le pagó al conductor los meses anteriores.
+      ? // El porcentaje se calcula sobre el ingreso estimado con el valor por
+        // entrega DE ESTA MISMA REGLA. Por eso valor_pedido vive en la regla y
+        // no en una configuración aparte: es parte de la fórmula del sueldo.
         Math.round((ingresoEstimado(conteo.entregados, valorPedido(regla)) * valor) / 100)
       : Math.round(conteo.entregados * valor);
 

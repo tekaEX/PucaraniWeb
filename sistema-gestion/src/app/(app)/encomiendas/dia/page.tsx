@@ -7,14 +7,9 @@ import { buttonClass } from "@/components/ui/button";
 import { Package, BarChart3 } from "lucide-react";
 import { hoyChile } from "@/lib/format";
 import { DiaNav } from "@/components/encomiendas/dia-nav";
-import {
-  agruparPorDia,
-  reglaVigente,
-  valorPedido,
-  type EventoActividad,
-} from "@/lib/encomiendas/pago";
+import { agruparPorDia, type EventoActividad } from "@/lib/encomiendas/pago";
 import { ActividadDia, type EventoDia } from "../actividad-dia";
-import type { EncomiendaPago, EncomiendaReglaPago } from "@/types/db";
+import type { EncomiendaPago } from "@/types/db";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Actividad del día — Encomiendas" };
@@ -39,10 +34,13 @@ export default async function EncomiendasDiaPage({
 
   const supabase = await createClient();
 
+  // Ya no hacen falta las reglas de pago: los ingresos y el pago del día están
+  // escritos en encomienda_pagos desde que el día se registró (0031). Antes
+  // había que traerlas para resolver a cuánto se valoraba cada entrega esa
+  // fecha, y esta pantalla rehacía la cuenta por su cuenta.
   const [
     { data: actividadData, error: errorActividad },
     { data: pagosData, error: errorPagos },
-    { data: reglasData, error: errorReglas },
   ] = await Promise.all([
     supabase
       .from("encomienda_actividad")
@@ -50,15 +48,10 @@ export default async function EncomiendasDiaPage({
       .eq("fecha", fecha)
       .returns<Fila[]>(),
     supabase.from("encomienda_pagos").select("*").eq("fecha", fecha),
-    // Para saber a cuánto se valora cada entrega ese día (0029): el valor vive
-    // en la regla vigente, así que sin las reglas no se puede mostrar el
-    // ingreso del día.
-    supabase.from("encomienda_reglas_pago").select("*"),
   ]);
 
-  const errorCarga = errorActividad ?? errorPagos ?? errorReglas;
+  const errorCarga = errorActividad ?? errorPagos;
   const pagos = (pagosData ?? []) as EncomiendaPago[];
-  const reglas = (reglasData ?? []) as EncomiendaReglaPago[];
   const porConductor = agruparPorDia(actividadData ?? []);
 
   return (
@@ -104,7 +97,6 @@ export default async function EncomiendasDiaPage({
               fecha={fecha}
               eventos={d.eventos}
               pago={pagos.find((p) => p.chofer_id === d.choferId) ?? null}
-              valorPorEntrega={valorPedido(reglaVigente(reglas, d.choferId, fecha))}
             />
           ))}
         </div>

@@ -19,13 +19,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { Field } from "@/components/ui/label";
-import { formatCLP, formatDate, formatNumber } from "@/lib/format";
-import {
-  calcularPagoDia,
-  ingresoEstimado,
-  reglaVigente,
-  valorPedido,
-} from "@/lib/encomiendas/pago";
+import { formatCLP, formatNumber } from "@/lib/format";
+import { calcularPagoDia, ingresoEstimado, valorPedido } from "@/lib/encomiendas/pago";
 import type { EncomiendaReglaPago } from "@/types/db";
 import { agregarDiaManual } from "./actions";
 
@@ -49,7 +44,7 @@ export type DiaConocido = {
 export function AgregarDia({
   choferes,
   errorChoferes,
-  reglas,
+  regla,
   diasConocidos,
   hoy,
 }: {
@@ -58,7 +53,10 @@ export function AgregarDia({
    *  un error y una lista vacía porque nadie tiene la categoría se veían igual,
    *  y el aviso afirmaba lo segundo sin saberlo. */
   errorChoferes?: string | null;
-  reglas: EncomiendaReglaPago[];
+  /** La regla de pago, o null si todavía no se configuró (0031). Sin ella no se
+   *  puede cargar un día: la base no le escribiría cifras y quedaría un día
+   *  trabajado que no suma ni se puede pagar. */
+  regla: EncomiendaReglaPago | null;
   diasConocidos: DiaConocido[];
   /** Fecha de hoy en Chile, calculada en el servidor: el reloj del navegador
    *  puede estar en otra zona y el tope del campo quedaría corrido un día. */
@@ -66,6 +64,16 @@ export function AgregarDia({
 }) {
   const [abierto, setAbierto] = useState(false);
   const [listo, setListo] = useState(false);
+
+  // El servidor vuelve a comprobar las dos cosas: esto es para no dejar
+  // escribir un formulario entero antes de decir que no se puede.
+  const bloqueo = regla == null
+    ? "Configura primero la regla de pago: sin ella no se puede calcular el día."
+    : errorChoferes
+      ? `No se pudo leer la lista de conductores: ${errorChoferes}`
+      : choferes.length === 0
+        ? "Ningún conductor tiene la categoría 'Encomiendas' asignada."
+        : null;
 
   return (
     <div className="flex flex-col items-end gap-1.5">
@@ -76,24 +84,18 @@ export function AgregarDia({
         }}
         size="sm"
         variant="secondary"
-        disabled={choferes.length === 0}
-        title={
-          errorChoferes
-            ? `No se pudo leer la lista de conductores: ${errorChoferes}`
-            : choferes.length === 0
-              ? "Ningún conductor tiene la categoría 'Encomiendas' asignada."
-              : undefined
-        }
+        disabled={bloqueo != null}
+        title={bloqueo ?? undefined}
       >
         <CalendarPlus className="h-4 w-4" />
         Agregar día
       </Button>
       {listo ? <p className="text-xs text-ok">Día cargado.</p> : null}
 
-      {abierto ? (
+      {abierto && regla ? (
         <DialogoAgregarDia
           choferes={choferes}
-          reglas={reglas}
+          regla={regla}
           diasConocidos={diasConocidos}
           hoy={hoy}
           onCerrar={() => setAbierto(false)}
@@ -109,14 +111,14 @@ export function AgregarDia({
 
 function DialogoAgregarDia({
   choferes,
-  reglas,
+  regla,
   diasConocidos,
   hoy,
   onCerrar,
   onGuardado,
 }: {
   choferes: ChoferOpcion[];
-  reglas: EncomiendaReglaPago[];
+  regla: EncomiendaReglaPago;
   diasConocidos: DiaConocido[];
   hoy: string;
   onCerrar: () => void;
@@ -148,7 +150,6 @@ function DialogoAgregarDia({
   const nOmitidos = Math.max(0, Math.trunc(Number(omitidos) || 0));
 
   const conteo = { entregados: nEntregados, omitidos: nOmitidos };
-  const regla = reglaVigente(reglas, choferId, fecha);
   const pago = calcularPagoDia(conteo, regla);
   const ingresos = ingresoEstimado(nEntregados, valorPedido(regla));
 
@@ -260,25 +261,25 @@ function DialogoAgregarDia({
               </div>
               <div className="mt-1.5 flex items-center justify-between border-t border-divider pt-1.5">
                 <dt className="text-muted">A pagar al conductor</dt>
-                <dd className="font-semibold tabular-nums">
-                  {regla ? formatCLP(pago.total) : "—"}
-                </dd>
+                <dd className="font-semibold tabular-nums">{formatCLP(pago.total)}</dd>
               </div>
               <p className="mt-2 text-xs text-muted">
-                {regla ? (
-                  <>
-                    Estimado a {formatCLP(valorPedido(regla))} por entrega · pago ={" "}
-                    {formatCLP(pago.base)} por pedidos + {formatCLP(pago.dia)} por el día
-                    {pago.bono > 0 ? ` + ${formatCLP(pago.bono)} de bono` : ""}
-                  </>
-                ) : (
-                  <span className="text-danger">
-                    No hay ninguna regla de pago vigente al {formatDate(fecha)}. El día se guarda
-                    igual, pero va a quedar como “Sin regla” hasta que configures una.
-                  </span>
-                )}
+                Estimado a {formatCLP(valorPedido(regla))} por entrega · pago ={" "}
+                {formatCLP(pago.base)} por pedidos + {formatCLP(pago.dia)} por el día
+                {pago.bono > 0 ? ` + ${formatCLP(pago.bono)} de bono` : ""}
               </p>
             </dl>
+
+            {/* La regla es una sola y no tiene vigencia (0031): un día viejo se
+                calcula con la tarifa de HOY, no con la que corría en su fecha.
+                Es correcto —se está registrando ahora— pero no es evidente, y
+                cargar un día de hace tres meses es justo cuando importa. */}
+            {fecha < hoy ? (
+              <p className="rounded-lg border border-border bg-background px-3 py-2 text-xs text-muted sm:col-span-2">
+                Es un día pasado: se calcula con la regla de pago que está vigente ahora, que es la
+                que muestra el cuadro de arriba.
+              </p>
+            ) : null}
 
             {nEntregados + nOmitidos === 0 ? (
               <p className="rounded-lg border border-border bg-background px-3 py-2 text-xs text-muted sm:col-span-2">

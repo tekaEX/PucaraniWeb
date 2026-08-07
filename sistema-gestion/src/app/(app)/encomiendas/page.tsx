@@ -12,22 +12,18 @@ import { formatCLP, formatDate, formatNumber, hoyChile } from "@/lib/format";
 import { getPeriodo, rangoPeriodo, etiquetaPeriodo } from "@/lib/periodo";
 import {
   agruparPorDia,
-  calcularPagoDia,
-  ingresoEstimado,
-  reglaVigente,
   valorPedido,
   type ConteoDia,
   type EventoActividad,
-  type PagoDesglose,
 } from "@/lib/encomiendas/pago";
 import type {
   EncomiendaIngresoReal,
   EncomiendaPago,
   EncomiendaReglaPago,
 } from "@/types/db";
-import { ConfirmarPagos } from "./confirmar-pagos";
 import { AgregarDia, type ChoferOpcion } from "./agregar-dia";
-import { ConfiguracionEncomiendas } from "./configuracion-encomiendas";
+import { ReglaPago } from "./regla-pago";
+import { CompararIngresos } from "./comparar-ingresos";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Encomiendas" };
@@ -45,24 +41,20 @@ type Dia = {
   choferId: string | null;
   choferNombre: string;
   conteo: ConteoDia;
-  ingresos: number;
-  /** Lo que corresponde pagar según la regla vigente a esa fecha. */
-  calculado: PagoDesglose;
-  /** Snapshot en encomienda_pagos, si alguien ya confirmó la liquidación. */
-  snapshot: EncomiendaPago | null;
-  /** No hay regla de pago vigente a esa fecha: el día NO se puede liquidar. */
-  sinRegla: boolean;
+  /** Las cifras que la base congeló para este día (0031): ingreso estimado y
+   *  desglose del pago. Esta pantalla NO las recalcula — lee lo que se escribió
+   *  cuando el día se registró, que es lo que hace que cambiar la regla de pago
+   *  no mueva ni un peso de lo que ya está.
+   *
+   *  null solo si el día no se pudo calcular: sin conductor (eliminado después)
+   *  o sin regla configurada todavía. */
+  cifras: EncomiendaPago | null;
   /** Eventos cargados a mano desde la oficina (0028) y total del día: con los
    *  dos se distingue un día íntegramente manual de uno que el teléfono mandó
    *  a medias y la oficina completó. */
   manuales: number;
   total: number;
 };
-
-/** Lo que hay que pagar: manda lo confirmado; si no hay, la proyección. */
-function pagoEfectivo(d: Dia): number {
-  return d.snapshot ? d.snapshot.pago_total : d.calculado.total;
-}
 
 export default async function EncomiendasPage() {
   // Mismo periodo global que el resto de la app: el mes/año lo fija el
@@ -89,7 +81,12 @@ export default async function EncomiendasPage() {
       .gte("fecha", desde)
       .lte("fecha", hasta)
       .returns<EventoFila[]>(),
-    supabase.from("encomienda_reglas_pago").select("*"),
+    // Hay una sola (0031). Se pide igual porque el diálogo la necesita para
+    // prellenar el formulario, y porque su ausencia es lo que bloquea el resto
+    // de la pantalla.
+    supabase.from("encomienda_reglas_pago").select("*").limit(1).maybeSingle(),
+    // Las cifras ya congeladas de cada día del periodo. De acá salen TODOS los
+    // números de plata de esta pantalla: no se recalcula nada al vuelo.
     supabase.from("encomienda_pagos").select("*").gte("fecha", desde).lte("fecha", hasta),
     // Para el selector de "Agregar día". Se piden por categoría y no todos los
     // choferes: cargarle un día de encomiendas a un conductor de taxis o de
@@ -112,11 +109,11 @@ export default async function EncomiendasPage() {
   ]);
 
   // Las tres primeras consultas son la plata: la actividad son los días
-  // trabajados, las reglas son cuánto se paga por cada uno y los pagos son lo
-  // ya confirmado. Si CUALQUIERA falla, todo número de esta pantalla queda
-  // corto sin parecerlo: sin actividad se ve un mes sin trabajo, sin reglas
-  // sale "$0 a pagar", sin pagos se pierde lo ya liquidado. Antes los errores
-  // se descartaban y el resultado era indistinguible de un mes tranquilo.
+  // trabajados, los pagos son lo que valió cada uno y la regla es lo que se
+  // está aplicando. Si CUALQUIERA falla, todo número de esta pantalla queda
+  // corto sin parecerlo: sin actividad se ve un mes sin trabajo, sin pagos sale
+  // "$0", sin la regla el panel se cree sin configurar. Antes los errores se
+  // descartaban y el resultado era indistinguible de un mes tranquilo.
   const errorPlata = errorActividad ?? errorReglas ?? errorPagos;
   if (errorPlata) {
     return (
@@ -133,7 +130,7 @@ export default async function EncomiendasPage() {
     );
   }
 
-  const reglas = (reglasData ?? []) as EncomiendaReglaPago[];
+  const regla = (reglasData ?? null) as EncomiendaReglaPago | null;
   const pagos = (pagosData ?? []) as EncomiendaPago[];
   // Este NO entra en errorPlata: que falte el ingreso real no vuelve falso
   // ningún número de la pantalla —el estimado sigue siendo el estimado—, solo
@@ -148,24 +145,19 @@ export default async function EncomiendasPage() {
     .map((c) => ({ id: c.id, nombre: c.nombre }))
     .sort((a, b) => a.nombre.localeCompare(b.nombre, "es"));
 
-  const dias: Dia[] = agruparPorDia(actividadData ?? []).map((d) => {
-    const regla = reglaVigente(reglas, d.choferId, d.fecha);
-    return {
-      fecha: d.fecha,
-      choferId: d.choferId,
-      choferNombre: d.eventos[0]?.chofer?.nombre ?? "Conductor eliminado",
-      conteo: d.conteo,
-      // Cada día se valora con el valor por entrega de SU regla vigente (0029):
-      // si el valor cambió a mitad de año, los meses anteriores conservan el
-      // que tenían en vez de reescribirse solos.
-      ingresos: ingresoEstimado(d.conteo.entregados, valorPedido(regla)),
-      calculado: calcularPagoDia(d.conteo, regla),
-      snapshot: pagos.find((p) => p.fecha === d.fecha && p.chofer_id === d.choferId) ?? null,
-      sinRegla: regla == null,
-      manuales: d.manuales,
-      total: d.eventos.length,
-    };
-  });
+  // La actividad dice QUÉ pasó cada día; encomienda_pagos, cuánto valió. Se
+  // cruzan por (conductor, fecha) en vez de recalcular: las cifras de la
+  // segunda son las que se escribieron cuando el día se registró, y son las que
+  // mandan aunque la regla haya cambiado diez veces desde entonces.
+  const dias: Dia[] = agruparPorDia(actividadData ?? []).map((d) => ({
+    fecha: d.fecha,
+    choferId: d.choferId,
+    choferNombre: d.eventos[0]?.chofer?.nombre ?? "Conductor eliminado",
+    conteo: d.conteo,
+    cifras: pagos.find((p) => p.fecha === d.fecha && p.chofer_id === d.choferId) ?? null,
+    manuales: d.manuales,
+    total: d.eventos.length,
+  }));
 
   // Días de CALENDARIO, no filas: con dos conductores saliendo los mismos 20
   // días, el KPI diría 40 en un mes que tiene 20. El pago sí se calcula por
@@ -173,12 +165,14 @@ export default async function EncomiendasPage() {
   // es "cuántos días hubo reparto".
   const diasCalendario = new Set(dias.map((d) => d.fecha)).size;
   const totalEntregados = dias.reduce((a, d) => a + d.conteo.entregados, 0);
-  const totalIngresos = dias.reduce((a, d) => a + d.ingresos, 0);
-  const totalPago = dias.reduce((a, d) => a + pagoEfectivo(d), 0);
+  const totalIngresos = dias.reduce((a, d) => a + (d.cifras?.ingresos_totales ?? 0), 0);
+  const totalPago = dias.reduce((a, d) => a + (d.cifras?.pago_total ?? 0), 0);
   const promedioDia = diasCalendario > 0 ? totalEntregados / diasCalendario : 0;
-  // Días trabajados que no se pueden liquidar: suman $0 al total y hay que
-  // decirlo, o el "a pagar" queda corto sin que se note.
-  const diasSinRegla = dias.filter((d) => d.sinRegla && !d.snapshot).length;
+  // Días trabajados a los que la base no les pudo poner cifras: suman $0 a los
+  // dos totales de arriba y hay que decirlo, o los números quedan cortos sin
+  // que se note. Con la regla configurada esto solo pasa si el conductor fue
+  // eliminado; sin regla, le pasa a todos.
+  const diasSinCifras = dias.filter((d) => d.cifras == null).length;
 
   // Ingreso real del periodo: null si todavía no se cargó ninguno (distinto de
   // cero, que sería "no entró nada").
@@ -186,8 +180,7 @@ export default async function EncomiendasPage() {
     ? ingresosReales.reduce((a, r) => a + r.monto, 0)
     : null;
   const difReal = (totalReal ?? 0) - totalIngresos;
-  // El valor por entrega que rige HOY, para el subtítulo cuando no hay real.
-  const valorVigente = valorPedido(reglaVigente(reglas, null, hoyChile()));
+  const valorVigente = valorPedido(regla);
 
   // Serie del gráfico, atada al mismo periodo: en vista de MES un palo por
   // cada día del mes (los días sin actividad quedan como huecos, que es justo
@@ -234,8 +227,8 @@ export default async function EncomiendasPage() {
         // cuenta: no hay que preguntar si el conductor salió.
         acum.diasTrabajados += 1;
         acum.entregados += d.conteo.entregados;
-        acum.ingresos += d.ingresos;
-        acum.pago += pagoEfectivo(d);
+        acum.ingresos += d.cifras?.ingresos_totales ?? 0;
+        acum.pago += d.cifras?.pago_total ?? 0;
         mapa.set(clave, acum);
         return mapa;
       }, new Map<string, { nombre: string; diasTrabajados: number; entregados: number; ingresos: number; pago: number }>())
@@ -255,8 +248,7 @@ export default async function EncomiendasPage() {
         {/* Ya no hay "Nuevo pedido" desde la oficina: los pedidos los carga el
             conductor en su teléfono y no pasan por la base (ver 0026). Uno
             cargado acá no le llegaría a nadie. */}
-        <ConfiguracionEncomiendas
-          reglas={reglas}
+        <CompararIngresos
           anio={periodo.anio}
           mes={periodo.mes}
           ingresos={{
@@ -266,7 +258,23 @@ export default async function EncomiendasPage() {
             error: errorIngresosReales?.message ?? null,
           }}
         />
+        <ReglaPago regla={regla} />
       </PageHeader>
+
+      {/* Sin regla no hay cómo valorar un día: la base no le escribe cifras a
+          ninguno y todo el panel queda en cero, con los días igual apareciendo
+          en la tabla. Eso se lee como "no se trabajó" si no se dice. */}
+      {regla == null ? (
+        <div className="mb-4 rounded-[14px] border border-danger/25 bg-danger-bg px-4 py-3 text-sm text-danger">
+          <p className="font-medium">Falta configurar la regla de pago.</p>
+          <p className="mt-0.5 text-xs">
+            Hasta que la guardes no se puede calcular el ingreso de ningún día ni lo que hay que
+            pagarle al conductor, y no se pueden cargar días desde la oficina. Los días que el
+            teléfono registre mientras tanto quedan guardados y se calculan solos apenas configures
+            la regla.
+          </p>
+        </div>
+      ) : null}
 
       <div className="stagger-in grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <Kpi
@@ -308,11 +316,11 @@ export default async function EncomiendasPage() {
           value={formatCLP(totalPago)}
           valueClass="text-warn"
           sub={
-            diasSinRegla > 0
-              ? `${diasSinRegla} día(s) sin regla de pago, no incluidos`
+            diasSinCifras > 0
+              ? `${diasSinCifras} día(s) sin calcular, no incluidos`
               : "Por día trabajado + por pedido"
           }
-          subClass={diasSinRegla > 0 ? "text-danger" : "text-muted"}
+          subClass={diasSinCifras > 0 ? "text-danger" : "text-muted"}
           icon={Wallet}
           tint="bg-warn-bg text-warn"
         />
@@ -374,7 +382,7 @@ export default async function EncomiendasPage() {
                 // se desactiva diciendo "ningún conductor tiene la categoría",
                 // que es una afirmación sobre datos que no se pudieron leer.
                 errorChoferes={errorChoferes?.message ?? null}
-                reglas={reglas}
+                regla={regla}
                 hoy={hoyChile()}
                 diasConocidos={dias.map((d) => ({
                   fecha: d.fecha,
@@ -385,7 +393,10 @@ export default async function EncomiendasPage() {
                   total: d.total,
                 }))}
               />
-              {dias.length > 0 ? <ConfirmarPagos desde={desde} hasta={hasta} /> : null}
+              {/* Acá estaba "Confirmar pagos del periodo". No queda nada que
+                  confirmar: las cifras de cada día las escribe la base cuando
+                  el día se registra (0031), así que la columna "A pagar" ya es
+                  la definitiva desde el primer momento. */}
             </div>
           </CardHeader>
           {dias.length === 0 ? (
@@ -411,16 +422,11 @@ export default async function EncomiendasPage() {
                     <th className="px-4 py-2.5 text-right font-medium">No entreg.</th>
                     <th className="px-4 py-2.5 text-right font-medium">Ingresos</th>
                     <th className="px-4 py-2.5 text-right font-medium">A pagar</th>
-                    <th className="px-4 py-2.5 font-medium">Liquidación</th>
+                    <th className="px-4 py-2.5 font-medium">Origen</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border">
                   {dias.map((d) => {
-                    // Un snapshot que ya no coincide con lo calculado: cambió
-                    // la regla o siguieron entrando entregas después de
-                    // confirmar. Alguien tiene que decidir si recalcula.
-                    const desfasado =
-                      d.snapshot != null && d.snapshot.pago_total !== d.calculado.total;
                     return (
                       <tr key={`${d.fecha}-${d.choferId ?? "sin"}`} className="hover:bg-background">
                         <td className="whitespace-nowrap px-4 py-3">
@@ -430,19 +436,6 @@ export default async function EncomiendasPage() {
                           >
                             {formatDate(d.fecha)}
                           </Link>
-                          {/* Un día cargado desde la oficina paga igual que uno
-                              registrado en terreno, pero no es la misma prueba:
-                              son números que alguien recordó, no entregas con
-                              hora. Quien mira la liquidación tiene que poder
-                              distinguirlos de un vistazo. */}
-                          {/* "Manual parcial" es el caso que más confunde: el
-                              teléfono alcanzó a mandar una parte del día y la
-                              oficina completó el resto. */}
-                          {d.manuales > 0 ? (
-                            <Badge tone="violet" className="ml-2">
-                              {d.manuales === d.total ? "Carga manual" : "Manual parcial"}
-                            </Badge>
-                          ) : null}
                         </td>
                         <td className="px-4 py-3 text-muted">{d.choferNombre}</td>
                         <td className="px-4 py-3 text-right tabular-nums">
@@ -451,24 +444,40 @@ export default async function EncomiendasPage() {
                         <td className="px-4 py-3 text-right tabular-nums text-muted">
                           {d.conteo.omitidos > 0 ? formatNumber(d.conteo.omitidos) : "—"}
                         </td>
+                        {/* Un guion y no un $0: que un día no tenga cifras no
+                            significa que no valga nada, significa que no se
+                            pudo calcular. Un cero ahí sería una afirmación. */}
                         <td className="px-4 py-3 text-right tabular-nums text-ok">
-                          {formatCLP(d.ingresos)}
+                          {d.cifras ? formatCLP(d.cifras.ingresos_totales) : "—"}
                         </td>
                         <td
                           className="px-4 py-3 text-right font-semibold tabular-nums"
-                          title={`Por pedidos ${formatCLP(d.calculado.base)} · por día ${formatCLP(d.calculado.dia)} · bono ${formatCLP(d.calculado.bono)}`}
+                          title={
+                            d.cifras
+                              ? `Por pedidos ${formatCLP(d.cifras.pago_base)} · por día ${formatCLP(d.cifras.pago_dia)} · bono ${formatCLP(d.cifras.pago_bono)}`
+                              : undefined
+                          }
                         >
-                          {formatCLP(pagoEfectivo(d))}
-                        </td>
-                        <td className="px-4 py-3">
-                          {d.sinRegla && !d.snapshot ? (
-                            <Badge tone="red">Sin regla</Badge>
-                          ) : desfasado ? (
-                            <Badge tone="amber">Por recalcular</Badge>
-                          ) : d.snapshot ? (
-                            <Badge tone="green">Confirmada</Badge>
+                          {d.cifras ? (
+                            formatCLP(d.cifras.pago_total)
                           ) : (
-                            <Badge tone="blue">Estimada</Badge>
+                            <Badge tone="red">
+                              {d.choferId ? "Sin regla" : "Sin conductor"}
+                            </Badge>
+                          )}
+                        </td>
+                        {/* Lo único que queda por distinguir del día es de dónde
+                            salieron sus números: un día del teléfono son
+                            entregas con hora, uno de oficina son cifras que
+                            alguien recordó. Paga igual, pero no prueba lo
+                            mismo. */}
+                        <td className="px-4 py-3">
+                          {d.manuales === 0 ? (
+                            <Badge tone="blue">Teléfono</Badge>
+                          ) : d.manuales === d.total ? (
+                            <Badge tone="violet">Oficina</Badge>
+                          ) : (
+                            <Badge tone="amber">Mixto</Badge>
                           )}
                         </td>
                       </tr>

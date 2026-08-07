@@ -14,8 +14,7 @@ import { Card, CardBody, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { formatCLP, formatNumber, formatTime } from "@/lib/format";
-import { ingresoEstimado } from "@/lib/encomiendas/pago";
-import { calcularPagoChofer, eliminarDiaManual } from "./actions";
+import { eliminarDiaManual } from "./actions";
 import type {
   EncomiendaActividadOrigen,
   EncomiendaActividadTipo,
@@ -57,32 +56,19 @@ export function ActividadDia({
   fecha,
   eventos,
   pago,
-  valorPorEntrega,
 }: {
   /** null si el conductor fue eliminado: el día se ve, pero no se liquida. */
   choferId: string | null;
   choferNombre: string;
   fecha: string;
   eventos: EventoDia[];
+  /** Las cifras que la base congeló para este día (0031). null si no se pudo
+   *  calcular: sin conductor, o sin regla de pago configurada. */
   pago: EncomiendaPago | null;
-  /** Cuánto se estima que entra por entrega según la regla vigente ESE día
-   *  (0029). Lo resuelve la página: acá no hay forma de saberlo. */
-  valorPorEntrega: number;
 }) {
-  const [pendingPago, startTransitionPago] = useTransition();
-  const [errorPago, setErrorPago] = useState<string | null>(null);
   const [pendingBorrar, startTransitionBorrar] = useTransition();
   const [errorBorrar, setErrorBorrar] = useState<string | null>(null);
   const [confirmandoBorrado, setConfirmandoBorrado] = useState(false);
-
-  function onCalcularPago() {
-    if (!choferId) return;
-    setErrorPago(null);
-    startTransitionPago(async () => {
-      const res = await calcularPagoChofer(choferId, fecha);
-      if (res.error) setErrorPago(res.error);
-    });
-  }
 
   function onBorrarManual() {
     if (!choferId) return;
@@ -96,9 +82,6 @@ export function ActividadDia({
 
   const entregados = eventos.filter((e) => e.tipo === "entrega").length;
   const omitidos = eventos.filter((e) => e.tipo === "omision").length;
-  // Ingreso estimado (no real): Starken maneja el valor de cada envío en su
-  // propio sistema, Pucarani no lo conoce. Ver VALOR_APROXIMADO_PEDIDO.
-  const ingresos = ingresoEstimado(entregados, valorPorEntrega);
 
   // La bitácora de abajo solo lista lo que vino del TELÉFONO. Los eventos
   // cargados a mano no tienen hora real —la columna es `not null`, así que
@@ -134,7 +117,11 @@ export function ActividadDia({
             <p className="text-xs text-muted">No entregados</p>
           </div>
           <div>
-            <p className="text-lg font-semibold tabular-nums">{formatCLP(ingresos)}</p>
+            {/* Un guion y no un $0: sin cifras el día no vale cero, es que no
+                se pudo calcular (sin regla de pago, o conductor eliminado). */}
+            <p className="text-lg font-semibold tabular-nums">
+              {pago ? formatCLP(pago.ingresos_totales) : "—"}
+            </p>
             <p className="text-xs text-muted">Ingresos del día</p>
           </div>
         </div>
@@ -247,20 +234,18 @@ export function ActividadDia({
                 </span>
               </span>
             ) : (
-              <span className="text-muted">Liquidación de este día aún sin confirmar</span>
+              // Acá había un botón "Confirmar pago". No queda nada que
+              // confirmar: la base escribe las cifras del día apenas se
+              // registra (0031). Si igual no hay, es por una de dos razones
+              // concretas, y conviene decir cuál.
+              <span className="text-danger">
+                {choferId
+                  ? "Sin regla de pago configurada: este día no se pudo calcular."
+                  : "El conductor fue eliminado: este día no se puede liquidar."}
+              </span>
             )}
           </div>
-          {choferId ? (
-            <Button onClick={onCalcularPago} disabled={pendingPago} size="sm" variant="secondary">
-              {pendingPago ? "Confirmando…" : pago ? "Recalcular" : "Confirmar pago"}
-            </Button>
-          ) : null}
         </div>
-        {errorPago ? (
-          <p className="rounded-lg border border-danger/20 bg-danger-bg px-3 py-2 text-sm text-danger">
-            {errorPago}
-          </p>
-        ) : null}
       </CardBody>
     </Card>
   );

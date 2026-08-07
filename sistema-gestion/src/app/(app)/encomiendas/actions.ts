@@ -6,21 +6,19 @@ import { sesionActual } from "@/lib/auth";
 import { intNull, num, s, sReq } from "@/lib/form-helpers";
 import { hoyChile } from "@/lib/format";
 import { uuidv7 } from "@/lib/uuid";
-import {
-  agruparPorDia,
-  calcularPagoDia,
-  ingresoEstimado,
-  reglaVigente,
-  valorPedido,
-  type DiaActividad,
-  type EventoActividad,
-} from "@/lib/encomiendas/pago";
-import type { EncomiendaActividadTipo, EncomiendaReglaPago } from "@/types/db";
+import type { EncomiendaActividadTipo } from "@/types/db";
 
-// Acá solo vive lo exclusivamente admin: confirmar pagos y cargar a mano un día
-// que el teléfono no alcanzó a registrar. La carga de pedidos y el armado de la
-// ruta ya no pasan por el servidor — viven en el teléfono del conductor (ver
-// lib/encomiendas/local y la cabecera de la migración 0026).
+// Acá solo vive lo exclusivamente admin: la regla de pago, los ingresos reales
+// y cargar a mano un día que el teléfono no alcanzó a registrar. La carga de
+// pedidos y el armado de la ruta ya no pasan por el servidor — viven en el
+// teléfono del conductor (ver lib/encomiendas/local y la cabecera de la 0026).
+//
+// YA NO HAY ACCIONES DE "CONFIRMAR PAGO" (0031). Existían para escribir la fila
+// de encomienda_pagos de un día, o de un mes entero, a pedido. Ahora esa fila la
+// escribe la base sola —un trigger sobre encomienda_actividad— apenas cambia la
+// actividad del día, así que no queda nada que confirmar: las cifras ya están.
+// Con eso se fue también el estado "por recalcular", que era la posibilidad de
+// que el snapshot y el cálculo al vuelo no coincidieran.
 
 export type FormState = { error?: string; ok?: boolean };
 
@@ -32,140 +30,6 @@ export type FormState = { error?: string; ok?: boolean };
 async function esAdminUOperador(): Promise<boolean> {
   const sesion = await sesionActual();
   return sesion?.rol === "admin" || sesion?.rol === "operador";
-}
-
-const SELECT_ACTIVIDAD = "chofer_id, fecha, tipo, origen";
-
-async function leerReglas(supabase: Awaited<ReturnType<typeof createClient>>) {
-  const { data } = await supabase.from("encomienda_reglas_pago").select("*");
-  return (data ?? []) as EncomiendaReglaPago[];
-}
-
-// Arma la fila de encomienda_pagos de un día. Es un SNAPSHOT auditable
-// (guarda regla_id y calculado_en): si la regla cambia después, lo ya
-// confirmado NO se recalcula solo. El panel muestra en paralelo el cálculo al
-// vuelo, así que una diferencia entre ambos queda a la vista.
-// Devuelve null si el día no se puede liquidar (sin conductor o sin regla).
-//
-// Ya no hace falta preguntar si el día "cuenta como trabajado": un día llega
-// hasta acá solo si tiene actividad registrada (ver agruparPorDia).
-function filaPago(
-  dia: DiaActividad<EventoActividad>,
-  reglas: EncomiendaReglaPago[],
-  ahora: string,
-) {
-  if (!dia.choferId) return null;
-  const regla = reglaVigente(reglas, dia.choferId, dia.fecha);
-  if (!regla) return null;
-
-  const pago = calcularPagoDia(dia.conteo, regla);
-
-  // pago_total no va: es una columna generada (0017/0024).
-  return {
-    chofer_id: dia.choferId,
-    fecha: dia.fecha,
-    pedidos_entregados: dia.conteo.entregados,
-    pedidos_no_entregados: dia.conteo.omitidos,
-    ingresos_totales: ingresoEstimado(dia.conteo.entregados, valorPedido(regla)),
-    pago_base: pago.base,
-    pago_dia: pago.dia,
-    pago_bono: pago.bono,
-    regla_id: regla.id,
-    calculado_en: ahora,
-  };
-}
-
-/** Confirma (o recalcula) el pago de un día concreto para un conductor. */
-export async function calcularPagoChofer(choferId: string, fecha: string): Promise<FormState> {
-  if (!(await esAdminUOperador())) {
-    return { error: "No tienes permiso para confirmar pagos." };
-  }
-
-  const supabase = await createClient();
-
-  const { data, error: errActividad } = await supabase
-    .from("encomienda_actividad")
-    .select(SELECT_ACTIVIDAD)
-    .eq("chofer_id", choferId)
-    .eq("fecha", fecha)
-    .returns<EventoActividad[]>();
-  if (errActividad) {
-    return { error: `No se pudo leer la actividad: ${errActividad.message}` };
-  }
-
-  const dias = agruparPorDia(data ?? []);
-  if (dias.length === 0) {
-    return { error: "Ese conductor no registró actividad en esa fecha." };
-  }
-
-  const fila = filaPago(dias[0], await leerReglas(supabase), new Date().toISOString());
-  if (!fila) {
-    return { error: "No hay ninguna regla de pago vigente a esa fecha. Configúrala primero." };
-  }
-
-  const { error } = await supabase
-    .from("encomienda_pagos")
-    .upsert(fila, { onConflict: "chofer_id,fecha" });
-  if (error) return { error: `No se pudo guardar el pago: ${error.message}` };
-
-  revalidatePath("/encomiendas");
-  revalidatePath("/encomiendas/dia");
-  return { ok: true };
-}
-
-// Confirma de una pasada todos los días del periodo que se está mirando. Sin
-// esto, dejar la liquidación del mes registrada obliga a entrar día por día y
-// apretar "Confirmar" treinta veces.
-export async function confirmarPagosPeriodo(
-  desde: string,
-  hasta: string,
-): Promise<FormState> {
-  if (!(await esAdminUOperador())) {
-    return { error: "No tienes permiso para confirmar pagos." };
-  }
-
-  const supabase = await createClient();
-
-  const { data, error: errActividad } = await supabase
-    .from("encomienda_actividad")
-    .select(SELECT_ACTIVIDAD)
-    .gte("fecha", desde)
-    .lte("fecha", hasta)
-    .returns<EventoActividad[]>();
-  if (errActividad) {
-    return { error: `No se pudo leer la actividad: ${errActividad.message}` };
-  }
-
-  const dias = agruparPorDia(data ?? []);
-  if (dias.length === 0) {
-    return { error: "No hay días con actividad para confirmar en este periodo." };
-  }
-
-  const reglas = await leerReglas(supabase);
-  const ahora = new Date().toISOString();
-  const filas = dias.map((d) => filaPago(d, reglas, ahora)).filter((f) => f != null);
-
-  // Un solo upsert con todas las filas, no una por día: así el mes se
-  // confirma entero o no se confirma nada. Antes, un día sin regla vigente
-  // cortaba el bucle a la mitad y dejaba medio periodo grabado y medio no,
-  // sin manera de saber cuál era cuál.
-  if (filas.length === 0) {
-    return { error: "No hay ninguna regla de pago vigente para esos días. Configúrala primero." };
-  }
-  const { error } = await supabase
-    .from("encomienda_pagos")
-    .upsert(filas, { onConflict: "chofer_id,fecha" });
-  if (error) return { error: `No se pudieron guardar los pagos: ${error.message}` };
-
-  revalidatePath("/encomiendas");
-  revalidatePath("/encomiendas/dia");
-
-  const omitidos = dias.length - filas.length;
-  return omitidos > 0
-    ? {
-        error: `Se confirmaron ${filas.length} día(s). Quedaron ${omitidos} sin liquidar por no haber una regla de pago vigente a esa fecha (o por conductor eliminado).`,
-      }
-    : { ok: true };
 }
 
 // ----------------------------------------------------------------------------
@@ -235,6 +99,23 @@ export async function agregarDiaManual(
 
   const supabase = await createClient();
 
+  // Sin regla de pago configurada no hay con qué valorar el día: la base no le
+  // escribiría cifras (ver private.encomienda_congelar_dia en la 0031) y
+  // quedaría un día trabajado que no suma a los ingresos ni se le puede pagar
+  // al conductor. Se frena acá, con el día todavía sin guardar, en vez de
+  // dejarlo entrar y que aparezca marcado "Sin regla" en el panel.
+  const { count: hayRegla, error: errRegla } = await supabase
+    .from("encomienda_reglas_pago")
+    .select("id", { count: "exact", head: true });
+  if (errRegla) {
+    return { error: `No se pudo leer la regla de pago: ${errRegla.message}` };
+  }
+  if (!hayRegla) {
+    return {
+      error: "Configura primero la regla de pago: sin ella no se puede calcular el día.",
+    };
+  }
+
   // Que el conductor exista y reparta encomiendas. Sin esto, un chofer_id
   // inventado revienta contra la foreign key con un mensaje de Postgres, y uno
   // de otra área (taxis, operación) entraría a la liquidación de encomiendas
@@ -293,10 +174,12 @@ export async function agregarDiaManual(
   const { error } = await supabase.from("encomienda_actividad").insert(filas);
   if (error) return { error: `No se pudo guardar el día: ${error.message}` };
 
-  // Si ese día ya tenía la liquidación confirmada, el snapshot queda desfasado
-  // respecto del cálculo al vuelo y el panel lo marca solo como "Por
-  // recalcular". No se recalcula acá a propósito: cambiar un pago ya confirmado
-  // es una decisión de quien liquida, no un efecto secundario de cargar un día.
+  // Las cifras del día las acaba de escribir la base sola: el insert de arriba
+  // disparó el trigger que lo congela (0031). Ojo con lo que eso implica para un
+  // día viejo: se revalúa con la regla de AHORA, no con la que corría en su
+  // fecha. Es lo correcto —ese día se está registrando en este momento— pero
+  // significa que corregir a mano un día de hace tres meses le aplica la tarifa
+  // de hoy. El diálogo muestra las cifras antes de guardar, así que se ve.
   revalidatePath("/encomiendas");
   revalidatePath("/encomiendas/dia");
   return { ok: true };
@@ -322,28 +205,12 @@ export async function eliminarDiaManual(choferId: string, fecha: string): Promis
     .eq("origen", "manual");
   if (error) return { error: `No se pudo borrar la carga manual: ${error.message}` };
 
-  // Si no queda NADA de ese día, el día deja de existir para el panel (que lo
-  // arma agrupando actividad). Una fila de encomienda_pagos sobreviviente sería
-  // plata a pagar por un día que ya nadie puede ver ni auditar, así que se va
-  // con él. Si en cambio quedó actividad del teléfono, el snapshot se conserva:
-  // el día sigue existiendo y el panel lo marcará "Por recalcular".
-  const { count: quedan } = await supabase
-    .from("encomienda_actividad")
-    .select("id", { count: "exact", head: true })
-    .eq("chofer_id", choferId)
-    .eq("fecha", fecha);
-
-  if (!quedan) {
-    const { error: errPago } = await supabase
-      .from("encomienda_pagos")
-      .delete()
-      .eq("chofer_id", choferId)
-      .eq("fecha", fecha);
-    if (errPago) {
-      return { error: `Se borró la actividad, pero quedó la liquidación: ${errPago.message}` };
-    }
-  }
-
+  // Acá había una segunda parte: contar lo que quedaba del día y, si no quedaba
+  // nada, borrar también la fila de encomienda_pagos —o habría quedado plata a
+  // pagar por un día que ya nadie puede ver—. Lo hace el trigger de la 0031: el
+  // delete de arriba recalcula el día, y un día con cero eventos se lleva su
+  // liquidación. Si en cambio quedó actividad del teléfono, el día sobrevive y
+  // sus cifras se reescriben sin lo que se acaba de borrar.
   revalidatePath("/encomiendas");
   revalidatePath("/encomiendas/dia");
   return { ok: true };
@@ -369,9 +236,15 @@ function porcentaje(v: FormDataEntryValue | null): number {
   return Number.isFinite(n) ? n : 0;
 }
 
-// Regla general (chofer_id null) por ahora — MVP de 1 conductor. Cada regla
-// nueva queda "vigente desde hoy"; las anteriores se conservan para no
-// alterar pagos ya calculados con ellas (ver encomienda_pagos.regla_id).
+// HAY UNA SOLA REGLA Y SE EDITA ENCIMA (0031). Antes cada guardado insertaba
+// una fila nueva con su propia fecha de vigencia —también al corregir un dedazo
+// dos minutos después—, así que la tabla se llenó de versiones que no usó nadie
+// y saber cuánto valía un día obligaba a resolver cuál de todas regía.
+//
+// Cambiarla NO mueve nada de lo ya registrado, y eso no depende de esta acción:
+// cada día tiene sus cifras escritas en encomienda_pagos desde el momento en
+// que se registró (ver la cabecera de la 0031). Lo que se guarde acá manda
+// sobre los días que se registren de ahora en adelante.
 //
 // Una regla tiene hasta cuatro componentes: cuánto se estima que entra por
 // entrega (valor_pedido, 0029), un fijo por día trabajado (monto_dia, 0024), lo
@@ -420,17 +293,34 @@ export async function guardarReglaPago(
   }
 
   const supabase = await createClient();
-  const { error } = await supabase.from("encomienda_reglas_pago").insert({
-    tipo_pago,
-    valor_pago,
-    valor_pedido,
-    monto_dia,
-    meta_entregas_dia,
-    bono_monto,
-    vigente_desde: hoyChile(),
-  });
+
+  const campos = { tipo_pago, valor_pago, valor_pedido, monto_dia, meta_entregas_dia, bono_monto };
+
+  // Se busca la fila que hay (hay una o ninguna) y se decide entre modificarla
+  // o crearla. No se usa upsert: el cliente no conoce el empresa_id —lo pone un
+  // trigger— y sin él no hay cómo nombrar las columnas del conflicto.
+  //
+  // La restricción unique(empresa_id) de la 0031 es la red de abajo: si dos
+  // pestañas guardan a la vez, la segunda choca en vez de crear una regla
+  // paralela.
+  const { data: actual, error: errLectura } = await supabase
+    .from("encomienda_reglas_pago")
+    .select("id")
+    .limit(1)
+    .maybeSingle();
+  if (errLectura) {
+    return { error: `No se pudo leer la regla actual: ${errLectura.message}` };
+  }
+
+  const { error } = actual
+    ? await supabase.from("encomienda_reglas_pago").update(campos).eq("id", actual.id)
+    : await supabase.from("encomienda_reglas_pago").insert(campos);
   if (error) return { error: `No se pudo guardar: ${error.message}` };
 
+  // El insert de la PRIMERA regla dispara en la base el barrido de los días que
+  // habían quedado sin cifras por no haber tenido con qué calcularse — pasa en
+  // una instalación nueva, donde el conductor puede haber salido antes de que la
+  // oficina configure nada. Un update no barre nada: ahí está todo el diseño.
   revalidatePath("/encomiendas");
   revalidatePath("/encomiendas/dia");
   return { ok: true };

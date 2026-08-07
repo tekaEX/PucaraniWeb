@@ -550,23 +550,30 @@ export const ENCOMIENDA_TIPO_PAGO = {
 } as const;
 export type EncomiendaTipoPago = keyof typeof ENCOMIENDA_TIPO_PAGO;
 
+/** La regla de pago del conductor. Hay UNA sola fila y se edita encima: no
+ *  tiene historial ni vigencias (0031).
+ *
+ *  Eso NO significa que cambiarla reescriba el pasado. Cada día guarda sus
+ *  propias cifras en EncomiendaPago apenas se registra, así que la regla solo
+ *  decide lo que se registre de ahí en adelante. */
 export interface EncomiendaReglaPago {
   id: string;
   empresa_id: string;
-  chofer_id: string | null;
   tipo_pago: EncomiendaTipoPago;
   /** numeric en Postgres: PostgREST lo devuelve como string ("15.00"). */
   valor_pago: number;
   /** CLP que se estima que entra por cada entrega (0029). Antes era una
-   *  constante del código; vive acá porque con tipo_pago 'porcentaje' entra en
-   *  la fórmula del sueldo y tiene que quedar congelado con la regla. */
+   *  constante del código; vive acá porque con tipo_pago 'porcentaje' entra
+   *  también en la fórmula del sueldo. */
   valor_pedido: number;
   /** Fijo en CLP por día trabajado, aparte de lo que pague por pedido (0024). */
   monto_dia: number;
   meta_entregas_dia: number | null;
   bono_monto: number | null;
-  vigente_desde: string;
+  /** Cuándo se configuró por primera vez. */
   created_at: string;
+  /** Desde cuándo rige lo que dice ahora (0031). */
+  updated_at: string;
 }
 
 /** Lo que Starken liquidó DE VERDAD en un mes (0029). Se contrasta contra el
@@ -583,6 +590,13 @@ export interface EncomiendaIngresoReal {
   updated_at: string;
 }
 
+/** Lo que valió un (conductor, día): ingreso estimado y desglose del pago.
+ *
+ *  Lo escribe la base sola —un trigger sobre encomienda_actividad, ver 0031—
+ *  cada vez que cambia la actividad de ese día. Son las cifras DEFINITIVAS del
+ *  día: nada las recalcula después, ni siquiera cambiar la regla de pago. Por
+ *  eso ya no guarda regla_id: con una regla mutable apuntaría siempre a la
+ *  misma fila y sus valores no serían los que se usaron acá. */
 export interface EncomiendaPago {
   id: string;
   empresa_id: string;
@@ -598,6 +612,6 @@ export interface EncomiendaPago {
   pago_bono: number;
   /** Columna generada: pago_base + pago_bono + pago_dia. */
   pago_total: number;
-  regla_id: string | null;
+  /** Cuándo la base congeló estas cifras. */
   calculado_en: string;
 }
