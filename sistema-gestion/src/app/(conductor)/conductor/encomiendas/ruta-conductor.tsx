@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import dynamic from "next/dynamic";
-import Link from "next/link";
+import { useRouter } from "next/navigation";
 import {
   Phone,
   Check,
@@ -123,6 +123,7 @@ export function RutaConductor({
    *  muestra dentro de la misma hoja deslizable, debajo de la lista. */
   children?: React.ReactNode;
 }) {
+  const router = useRouter();
   const [error, setError] = useState<string | null>(null);
   const [cargando, setCargando] = useState(false);
   // Único estado de flujo que NO se puede deducir de los datos: ya se marcó el
@@ -192,6 +193,20 @@ export function RutaConductor({
     }
     return miUbicacion?.heading ?? null;
   }, [miUbicacion, navegacion.geometria]);
+
+  // La flecha de arriba a la izquierda deshace el último paso, como el botón de
+  // atrás del navegador: si el chofer venía mirando el día de ayer, vuelve a
+  // hoy; si entró desde el inicio, vuelve al inicio. Antes iba SIEMPRE a
+  // /conductor, así que revisar tres días atrás y querer volver obligaba a
+  // rehacer el camino hacia adelante.
+  //
+  // El resguardo es para cuando no hay a dónde volver: la app instalada abierta
+  // desde el ícono, o esta URL abierta directo, arrancan con un solo paso en el
+  // historial y back() no haría nada — el botón parecería roto.
+  function volver() {
+    if (typeof window !== "undefined" && window.history.length > 1) router.back();
+    else router.push("/conductor");
+  }
 
   // Envuelve una escritura del chofer: apaga los botones mientras corre y deja
   // el mensaje a la vista si falla. Devuelve si salió bien, para poder seguir
@@ -322,17 +337,22 @@ export function RutaConductor({
 
       <div className="absolute inset-x-3 top-3 z-10 flex flex-col gap-2">
         <div className="flex items-center gap-2">
-          <Link
-            href="/conductor"
+          <button
+            type="button"
+            onClick={volver}
             className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white shadow-md"
-            aria-label="Inicio"
+            aria-label="Volver"
           >
             <ArrowLeft className="h-4 w-4" />
-          </Link>
+          </button>
           {/* Con una ruta propuesta encima, la indicación de manejo es de la
               parada de la ruta vieja: distrae y no corresponde. */}
           {navegacion.paso && !previa ? (
-            <InstruccionNavegacion paso={navegacion.paso} metros={navegacion.metrosAManiobra} />
+            <InstruccionNavegacion
+              paso={navegacion.paso}
+              siguiente={navegacion.siguiente}
+              metros={navegacion.metrosAManiobra}
+            />
           ) : null}
         </div>
 
@@ -496,7 +516,7 @@ export function RutaConductor({
                     key={p.pedido.id}
                     className={cn(
                       "flex items-center gap-3 px-3.5 py-2.5 text-sm",
-                      i > 0 && "border-t border-[#f0f0f2]",
+                      i > 0 && "border-t border-divider",
                       esActiva && "bg-brand-soft",
                     )}
                   >

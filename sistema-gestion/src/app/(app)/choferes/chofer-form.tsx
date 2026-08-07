@@ -3,6 +3,7 @@
 import { useActionState } from "react";
 import Link from "next/link";
 import { guardarChofer, type FormState } from "./actions";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Field } from "@/components/ui/label";
@@ -35,11 +36,9 @@ export function ChoferForm({
         <Input id="telefono" name="telefono" defaultValue={chofer?.telefono ?? ""} />
       </Field>
       <label className="flex items-center gap-2 sm:col-span-2">
-        <input
-          type="checkbox"
+        <Checkbox
           name="activo"
           defaultChecked={chofer?.activo ?? true}
-          className="h-4 w-4 accent-brand"
         />
         <span className="text-sm font-medium">Chofer activo</span>
       </label>

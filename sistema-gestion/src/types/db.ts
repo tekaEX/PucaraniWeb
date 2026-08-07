@@ -68,7 +68,6 @@ export interface Cliente {
   contacto_email: string | null;
   contacto_telefono: string | null;
   activo: boolean;
-  notas: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -558,12 +557,30 @@ export interface EncomiendaReglaPago {
   tipo_pago: EncomiendaTipoPago;
   /** numeric en Postgres: PostgREST lo devuelve como string ("15.00"). */
   valor_pago: number;
+  /** CLP que se estima que entra por cada entrega (0029). Antes era una
+   *  constante del código; vive acá porque con tipo_pago 'porcentaje' entra en
+   *  la fórmula del sueldo y tiene que quedar congelado con la regla. */
+  valor_pedido: number;
   /** Fijo en CLP por día trabajado, aparte de lo que pague por pedido (0024). */
   monto_dia: number;
   meta_entregas_dia: number | null;
   bono_monto: number | null;
   vigente_desde: string;
   created_at: string;
+}
+
+/** Lo que Starken liquidó DE VERDAD en un mes (0029). Se contrasta contra el
+ *  ingreso estimado para saber si valor_pedido está bien calibrado. */
+export interface EncomiendaIngresoReal {
+  id: string;
+  empresa_id: string;
+  anio: number;
+  mes: number;
+  monto: number;
+  /** De dónde salió el número: nº de liquidación, si es parcial, etc. */
+  nota: string | null;
+  created_at: string;
+  updated_at: string;
 }
 
 export interface EncomiendaPago {

@@ -4,6 +4,7 @@ import { useActionState, useMemo, useState } from "react";
 import Link from "next/link";
 import { addDays } from "date-fns";
 import type { FormState } from "./actions";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { MoneyInput } from "@/components/ui/money-input";
 import { Textarea } from "@/components/ui/textarea";
@@ -237,12 +238,7 @@ export function CotizacionForm({
         <Card>
           <CardBody className="space-y-2 text-sm">
             <label className="mb-3 flex items-center gap-2">
-              <input
-                type="checkbox"
-                checked={exento}
-                onChange={(e) => setExento(e.target.checked)}
-                className="h-4 w-4 accent-brand"
-              />
+              <Checkbox checked={exento} onChange={(e) => setExento(e.target.checked)} />
               <span className="font-medium">Servicio exento de IVA</span>
             </label>
             <div className="flex justify-between">

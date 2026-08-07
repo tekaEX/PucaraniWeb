@@ -25,6 +25,43 @@ import {
 } from "./idb";
 
 // ----------------------------------------------------------------------------
+// Una operación a la vez
+// ----------------------------------------------------------------------------
+//
+// Casi todo lo de este módulo es LEER, DECIDIR Y RECIÉN DESPUÉS ESCRIBIR, y
+// entre esas tres cosas hay un await. La transacción de escribir() es atómica,
+// pero la DECISIÓN se tomó afuera, con una foto que ya puede estar vieja.
+//
+// El caso que costaba plata: dos toques casi simultáneos en "Pedido finalizado"
+// (un doble tap, o la pantalla táctil que reporta el toque dos veces). Las dos
+// llamadas leen la parada, las dos la ven "pendiente", las dos pasan el guardia
+// de marcarEntrega y las dos encolan un evento con id distinto — así que la
+// idempotencia del servidor tampoco las frena y la entrega se cuenta y se paga
+// dos veces. Reproducido con tres llamadas en paralelo: tres eventos.
+//
+// La otra cara del mismo problema: fijarCoordenadas y marcarEntrega escriben
+// las dos el pedido entero, cada una sobre la foto que leyó antes, así que la
+// última en guardar pisa a la otra. Según cuál llegue segunda se pierde el
+// "entregado" (el paquete reaparece mañana como no entregado) o se pierden las
+// coordenadas recién encontradas (el pedido queda "Sin ubicar" y se cae de la
+// ruta). Medido contra el código anterior: se perdían las coordenadas.
+//
+// La fila serializa esas operaciones. No hace falta nada más fino: son
+// escrituras de milisegundos disparadas por una sola pantalla, y el orden entre
+// dos toques del chofer es justamente el que él hizo.
+let fila: Promise<unknown> = Promise.resolve();
+
+function enFila<T>(trabajo: () => Promise<T>): Promise<T> {
+  // then(trabajo, trabajo): que la anterior haya fallado no puede dejar la fila
+  // trabada para el resto de la jornada.
+  const proximo = fila.then(trabajo, trabajo);
+  // La fila espera el turno, no el resultado: sin este catch, una operación que
+  // lanza deja un rechazo sin manejar colgado del encadenamiento.
+  fila = proximo.catch(() => {});
+  return proximo;
+}
+
+// ----------------------------------------------------------------------------
 // Formas guardadas
 // ----------------------------------------------------------------------------
 
@@ -116,23 +153,22 @@ export type DatosPedido = {
 };
 
 /** Crea (sin id) o actualiza (con id) un pedido. Devuelve el guardado. */
-export async function guardarPedido(
-  datos: DatosPedido,
-  id?: string,
-): Promise<PedidoLocal> {
-  const anterior = id ? await leerUno<PedidoLocal>(STORES.pedidos, id) : null;
+export function guardarPedido(datos: DatosPedido, id?: string): Promise<PedidoLocal> {
+  return enFila(async () => {
+    const anterior = id ? await leerUno<PedidoLocal>(STORES.pedidos, id) : null;
 
-  const pedido: PedidoLocal = {
-    ...datos,
-    id: anterior?.id ?? id ?? uuidv7(),
-    // Editar un pedido no lo reabre ni lo cierra: el estado solo cambia al
-    // marcar la entrega.
-    estado: anterior?.estado ?? "pendiente",
-    cargadoEn: anterior?.cargadoEn ?? new Date().toISOString(),
-  };
+    const pedido: PedidoLocal = {
+      ...datos,
+      id: anterior?.id ?? id ?? uuidv7(),
+      // Editar un pedido no lo reabre ni lo cierra: el estado solo cambia al
+      // marcar la entrega.
+      estado: anterior?.estado ?? "pendiente",
+      cargadoEn: anterior?.cargadoEn ?? new Date().toISOString(),
+    };
 
-  await escribir([STORES.pedidos], ({ guardar }) => guardar(STORES.pedidos, pedido));
-  return pedido;
+    await escribir([STORES.pedidos], ({ guardar }) => guardar(STORES.pedidos, pedido));
+    return pedido;
+  });
 }
 
 /** Ids de todos los pedidos que ya están en el teléfono, entregados incluidos.
@@ -147,48 +183,54 @@ export async function idsGuardados(): Promise<Set<string>> {
  *  su fecha de carga original. Es la entrada del traspaso único desde la base
  *  (ver ./importar.ts); para lo que carga el chofer está guardarPedido.
  *  Devuelve cuántos se agregaron de verdad. */
-export async function agregarFaltantes(pedidos: PedidoLocal[]): Promise<number> {
-  const existentes = await idsGuardados();
-  const faltantes = pedidos.filter((p) => !existentes.has(p.id));
-  if (faltantes.length === 0) return 0;
+export function agregarFaltantes(pedidos: PedidoLocal[]): Promise<number> {
+  return enFila(async () => {
+    const existentes = await idsGuardados();
+    const faltantes = pedidos.filter((p) => !existentes.has(p.id));
+    if (faltantes.length === 0) return 0;
 
-  await escribir([STORES.pedidos], ({ guardar }) => {
-    for (const pedido of faltantes) guardar(STORES.pedidos, pedido);
+    await escribir([STORES.pedidos], ({ guardar }) => {
+      for (const pedido of faltantes) guardar(STORES.pedidos, pedido);
+    });
+    return faltantes.length;
   });
-  return faltantes.length;
 }
 
 /** Fija las coordenadas de varios pedidos de una vez, sin tocar el resto de sus
  *  datos: se usa al reintentar ubicar direcciones que habían fallado (ver
  *  ./generar-ruta.ts). Los que ya no existan se ignoran en silencio — el chofer
  *  pudo borrarlos mientras corría la geocodificación. */
-export async function fijarCoordenadas(
+export function fijarCoordenadas(
   coordenadas: { id: string; lat: number; lng: number }[],
 ): Promise<void> {
-  if (coordenadas.length === 0) return;
-  const actuales = await Promise.all(
-    coordenadas.map((c) => leerUno<PedidoLocal>(STORES.pedidos, c.id)),
-  );
+  if (coordenadas.length === 0) return Promise.resolve();
+  return enFila(async () => {
+    const actuales = await Promise.all(
+      coordenadas.map((c) => leerUno<PedidoLocal>(STORES.pedidos, c.id)),
+    );
 
-  await escribir([STORES.pedidos], ({ guardar }) => {
-    actuales.forEach((pedido, i) => {
-      if (!pedido) return;
-      guardar(STORES.pedidos, { ...pedido, lat: coordenadas[i].lat, lng: coordenadas[i].lng });
+    await escribir([STORES.pedidos], ({ guardar }) => {
+      actuales.forEach((pedido, i) => {
+        if (!pedido) return;
+        guardar(STORES.pedidos, { ...pedido, lat: coordenadas[i].lat, lng: coordenadas[i].lng });
+      });
     });
   });
 }
 
 /** Borra un pedido y lo saca de la ruta del día si estaba ahí. No toca eventos
  *  ya enviados: si se entregó, esa entrega ya está contada y así debe quedar. */
-export async function borrarPedido(id: string, fecha: string): Promise<void> {
-  const ruta = await leerUno<RutaLocal>(STORES.rutas, fecha);
-  const rutaSinPedido = ruta
-    ? { ...ruta, paradas: ruta.paradas.filter((p) => p.pedidoId !== id) }
-    : null;
+export function borrarPedido(id: string, fecha: string): Promise<void> {
+  return enFila(async () => {
+    const ruta = await leerUno<RutaLocal>(STORES.rutas, fecha);
+    const rutaSinPedido = ruta
+      ? { ...ruta, paradas: ruta.paradas.filter((p) => p.pedidoId !== id) }
+      : null;
 
-  await escribir([STORES.pedidos, STORES.rutas], ({ guardar, borrar }) => {
-    borrar(STORES.pedidos, id);
-    if (rutaSinPedido) guardar(STORES.rutas, rutaSinPedido);
+    await escribir([STORES.pedidos, STORES.rutas], ({ guardar, borrar }) => {
+      borrar(STORES.pedidos, id);
+      if (rutaSinPedido) guardar(STORES.rutas, rutaSinPedido);
+    });
   });
 }
 
@@ -223,41 +265,43 @@ export type EntradaRuta = {
 // El estado de LLAMADA de una parada que sigue pendiente también se conserva:
 // el chofer ya llamó, no tiene por qué volver a llamar solo porque rehizo la
 // ruta.
-export async function guardarRuta(entrada: EntradaRuta): Promise<RutaLocal> {
-  const anterior = await leerRuta(entrada.fecha);
-  const cerradas = (anterior?.paradas ?? []).filter((p) => p.entrega !== "pendiente");
-  const yaCerrado = new Set(cerradas.map((p) => p.pedidoId));
-  const llamadaPrevia = new Map(
-    (anterior?.paradas ?? []).map((p) => [p.pedidoId, p] as const),
-  );
+export function guardarRuta(entrada: EntradaRuta): Promise<RutaLocal> {
+  return enFila(async () => {
+    const anterior = await leerRuta(entrada.fecha);
+    const cerradas = (anterior?.paradas ?? []).filter((p) => p.entrega !== "pendiente");
+    const yaCerrado = new Set(cerradas.map((p) => p.pedidoId));
+    const llamadaPrevia = new Map(
+      (anterior?.paradas ?? []).map((p) => [p.pedidoId, p] as const),
+    );
 
-  const nuevas: ParadaLocal[] = entrada.pedidoIdsEnOrden
-    .filter((pedidoId) => !yaCerrado.has(pedidoId))
-    .map((pedidoId) => {
-      const previa = llamadaPrevia.get(pedidoId);
-      return {
-        pedidoId,
-        llamada: previa?.llamada ?? "pendiente",
-        entrega: "pendiente",
-        horaLlamada: previa?.horaLlamada ?? null,
-        horaEntrega: null,
-      };
-    });
+    const nuevas: ParadaLocal[] = entrada.pedidoIdsEnOrden
+      .filter((pedidoId) => !yaCerrado.has(pedidoId))
+      .map((pedidoId) => {
+        const previa = llamadaPrevia.get(pedidoId);
+        return {
+          pedidoId,
+          llamada: previa?.llamada ?? "pendiente",
+          entrega: "pendiente",
+          horaLlamada: previa?.horaLlamada ?? null,
+          horaEntrega: null,
+        };
+      });
 
-  const ruta: RutaLocal = {
-    fecha: entrada.fecha,
-    paradas: [...cerradas, ...nuevas],
-    // Si el servicio de rutas no respondió, conservar el trazado anterior le
-    // sirve más al chofer que un mapa en blanco (mismo criterio que hoy tiene
-    // generarRuta en el servidor).
-    geometria: entrada.geometria ?? anterior?.geometria ?? null,
-    distanciaM: entrada.distanciaM ?? anterior?.distanciaM ?? null,
-    duracionS: entrada.duracionS ?? anterior?.duracionS ?? null,
-    generadaEn: new Date().toISOString(),
-  };
+    const ruta: RutaLocal = {
+      fecha: entrada.fecha,
+      paradas: [...cerradas, ...nuevas],
+      // Si el servicio de rutas no respondió, conservar el trazado anterior le
+      // sirve más al chofer que un mapa en blanco (mismo criterio que hoy tiene
+      // generarRuta en el servidor).
+      geometria: entrada.geometria ?? anterior?.geometria ?? null,
+      distanciaM: entrada.distanciaM ?? anterior?.distanciaM ?? null,
+      duracionS: entrada.duracionS ?? anterior?.duracionS ?? null,
+      generadaEn: new Date().toISOString(),
+    };
 
-  await escribir([STORES.rutas], ({ guardar }) => guardar(STORES.rutas, ruta));
-  return ruta;
+    await escribir([STORES.rutas], ({ guardar }) => guardar(STORES.rutas, ruta));
+    return ruta;
+  });
 }
 
 // ----------------------------------------------------------------------------
@@ -290,68 +334,77 @@ export type Marca = {
 
 /** Registra el resultado de llamar al destinatario. No suma ni resta entregas:
  *  solo prueba que el chofer está trabajando (ver esPrimeraAccion). */
-export async function marcarLlamada(
+export function marcarLlamada(
   { fecha, pedidoId, choferId }: Marca,
   resultado: Exclude<EstadoLlamadaLocal, "pendiente">,
 ): Promise<void> {
-  const ruta = await leerRuta(fecha);
-  if (!ruta) throw new Error("No hay una ruta para ese día.");
-  if (!ruta.paradas.some((p) => p.pedidoId === pedidoId)) {
-    throw new Error("Ese pedido no está en la ruta del día.");
-  }
+  return enFila(async () => {
+    const ruta = await leerRuta(fecha);
+    if (!ruta) throw new Error("No hay una ruta para ese día.");
+    if (!ruta.paradas.some((p) => p.pedidoId === pedidoId)) {
+      throw new Error("Ese pedido no está en la ruta del día.");
+    }
 
-  const hora = new Date().toISOString();
-  const primera = esPrimeraAccion(ruta);
-  const actualizada: RutaLocal = {
-    ...ruta,
-    paradas: ruta.paradas.map((p) =>
-      p.pedidoId === pedidoId ? { ...p, llamada: resultado, horaLlamada: hora } : p,
-    ),
-  };
+    const hora = new Date().toISOString();
+    const primera = esPrimeraAccion(ruta);
+    const actualizada: RutaLocal = {
+      ...ruta,
+      paradas: ruta.paradas.map((p) =>
+        p.pedidoId === pedidoId ? { ...p, llamada: resultado, horaLlamada: hora } : p,
+      ),
+    };
 
-  await escribir([STORES.rutas, STORES.cola], ({ guardar }) => {
-    guardar(STORES.rutas, actualizada);
-    if (primera) guardar(STORES.cola, evento(choferId, fecha, "llamada", hora));
+    await escribir([STORES.rutas, STORES.cola], ({ guardar }) => {
+      guardar(STORES.rutas, actualizada);
+      if (primera) guardar(STORES.cola, evento(choferId, fecha, "llamada", hora));
+    });
   });
 }
 
 /** Cierra una parada. "entregado" cierra también el pedido; "omitido" lo deja
  *  pendiente para reintentarlo otro día (igual que el trigger del servidor en
  *  la 0018). El evento para el servidor sale en la misma transacción. */
-export async function marcarEntrega(
+export function marcarEntrega(
   { fecha, pedidoId, choferId }: Marca,
   resultado: Exclude<EstadoEntregaLocal, "pendiente">,
 ): Promise<void> {
-  const [ruta, pedido] = await Promise.all([
-    leerRuta(fecha),
-    leerUno<PedidoLocal>(STORES.pedidos, pedidoId),
-  ]);
-  if (!ruta) throw new Error("No hay una ruta para ese día.");
-  if (!pedido) throw new Error("Ese pedido ya no existe en este teléfono.");
-  const parada = ruta.paradas.find((p) => p.pedidoId === pedidoId);
-  if (!parada) throw new Error("Ese pedido no está en la ruta del día.");
-  // Marcar dos veces la misma parada duplicaría el evento y por lo tanto el
-  // conteo: el id del evento sería nuevo, así que la idempotencia del servidor
-  // no lo frenaría. Se corta acá.
-  if (parada.entrega !== "pendiente") return;
+  return enFila(async () => {
+    const [ruta, pedido] = await Promise.all([
+      leerRuta(fecha),
+      leerUno<PedidoLocal>(STORES.pedidos, pedidoId),
+    ]);
+    if (!ruta) throw new Error("No hay una ruta para ese día.");
+    if (!pedido) throw new Error("Ese pedido ya no existe en este teléfono.");
+    const parada = ruta.paradas.find((p) => p.pedidoId === pedidoId);
+    if (!parada) throw new Error("Ese pedido no está en la ruta del día.");
+    // Marcar dos veces la misma parada duplicaría el evento y por lo tanto el
+    // conteo: el id del evento sería nuevo, así que la idempotencia del servidor
+    // no lo frenaría. Se corta acá.
+    //
+    // Este guardia solo vale porque la lectura de arriba y la escritura de abajo
+    // corren sin que se meta otra marca en el medio; eso lo garantiza enFila
+    // (ver su comentario). Sin la fila, dos toques simultáneos leían los dos
+    // "pendiente" y pasaban los dos.
+    if (parada.entrega !== "pendiente") return;
 
-  const hora = new Date().toISOString();
-  const actualizada: RutaLocal = {
-    ...ruta,
-    paradas: ruta.paradas.map((p) =>
-      p.pedidoId === pedidoId ? { ...p, entrega: resultado, horaEntrega: hora } : p,
-    ),
-  };
-  const pedidoActualizado: PedidoLocal =
-    resultado === "entregado" ? { ...pedido, estado: "entregado" } : pedido;
+    const hora = new Date().toISOString();
+    const actualizada: RutaLocal = {
+      ...ruta,
+      paradas: ruta.paradas.map((p) =>
+        p.pedidoId === pedidoId ? { ...p, entrega: resultado, horaEntrega: hora } : p,
+      ),
+    };
+    const pedidoActualizado: PedidoLocal =
+      resultado === "entregado" ? { ...pedido, estado: "entregado" } : pedido;
 
-  await escribir([STORES.rutas, STORES.pedidos, STORES.cola], ({ guardar }) => {
-    guardar(STORES.rutas, actualizada);
-    guardar(STORES.pedidos, pedidoActualizado);
-    guardar(
-      STORES.cola,
-      evento(choferId, fecha, resultado === "entregado" ? "entrega" : "omision", hora),
-    );
+    await escribir([STORES.rutas, STORES.pedidos, STORES.cola], ({ guardar }) => {
+      guardar(STORES.rutas, actualizada);
+      guardar(STORES.pedidos, pedidoActualizado);
+      guardar(
+        STORES.cola,
+        evento(choferId, fecha, resultado === "entregado" ? "entrega" : "omision", hora),
+      );
+    });
   });
 }
 

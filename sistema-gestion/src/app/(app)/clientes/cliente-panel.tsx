@@ -4,7 +4,6 @@ import { useActionState, useRef } from "react";
 import { guardarCliente, eliminarCliente, type FormState } from "./actions";
 import { ConfirmForm } from "@/components/ui/confirm-form";
 import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
 import { InitialsAvatar } from "@/components/ui/avatar";
 import { EstadoCuenta } from "@/components/estado-cuenta";
 import { Trash2, Check, Loader2 } from "lucide-react";
@@ -41,7 +40,7 @@ export function ClientePanel({
           ref={formRef}
           action={formAction}
           onBlur={onBlurForm}
-          className="flex flex-1 items-start gap-4"
+          className="flex min-w-0 flex-1 items-start gap-4"
         >
           <input type="hidden" name="id" value={cliente.id} />
           <InitialsAvatar name={cliente.nombre} size={56} />
@@ -91,7 +90,7 @@ export function ClientePanel({
           </div>
         </form>
 
-        <div className="flex flex-col items-end gap-2">
+        <div className="flex shrink-0 flex-col items-end gap-2">
           <ConfirmForm
             action={eliminarCliente}
             mensaje={`¿Eliminar a ${cliente.nombre}? Esta acción no se puede deshacer.`}
@@ -121,18 +120,6 @@ export function ClientePanel({
             )}
           </span>
         </div>
-      </div>
-
-      <div>
-        <p className="mb-2 text-sm font-semibold">Notas</p>
-        <Textarea
-          name="notas"
-          form={formId}
-          defaultValue={cliente.notas ?? ""}
-          onBlur={autoguardar}
-          placeholder="Notas del cliente…"
-          className="min-h-20"
-        />
       </div>
 
       <div>

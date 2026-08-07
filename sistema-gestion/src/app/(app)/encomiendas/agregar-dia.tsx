@@ -24,8 +24,8 @@ import {
   calcularPagoDia,
   ingresoEstimado,
   reglaVigente,
+  valorPedido,
 } from "@/lib/encomiendas/pago";
-import { VALOR_APROXIMADO_PEDIDO } from "@/lib/encomiendas/config";
 import type { EncomiendaReglaPago } from "@/types/db";
 import { agregarDiaManual } from "./actions";
 
@@ -48,11 +48,16 @@ export type DiaConocido = {
 
 export function AgregarDia({
   choferes,
+  errorChoferes,
   reglas,
   diasConocidos,
   hoy,
 }: {
   choferes: ChoferOpcion[];
+  /** Mensaje si la lista de conductores no se pudo leer. Una lista vacía por
+   *  un error y una lista vacía porque nadie tiene la categoría se veían igual,
+   *  y el aviso afirmaba lo segundo sin saberlo. */
+  errorChoferes?: string | null;
   reglas: EncomiendaReglaPago[];
   diasConocidos: DiaConocido[];
   /** Fecha de hoy en Chile, calculada en el servidor: el reloj del navegador
@@ -73,9 +78,11 @@ export function AgregarDia({
         variant="secondary"
         disabled={choferes.length === 0}
         title={
-          choferes.length === 0
-            ? "Ningún conductor tiene la categoría 'Encomiendas' asignada."
-            : undefined
+          errorChoferes
+            ? `No se pudo leer la lista de conductores: ${errorChoferes}`
+            : choferes.length === 0
+              ? "Ningún conductor tiene la categoría 'Encomiendas' asignada."
+              : undefined
         }
       >
         <CalendarPlus className="h-4 w-4" />
@@ -143,7 +150,7 @@ function DialogoAgregarDia({
   const conteo = { entregados: nEntregados, omitidos: nOmitidos };
   const regla = reglaVigente(reglas, choferId, fecha);
   const pago = calcularPagoDia(conteo, regla);
-  const ingresos = ingresoEstimado(nEntregados);
+  const ingresos = ingresoEstimado(nEntregados, valorPedido(regla));
 
   // Lo que ya hay registrado de ese (conductor, día). Si viene del teléfono, lo
   // que se cargue acá se suma; si ya era carga manual, la reemplaza. Las dos
@@ -251,7 +258,7 @@ function DialogoAgregarDia({
                 <dt className="text-muted">Ingresos estimados</dt>
                 <dd className="font-semibold tabular-nums text-ok">{formatCLP(ingresos)}</dd>
               </div>
-              <div className="mt-1.5 flex items-center justify-between border-t border-[#e6e6ea] pt-1.5">
+              <div className="mt-1.5 flex items-center justify-between border-t border-divider pt-1.5">
                 <dt className="text-muted">A pagar al conductor</dt>
                 <dd className="font-semibold tabular-nums">
                   {regla ? formatCLP(pago.total) : "—"}
@@ -260,7 +267,7 @@ function DialogoAgregarDia({
               <p className="mt-2 text-xs text-muted">
                 {regla ? (
                   <>
-                    Estimado a {formatCLP(VALOR_APROXIMADO_PEDIDO)} por entrega · pago ={" "}
+                    Estimado a {formatCLP(valorPedido(regla))} por entrega · pago ={" "}
                     {formatCLP(pago.base)} por pedidos + {formatCLP(pago.dia)} por el día
                     {pago.bono > 0 ? ` + ${formatCLP(pago.bono)} de bono` : ""}
                   </>
@@ -274,7 +281,7 @@ function DialogoAgregarDia({
             </dl>
 
             {nEntregados + nOmitidos === 0 ? (
-              <p className="rounded-lg border border-[#f0f0f2] bg-background px-3 py-2 text-xs text-muted sm:col-span-2">
+              <p className="rounded-lg border border-border bg-background px-3 py-2 text-xs text-muted sm:col-span-2">
                 Sin entregas ni omisiones, el día se registra como “salió a repartir”: cuenta como
                 día trabajado y paga el fijo diario, sin sumar nada por pedido.
               </p>
@@ -304,7 +311,7 @@ function DialogoAgregarDia({
             ) : null}
           </div>
 
-          <div className="flex items-center justify-end gap-2 border-t border-[#f0f0f2] px-5 py-4 sm:px-6">
+          <div className="flex items-center justify-end gap-2 border-t border-divider px-5 py-4 sm:px-6">
             <Button type="button" variant="outline" onClick={onCerrar} disabled={pending}>
               Cancelar
             </Button>

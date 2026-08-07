@@ -3,6 +3,7 @@
 import { useActionState } from "react";
 import Link from "next/link";
 import { guardarVehiculo, type FormState } from "./actions";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Select } from "@/components/ui/select";
@@ -114,11 +115,9 @@ export function VehiculoForm({ vehiculo }: { vehiculo?: Vehiculo }) {
       <Card className="flex-1">
         <CardBody className="space-y-4">
           <label className="flex items-center gap-2">
-            <input
-              type="checkbox"
+            <Checkbox
               name="activo"
               defaultChecked={vehiculo?.activo ?? true}
-              className="h-4 w-4 accent-brand"
             />
             <span className="text-sm font-medium">Vehículo activo</span>
           </label>

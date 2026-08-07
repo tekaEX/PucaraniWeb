@@ -5,8 +5,9 @@ import { Card, CardBody, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Kpi } from "@/components/ui/kpi";
 import { Vacio } from "@/components/ui/vacio";
+import { ErrorDatos } from "@/components/ui/error-datos";
 import { buttonClass } from "@/components/ui/button";
-import { Package, Settings, CalendarRange, Truck, Wallet, CircleDollarSign } from "lucide-react";
+import { Package, CalendarRange, Truck, Wallet, CircleDollarSign } from "lucide-react";
 import { formatCLP, formatDate, formatNumber, hoyChile } from "@/lib/format";
 import { getPeriodo, rangoPeriodo, etiquetaPeriodo } from "@/lib/periodo";
 import {
@@ -14,14 +15,19 @@ import {
   calcularPagoDia,
   ingresoEstimado,
   reglaVigente,
+  valorPedido,
   type ConteoDia,
   type EventoActividad,
   type PagoDesglose,
 } from "@/lib/encomiendas/pago";
-import { VALOR_APROXIMADO_PEDIDO } from "@/lib/encomiendas/config";
-import type { EncomiendaPago, EncomiendaReglaPago } from "@/types/db";
+import type {
+  EncomiendaIngresoReal,
+  EncomiendaPago,
+  EncomiendaReglaPago,
+} from "@/types/db";
 import { ConfirmarPagos } from "./confirmar-pagos";
 import { AgregarDia, type ChoferOpcion } from "./agregar-dia";
+import { ConfiguracionEncomiendas } from "./configuracion-encomiendas";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Encomiendas" };
@@ -71,10 +77,11 @@ export default async function EncomiendasPage() {
   // acá abajo: cada grupo que existe es, por definición, un día trabajado — un
   // día en que nadie salió no tiene filas y simplemente no aparece.
   const [
-    { data: actividadData },
-    { data: reglasData },
-    { data: pagosData },
-    { data: choferesData },
+    { data: actividadData, error: errorActividad },
+    { data: reglasData, error: errorReglas },
+    { data: pagosData, error: errorPagos },
+    { data: choferesData, error: errorChoferes },
+    { data: ingresosRealesData, error: errorIngresosReales },
   ] = await Promise.all([
     supabase
       .from("encomienda_actividad")
@@ -92,10 +99,46 @@ export default async function EncomiendasPage() {
       .select("chofer:choferes(id, nombre, activo)")
       .eq("categoria", "encomiendas")
       .returns<{ chofer: { id: string; nombre: string; activo: boolean } | null }[]>(),
+    // Lo que Starken liquidó de verdad (0029). Va por mes, no por fecha, así
+    // que se filtra por año y —en vista de mes— por ese mes.
+    (periodo.mes === null
+      ? supabase.from("encomienda_ingresos_reales").select("*").eq("anio", periodo.anio)
+      : supabase
+          .from("encomienda_ingresos_reales")
+          .select("*")
+          .eq("anio", periodo.anio)
+          .eq("mes", periodo.mes)
+    ).returns<EncomiendaIngresoReal[]>(),
   ]);
+
+  // Las tres primeras consultas son la plata: la actividad son los días
+  // trabajados, las reglas son cuánto se paga por cada uno y los pagos son lo
+  // ya confirmado. Si CUALQUIERA falla, todo número de esta pantalla queda
+  // corto sin parecerlo: sin actividad se ve un mes sin trabajo, sin reglas
+  // sale "$0 a pagar", sin pagos se pierde lo ya liquidado. Antes los errores
+  // se descartaban y el resultado era indistinguible de un mes tranquilo.
+  const errorPlata = errorActividad ?? errorReglas ?? errorPagos;
+  if (errorPlata) {
+    return (
+      <div>
+        <PageHeader
+          title="Gestión de encomiendas"
+          description={etiquetaPeriodo(periodo)}
+        />
+        <ErrorDatos
+          titulo="No se pudo leer la actividad de encomiendas."
+          detalle={errorPlata.message}
+        />
+      </div>
+    );
+  }
 
   const reglas = (reglasData ?? []) as EncomiendaReglaPago[];
   const pagos = (pagosData ?? []) as EncomiendaPago[];
+  // Este NO entra en errorPlata: que falte el ingreso real no vuelve falso
+  // ningún número de la pantalla —el estimado sigue siendo el estimado—, solo
+  // deja sin hacer la comparación. El aviso va dentro del diálogo, donde sirve.
+  const ingresosReales = (ingresosRealesData ?? []) as EncomiendaIngresoReal[];
 
   // Solo conductores activos: uno dado de baja no debería aparecer como opción
   // para cargarle días nuevos. Su historial y sus liquidaciones ya cargadas
@@ -112,7 +155,10 @@ export default async function EncomiendasPage() {
       choferId: d.choferId,
       choferNombre: d.eventos[0]?.chofer?.nombre ?? "Conductor eliminado",
       conteo: d.conteo,
-      ingresos: ingresoEstimado(d.conteo.entregados),
+      // Cada día se valora con el valor por entrega de SU regla vigente (0029):
+      // si el valor cambió a mitad de año, los meses anteriores conservan el
+      // que tenían en vez de reescribirse solos.
+      ingresos: ingresoEstimado(d.conteo.entregados, valorPedido(regla)),
       calculado: calcularPagoDia(d.conteo, regla),
       snapshot: pagos.find((p) => p.fecha === d.fecha && p.chofer_id === d.choferId) ?? null,
       sinRegla: regla == null,
@@ -133,6 +179,15 @@ export default async function EncomiendasPage() {
   // Días trabajados que no se pueden liquidar: suman $0 al total y hay que
   // decirlo, o el "a pagar" queda corto sin que se note.
   const diasSinRegla = dias.filter((d) => d.sinRegla && !d.snapshot).length;
+
+  // Ingreso real del periodo: null si todavía no se cargó ninguno (distinto de
+  // cero, que sería "no entró nada").
+  const totalReal = ingresosReales.length > 0
+    ? ingresosReales.reduce((a, r) => a + r.monto, 0)
+    : null;
+  const difReal = (totalReal ?? 0) - totalIngresos;
+  // El valor por entrega que rige HOY, para el subtítulo cuando no hay real.
+  const valorVigente = valorPedido(reglaVigente(reglas, null, hoyChile()));
 
   // Serie del gráfico, atada al mismo periodo: en vista de MES un palo por
   // cada día del mes (los días sin actividad quedan como huecos, que es justo
@@ -200,18 +255,33 @@ export default async function EncomiendasPage() {
         {/* Ya no hay "Nuevo pedido" desde la oficina: los pedidos los carga el
             conductor en su teléfono y no pasan por la base (ver 0026). Uno
             cargado acá no le llegaría a nadie. */}
-        <Link href="/encomiendas/configuracion" className={buttonClass({ variant: "secondary" })}>
-          <Settings className="h-4 w-4" />
-          Reglas de pago
-        </Link>
+        <ConfiguracionEncomiendas
+          reglas={reglas}
+          anio={periodo.anio}
+          mes={periodo.mes}
+          ingresos={{
+            estimado: totalIngresos,
+            entregas: totalEntregados,
+            reales: ingresosReales,
+            error: errorIngresosReales?.message ?? null,
+          }}
+        />
       </PageHeader>
 
       <div className="stagger-in grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <Kpi
-          label="Ingresos"
+          label="Ingresos estimados"
           value={formatCLP(totalIngresos)}
           valueClass="text-ok"
-          sub={`estimado a ${formatCLP(VALOR_APROXIMADO_PEDIDO)} por entrega`}
+          // Con lo real cargado, lo que importa deja de ser el estimado y pasa
+          // a ser cuánto le erró: es el número con el que se calibra el valor
+          // por entrega.
+          sub={
+            totalReal != null
+              ? `reales ${formatCLP(totalReal)} · ${difReal >= 0 ? "+" : "−"}${formatCLP(Math.abs(difReal))}`
+              : `a ${formatCLP(valorVigente)} por entrega · carga los reales para comparar`
+          }
+          subClass={totalReal == null ? "text-muted" : difReal >= 0 ? "text-ok" : "text-danger"}
           icon={CircleDollarSign}
           tint="bg-ok-bg text-ok"
         />
@@ -300,6 +370,10 @@ export default async function EncomiendasPage() {
                   la que va a cambiar: se carga un día y aparece una fila. */}
               <AgregarDia
                 choferes={choferesEncomiendas}
+                // Sin esto, una consulta fallida deja la lista vacía y el botón
+                // se desactiva diciendo "ningún conductor tiene la categoría",
+                // que es una afirmación sobre datos que no se pudieron leer.
+                errorChoferes={errorChoferes?.message ?? null}
                 reglas={reglas}
                 hoy={hoyChile()}
                 diasConocidos={dias.map((d) => ({
@@ -432,7 +506,7 @@ export default async function EncomiendasPage() {
                       <dt className="text-muted">Ingresos generados</dt>
                       <dd className="tabular-nums text-ok">{formatCLP(c.ingresos)}</dd>
                     </div>
-                    <div className="flex justify-between border-t border-[#f0f0f2] pt-1.5">
+                    <div className="flex justify-between border-t border-divider pt-1.5">
                       <dt className="font-medium">Total a pagar</dt>
                       <dd className="font-semibold tabular-nums">{formatCLP(c.pago)}</dd>
                     </div>

@@ -13,6 +13,7 @@ import {
   type FormState,
   type InvitarState,
 } from "./actions";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Button, buttonClass } from "@/components/ui/button";
@@ -174,22 +175,25 @@ function CategoriasChofer({
   return (
     <form ref={formRef} action={formAction}>
       <input type="hidden" name="id" value={choferId} />
-      <div className="flex flex-wrap gap-3">
+      {/* justify-center y gap más ancho: las categorías son pocas y cortas, así
+          que alineadas a la izquierda dejaban la mitad derecha de la caja en
+          blanco. Centradas ocupan el medio y la caja se ve pareja. */}
+      <div className="flex flex-wrap items-center justify-center gap-x-5 gap-y-2.5">
         {Object.entries(VEHICULO_CATEGORIAS).map(([value, label]) => (
-          <label key={value} className="flex items-center gap-2 text-sm">
-            <input
-              type="checkbox"
+          <label key={value} className="flex cursor-pointer items-center gap-2 text-sm">
+            <Checkbox
               name="categorias"
               value={value}
               defaultChecked={categorias.includes(value)}
               onChange={autoguardar}
-              className="h-4 w-4 accent-brand"
             />
             {label}
           </label>
         ))}
       </div>
-      {state.error ? <p className="mt-2 text-sm text-danger">{state.error}</p> : null}
+      {state.error ? (
+        <p className="mt-2 text-center text-sm text-danger">{state.error}</p>
+      ) : null}
     </form>
   );
 }
@@ -366,12 +370,10 @@ export function ChoferPanel({
                 className="w-44"
               />
               <label className="flex items-center gap-2 text-sm">
-                <input
-                  type="checkbox"
+                <Checkbox
                   name="activo"
                   defaultChecked={chofer.activo}
                   onChange={autoguardar}
-                  className="h-4 w-4 accent-brand"
                 />
                 Activo
               </label>
@@ -433,7 +435,7 @@ export function ChoferPanel({
               </div>
               <VencimientoBadge fecha={chofer.licencia_vencimiento} />
             </div>
-            <div className="mt-3 flex flex-1 flex-col border-t border-[#f0f0f2] pt-3">
+            <div className="mt-3 flex flex-1 flex-col border-t border-divider pt-3">
               <LicenciaForm chofer={chofer} />
             </div>
           </div>
@@ -452,18 +454,29 @@ export function ChoferPanel({
         </div>
       </div>
 
-      {/* Categorías (líneas de trabajo) · Acceso a la app del chofer */}
-      <div className="grid items-start gap-5 lg:grid-cols-2">
-        <div>
+      {/* Categorías (líneas de trabajo) · Acceso a la app del chofer
+          Sin "items-start": así las dos cajas quedan del mismo alto en vez de
+          que cada una tome el de su contenido — la de acceso trae un campo de
+          correo y un botón, la de categorías solo una fila de casillas, y una
+          quedaba bastante más alta que la otra.
+          El flex-col de cada columna con flex-1 en la caja es lo que hace que
+          el borde llegue abajo; sin eso, estirar la celda del grid no estira la
+          caja que tiene adentro. */}
+      <div className="grid gap-5 lg:grid-cols-2">
+        <div className="flex flex-col">
           <p className="mb-2 text-sm font-semibold">Categorías</p>
-          <div className="rounded-xl border border-border bg-white p-4">
+          {/* Centrado en los dos ejes: al emparejar los altos sobra lugar, y
+              con el contenido arriba a la izquierda ese sobrante quedaba todo
+              junto abajo, como un hueco. Centrado se reparte y no se lee como
+              espacio vacío. */}
+          <div className="flex flex-1 items-center justify-center rounded-xl border border-border bg-white p-4">
             <CategoriasChofer choferId={chofer.id} categorias={categorias} />
           </div>
         </div>
 
-        <div>
+        <div className="flex flex-col">
           <p className="mb-2 text-sm font-semibold">Acceso a la app del chofer</p>
-          <div className="rounded-xl border border-border bg-white p-4">
+          <div className="flex-1 rounded-xl border border-border bg-white p-4">
             <AccesoChofer chofer={chofer} />
           </div>
         </div>

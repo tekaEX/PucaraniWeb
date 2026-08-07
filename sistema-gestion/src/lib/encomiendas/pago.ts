@@ -27,10 +27,27 @@ export type ConteoDia = {
   omitidos: number;
 };
 
+/** Cuánto se estima que entra por cada entrega, según la regla que rige ese
+ *  día (0029). Sin regla vigente no hay valor configurado y se cae al respaldo:
+ *  el día igual muestra un ingreso estimado, aunque no se pueda liquidar.
+ *
+ *  numeric/integer de PostgREST puede llegar como string, y una regla anterior
+ *  a la 0029 no trae la columna: los dos casos terminan en el respaldo en vez
+ *  de en un NaN paseándose por la pantalla. */
+export function valorPedido(regla: EncomiendaReglaPago | null | undefined): number {
+  const valor = Number(regla?.valor_pedido);
+  return Number.isFinite(valor) && valor > 0 ? valor : VALOR_APROXIMADO_PEDIDO;
+}
+
 // Ingreso ESTIMADO, no real: Starken maneja el valor de cada envío en su
-// propio sistema y Pucarani nunca lo conoce (ver la 0021).
-export function ingresoEstimado(entregados: number): number {
-  return entregados * VALOR_APROXIMADO_PEDIDO;
+// propio sistema y Pucarani nunca lo conoce (ver la 0021). Lo real se anota a
+// mano por mes y se contrasta contra esto (encomienda_ingresos_reales, 0029).
+//
+// El valor por entrega se pide explícito y no se toma de una constante: es
+// configurable y cambia con la regla vigente, así que cada pantalla tiene que
+// decir con cuál está calculando en vez de suponerlo.
+export function ingresoEstimado(entregados: number, valorPorEntrega: number): number {
+  return Math.round(entregados * valorPorEntrega);
 }
 
 // Ya no hay una función "diaTrabajado". Antes hacía falta porque una ruta podía
@@ -97,7 +114,11 @@ export function calcularPagoDia(
   const valor = Number(regla.valor_pago);
   const base =
     regla.tipo_pago === "porcentaje"
-      ? Math.round((ingresoEstimado(conteo.entregados) * valor) / 100)
+      ? // El porcentaje se calcula sobre el ingreso estimado CON EL VALOR DE
+        // ESTA MISMA REGLA. Por eso valor_pedido vive en la regla y no en una
+        // configuración aparte: si no, cambiarlo reescribiría en silencio lo
+        // que se le pagó al conductor los meses anteriores.
+        Math.round((ingresoEstimado(conteo.entregados, valorPedido(regla)) * valor) / 100)
       : Math.round(conteo.entregados * valor);
 
   const dia = Number(regla.monto_dia ?? 0);

@@ -26,7 +26,6 @@ export async function guardarCliente(
     contacto_nombre: s(formData.get("contacto_nombre")),
     contacto_email: s(formData.get("contacto_email")),
     contacto_telefono: s(formData.get("contacto_telefono")),
-    notas: s(formData.get("notas")),
   };
 
   const supabase = await createClient();

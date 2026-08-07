@@ -180,26 +180,33 @@ export function PedidoFormLocal({
         ) : null}
       </div>
 
-      <div className="mt-4 flex flex-wrap items-center gap-2">
-        <Button type="submit" disabled={guardando}>
-          <Save className="h-4 w-4" />
-          {guardando ? "Guardando…" : editando ? "Guardar cambios" : "Guardar pedido"}
-        </Button>
-        {onCancelar ? (
-          <button
-            type="button"
-            onClick={onCancelar}
-            className="text-sm text-muted transition-colors hover:text-foreground"
-          >
-            Cancelar
-          </button>
-        ) : null}
+      {/* Guardar contra el borde derecho y Cancelar a su izquierda: el pulgar
+          del chofer cae en esa esquina, y es el mismo orden que el resto de los
+          diálogos del sistema (ver el modal de "Agregar día" en el panel).
+          El aviso de guardado se va al otro extremo con mr-auto, así no empuja
+          los botones ni les cambia el lugar de un guardado al siguiente. */}
+      <div className="mt-4 flex flex-wrap items-center justify-end gap-2">
         {listo && !aviso ? (
-          <span className="flex items-center gap-1 text-sm text-ok">
+          <span className="mr-auto flex items-center gap-1 text-sm text-ok">
             <Check className="h-4 w-4" />
             Agregado — listo para el siguiente
           </span>
         ) : null}
+        {onCancelar ? (
+          <button
+            type="button"
+            onClick={onCancelar}
+            // Con padding y no como texto suelto: en el teléfono tiene que ser
+            // tan tocable como el botón que tiene al lado.
+            className="rounded-full px-3 py-2 text-sm text-muted transition-colors hover:text-foreground active:bg-background"
+          >
+            Cancelar
+          </button>
+        ) : null}
+        <Button type="submit" disabled={guardando}>
+          <Save className="h-4 w-4" />
+          {guardando ? "Guardando…" : editando ? "Guardar cambios" : "Guardar pedido"}
+        </Button>
       </div>
     </form>
   );

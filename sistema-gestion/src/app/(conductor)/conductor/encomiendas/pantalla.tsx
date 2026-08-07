@@ -11,11 +11,9 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { CloudOff, Download, MapPinOff, Plus, X } from "lucide-react";
+import { CloudOff, MapPinOff, Plus, X } from "lucide-react";
 import { DiaNav } from "@/components/encomiendas/dia-nav";
 import { Seccion } from "@/components/encomiendas/seccion";
-import { Button } from "@/components/ui/button";
-import { pendientesPorTraer, traerPendientes } from "@/lib/encomiendas/local/importar";
 import {
   leerPedidos,
   leerRuta,
@@ -60,7 +58,7 @@ function FilaPedido({
 }) {
   const sinUbicar = pedido.lat == null || pedido.lng == null;
   return (
-    <li className={primera ? "" : "border-t border-[#f0f0f2]"}>
+    <li className={primera ? "" : "border-t border-divider"}>
       <button
         type="button"
         onClick={onEditar}
@@ -104,9 +102,6 @@ export function PantallaEncomiendas({
   const [errorCarga, setErrorCarga] = useState<string | null>(null);
   const [agregando, setAgregando] = useState(false);
   const [editando, setEditando] = useState<PedidoLocal | null>(null);
-  const [porTraer, setPorTraer] = useState(0);
-  const [trayendo, setTrayendo] = useState(false);
-  const [errorTraer, setErrorTraer] = useState<string | null>(null);
   // Ruta calculada esperando el visto bueno del chofer. Mientras esté acá no se
   // guardó nada: la ruta que rige sigue siendo la de "ruta".
   const [propuesta, setPropuesta] = useState<PropuestaRuta | null>(null);
@@ -163,35 +158,10 @@ export function PantallaEncomiendas({
     };
   }, [leerTodo, fecha]);
 
-  // Traspaso de transición (ver lib/encomiendas/local/importar.ts): cuántos
-  // pendientes quedaron en la base sin pasar a este teléfono. Se consulta
-  // aparte y sin bloquear la pantalla — sin señal, o una vez retirada la tabla
-  // por la 0027, simplemente no aparece nada.
-  useEffect(() => {
-    if (!esHoy) return;
-    let cancelado = false;
-    void (async () => {
-      const faltan = await pendientesPorTraer();
-      if (!cancelado) setPorTraer(faltan.length);
-    })();
-    return () => {
-      cancelado = true;
-    };
-  }, [esHoy]);
-
-  const onTraer = useCallback(async () => {
-    setTrayendo(true);
-    setErrorTraer(null);
-    try {
-      await traerPendientes();
-      await recargar();
-      setPorTraer((await pendientesPorTraer()).length);
-    } catch (e) {
-      setErrorTraer(e instanceof Error ? e.message : "No se pudieron traer los pedidos.");
-    } finally {
-      setTrayendo(false);
-    }
-  }, [recargar]);
+  // Acá vivía el traspaso de transición (el botón "Cargar tus N pedidos
+  // pendientes" y lib/encomiendas/local/importar.ts), que copiaba a este
+  // teléfono lo que quedaba en encomienda_pedidos. Esa tabla la retiró la
+  // migración 0027, así que el botón ya no podía traer nada.
 
   const onLlamada = useCallback(
     async (pedidoId: string, resultado: "contesto" | "no_contesto") => {
@@ -311,35 +281,6 @@ export function PantallaEncomiendas({
         </Seccion>
       ) : null}
 
-      {/* Traspaso único desde el sistema anterior: el botón solo, sin título ni
-          explicación — su propia etiqueta lleva la cantidad y ya dice todo lo
-          que hay que saber. Deja de aparecer en cuanto no queden pendientes en
-          la base fuera de este teléfono.
-          OJO (queda en el código porque ya no está en pantalla): esto lo tiene
-          que apretar UN solo chofer. Los pedidos de la base no tienen dueño, así
-          que si lo aprietan dos, los dos salen con los mismos paquetes. */}
-      {esHoy && porTraer > 0 ? (
-        <div className="mt-5">
-          <Button
-            onClick={() => void onTraer()}
-            disabled={trayendo}
-            className="w-full justify-center"
-          >
-            <Download className="h-4 w-4" />
-            {trayendo
-              ? "Cargando…"
-              : porTraer === 1
-                ? "Cargar tu pedido pendiente"
-                : `Cargar tus ${porTraer} pedidos pendientes`}
-          </Button>
-          {errorTraer ? (
-            <p className="mt-2 rounded-lg bg-danger-bg px-3 py-2 text-xs text-danger">
-              {errorTraer}
-            </p>
-          ) : null}
-        </div>
-      ) : null}
-
       {esHoy && editando ? (
         <Seccion titulo="Editar pedido">
           <div className="rounded-2xl bg-card p-4 shadow-soft">
@@ -397,7 +338,10 @@ export function PantallaEncomiendas({
                 </div>
                 {/* Se queda abierto tras guardar: los pedidos se cargan en
                     tanda, uno atrás del otro. */}
-                <PedidoFormLocal onGuardado={onPedidoGuardado} />
+                <PedidoFormLocal
+                  onGuardado={onPedidoGuardado}
+                  onCancelar={() => setAgregando(false)}
+                />
               </div>
             ) : (
               <button

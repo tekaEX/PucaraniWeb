@@ -51,9 +51,16 @@ function iconoManiobra(paso: PasoNavegacion) {
 // la parada activa + distancia. Ver useNavegacion para cuándo se refresca.
 export function InstruccionNavegacion({
   paso,
+  siguiente,
   metros,
 }: {
   paso: PasoNavegacion;
+  /** La maniobra que viene al terminar `paso`. De ahí sale la FLECHA: la
+   *  maniobra de `paso` se ejecutó al empezarlo, así que dibujar esa mostraba
+   *  el giro ya hecho — yendo derecho hacia un giro a la derecha, la flecha
+   *  decía "siga derecho". El texto ya era el correcto (`paso.banner` nombra
+   *  hacia dónde se entra), así que flecha y texto se contradecían. */
+  siguiente: PasoNavegacion | null;
   /** Metros hasta la maniobra recalculados con el GPS (ver useNavegacion): se
    *  prefiere antes que paso.distanciaM, que se queda vieja entre consultas. */
   metros: number | null;
@@ -62,7 +69,7 @@ export function InstruccionNavegacion({
 
   return (
     <div className="flex min-w-0 flex-1 items-center gap-2.5 rounded-2xl bg-card px-3.5 py-2 shadow-card">
-      {iconoManiobra(paso)}
+      {iconoManiobra(siguiente ?? paso)}
       <div className="min-w-0 flex-1">
         {/* El banner de Mapbox es el texto corto (la calle a la que se entra) y
             la instrucción es la frase completa. Se muestra el corto arriba,

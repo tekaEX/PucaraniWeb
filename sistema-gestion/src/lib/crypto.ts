@@ -24,7 +24,13 @@ export function encrypt(plain: string): string {
 
 export function decrypt(payload: string): string {
   const [ivHex, tagHex, dataHex] = payload.split(":");
-  if (!ivHex || !tagHex || !dataHex) {
+  // dataHex se compara contra undefined y no con "!": cifrar un texto VACÍO da
+  // cero bytes de contenido, o sea "iv:tag:", y con "!dataHex" ese payload
+  // —perfectamente válido, generado por este mismo módulo— se rechazaba como
+  // corrupto. Hoy no se llega ahí (quien guarda la clave del certificado no
+  // deja pasar el vacío), pero un cifrador que no puede leer lo que él mismo
+  // escribió es una trampa esperando al próximo que lo use.
+  if (!ivHex || !tagHex || dataHex === undefined) {
     throw new Error("Formato de dato cifrado inválido.");
   }
   const decipher = createDecipheriv("aes-256-gcm", getKey(), Buffer.from(ivHex, "hex"));

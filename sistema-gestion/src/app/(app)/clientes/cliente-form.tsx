@@ -4,7 +4,6 @@ import { useActionState } from "react";
 import Link from "next/link";
 import { guardarCliente, type FormState } from "./actions";
 import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
 import { Field } from "@/components/ui/label";
 import { Button, buttonClass } from "@/components/ui/button";
 import { Card, CardBody } from "@/components/ui/card";
@@ -80,12 +79,9 @@ export function ClienteForm({ cliente }: { cliente?: Cliente }) {
               defaultValue={cliente?.contacto_email ?? ""}
             />
           </Field>
-          <Field label="Notas" htmlFor="notas" className="sm:col-span-2">
-            <Textarea id="notas" name="notas" defaultValue={cliente?.notas ?? ""} />
-          </Field>
 
           {state.error ? (
-            <p className="sm:col-span-2 rounded-lg bg-danger-bg border border-danger/20 px-3 py-2 text-sm text-danger">
+            <p className="rounded-lg border border-danger/20 bg-danger-bg px-3 py-2 text-sm text-danger sm:col-span-2">
               {state.error}
             </p>
           ) : null}

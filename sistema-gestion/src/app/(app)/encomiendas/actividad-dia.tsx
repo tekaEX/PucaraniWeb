@@ -57,6 +57,7 @@ export function ActividadDia({
   fecha,
   eventos,
   pago,
+  valorPorEntrega,
 }: {
   /** null si el conductor fue eliminado: el día se ve, pero no se liquida. */
   choferId: string | null;
@@ -64,6 +65,9 @@ export function ActividadDia({
   fecha: string;
   eventos: EventoDia[];
   pago: EncomiendaPago | null;
+  /** Cuánto se estima que entra por entrega según la regla vigente ESE día
+   *  (0029). Lo resuelve la página: acá no hay forma de saberlo. */
+  valorPorEntrega: number;
 }) {
   const [pendingPago, startTransitionPago] = useTransition();
   const [errorPago, setErrorPago] = useState<string | null>(null);
@@ -94,7 +98,7 @@ export function ActividadDia({
   const omitidos = eventos.filter((e) => e.tipo === "omision").length;
   // Ingreso estimado (no real): Starken maneja el valor de cada envío en su
   // propio sistema, Pucarani no lo conoce. Ver VALOR_APROXIMADO_PEDIDO.
-  const ingresos = ingresoEstimado(entregados);
+  const ingresos = ingresoEstimado(entregados, valorPorEntrega);
 
   // La bitácora de abajo solo lista lo que vino del TELÉFONO. Los eventos
   // cargados a mano no tienen hora real —la columna es `not null`, así que
@@ -206,7 +210,7 @@ export function ActividadDia({
             return (
               <li
                 key={e.id}
-                className="flex items-center gap-3 rounded-lg border border-[#f0f0f2] px-3 py-2 text-sm"
+                className="flex items-center gap-3 rounded-lg border border-border px-3 py-2 text-sm"
               >
                 <span className="w-11 shrink-0 text-xs tabular-nums text-muted">
                   {formatTime(e.hora)}
@@ -228,7 +232,7 @@ export function ActividadDia({
         </ol>
         )}
 
-        <div className="flex items-center justify-between gap-3 border-t border-[#f0f0f2] pt-3">
+        <div className="flex items-center justify-between gap-3 border-t border-divider pt-3">
           <div className="flex items-center gap-2 text-sm">
             <Wallet className="h-4 w-4 shrink-0 text-muted" />
             {pago ? (

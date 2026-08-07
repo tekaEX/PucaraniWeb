@@ -2,6 +2,7 @@
 
 import { useActionState, useRef, useState, useTransition } from "react";
 import { Plus, Trash2, Check, Loader2 } from "lucide-react";
+import { Checkbox } from "@/components/ui/checkbox";
 import { EstadoSelector, type EstadoOpcion } from "@/components/ui/estado-selector";
 import {
   actualizarCotizacion,
@@ -313,15 +314,13 @@ export function CotizacionEditor({
           </div>
           <div className="flex justify-end pt-1">
             <label className="flex items-center gap-2 text-xs text-muted">
-              <input
-                type="checkbox"
+              <Checkbox
                 name="exento_iva"
                 checked={exento}
                 onChange={(e) => {
                   setExento(e.target.checked);
                   autoguardar();
                 }}
-                className="h-4 w-4 accent-brand"
               />
               Exento de IVA
             </label>

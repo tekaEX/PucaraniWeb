@@ -9,6 +9,14 @@
   --card: #ffffff;
   --separator: #d2d2d7;
   --border: #d2d2d7;
+  /* Línea INTERNA: la que separa la cabecera de una tarjeta de su cuerpo, o
+     una fila de la siguiente. Más clara que --border a propósito — el borde
+     que dibuja el contorno de una caja tiene que pesar más que las líneas de
+     adentro, o la caja deja de leerse como una unidad.
+     Estaba escrita a mano como #f0f0f2 en once lugares, y en otros dos había
+     colado un #e9e9ec y un #e6e6ea: tres grises casi iguales haciendo lo
+     mismo. */
+  --divider: #f0f0f2;
   --muted: #6e6e73;
 
   /* Marca */
@@ -35,6 +43,7 @@
   --color-card: var(--card);
   --color-border: var(--border);
   --color-separator: var(--separator);
+  --color-divider: var(--divider);
   --color-muted: var(--muted);
 
   --color-brand: var(--brand);

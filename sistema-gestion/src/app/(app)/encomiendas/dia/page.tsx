@@ -2,13 +2,19 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { PageHeader } from "@/components/page-header";
 import { Card } from "@/components/ui/card";
+import { ErrorDatos } from "@/components/ui/error-datos";
 import { buttonClass } from "@/components/ui/button";
 import { Package, BarChart3 } from "lucide-react";
 import { hoyChile } from "@/lib/format";
 import { DiaNav } from "@/components/encomiendas/dia-nav";
-import { agruparPorDia, type EventoActividad } from "@/lib/encomiendas/pago";
+import {
+  agruparPorDia,
+  reglaVigente,
+  valorPedido,
+  type EventoActividad,
+} from "@/lib/encomiendas/pago";
 import { ActividadDia, type EventoDia } from "../actividad-dia";
-import type { EncomiendaPago } from "@/types/db";
+import type { EncomiendaPago, EncomiendaReglaPago } from "@/types/db";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Actividad del día — Encomiendas" };
@@ -33,16 +39,26 @@ export default async function EncomiendasDiaPage({
 
   const supabase = await createClient();
 
-  const [{ data: actividadData }, { data: pagosData }] = await Promise.all([
+  const [
+    { data: actividadData, error: errorActividad },
+    { data: pagosData, error: errorPagos },
+    { data: reglasData, error: errorReglas },
+  ] = await Promise.all([
     supabase
       .from("encomienda_actividad")
       .select("id, chofer_id, fecha, tipo, origen, hora, created_at, chofer:choferes(id,nombre)")
       .eq("fecha", fecha)
       .returns<Fila[]>(),
     supabase.from("encomienda_pagos").select("*").eq("fecha", fecha),
+    // Para saber a cuánto se valora cada entrega ese día (0029): el valor vive
+    // en la regla vigente, así que sin las reglas no se puede mostrar el
+    // ingreso del día.
+    supabase.from("encomienda_reglas_pago").select("*"),
   ]);
 
+  const errorCarga = errorActividad ?? errorPagos ?? errorReglas;
   const pagos = (pagosData ?? []) as EncomiendaPago[];
+  const reglas = (reglasData ?? []) as EncomiendaReglaPago[];
   const porConductor = agruparPorDia(actividadData ?? []);
 
   return (
@@ -61,7 +77,11 @@ export default async function EncomiendasDiaPage({
         <DiaNav fecha={fecha} basePath="/encomiendas/dia" />
       </div>
 
-      {porConductor.length === 0 ? (
+      {/* Un error de lectura no puede verse como "el conductor no salió": ver
+          components/ui/error-datos.tsx. */}
+      {errorCarga ? (
+        <ErrorDatos titulo="No se pudo leer la actividad de este día." detalle={errorCarga.message} />
+      ) : porConductor.length === 0 ? (
         <Card className="flex flex-col items-center gap-3 px-6 py-16 text-center">
           <Package className="h-8 w-8 text-muted" />
           <p className="text-sm text-muted">
@@ -84,6 +104,7 @@ export default async function EncomiendasDiaPage({
               fecha={fecha}
               eventos={d.eventos}
               pago={pagos.find((p) => p.chofer_id === d.choferId) ?? null}
+              valorPorEntrega={valorPedido(reglaVigente(reglas, d.choferId, fecha))}
             />
           ))}
         </div>

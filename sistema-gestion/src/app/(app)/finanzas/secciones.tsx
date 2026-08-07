@@ -2,6 +2,7 @@ import { Truck, Wallet, FileText } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { Card, CardBody, CardHeader, CardTitle } from "@/components/ui/card";
 import { Vacio } from "@/components/ui/vacio";
+import { ErrorDatos } from "@/components/ui/error-datos";
 import { formatCLP } from "@/lib/format";
 import { getPeriodo, rangoPeriodo } from "@/lib/periodo";
 import {
@@ -51,13 +52,13 @@ export async function FinanzasSecciones() {
   const supabase = await createClient();
   /* eslint-disable @typescript-eslint/no-explicit-any */
   const [
-    { data: fData },
-    { data: gData },
-    { data: hiData },
-    { data: hgData },
-    { data: vcData },
-    { data: txData },
-    { data: htData },
+    { data: fData, error: eF },
+    { data: gData, error: eG },
+    { data: hiData, error: eHi },
+    { data: hgData, error: eHg },
+    { data: vcData, error: eVc },
+    { data: txData, error: eTx },
+    { data: htData, error: eHt },
   ] = await Promise.all([
       supabase
         .from("facturas")
@@ -98,6 +99,22 @@ export async function FinanzasSecciones() {
         .gte("fecha", chartDesde)
         .lte("fecha", chartHasta),
     ]);
+
+  // Esta pantalla son SIETE consultas y todas terminan en la misma cifra. Si
+  // una falla y su error se descarta, el panel no muestra un error: muestra
+  // menos ingresos, o menos gastos, o una utilidad que no existe — y no hay
+  // forma de notarlo mirando. Un mes flojo y un mes que no se pudo leer se ven
+  // exactamente igual.
+  const errorFinanzas = eF ?? eG ?? eHi ?? eHg ?? eVc ?? eTx ?? eHt;
+  if (errorFinanzas) {
+    return (
+      <ErrorDatos
+        titulo="No se pudieron leer las finanzas del periodo."
+        detalle={errorFinanzas.message}
+      />
+    );
+  }
+
   const ingresosArr: Ingreso[] = ((fData ?? []) as any[]).map((f) => ({
     monto: Number(f.total),
     cliente: f.cliente?.nombre ?? "—",

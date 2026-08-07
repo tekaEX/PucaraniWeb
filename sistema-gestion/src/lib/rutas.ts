@@ -112,17 +112,78 @@ export function rumboDelCamino(
   return rumboEntre(posicion, objetivo);
 }
 
+/** Punto del trazado más cercano a `p`: en qué segmento cae, cuánto se avanzó
+ *  dentro de él (0 a 1) y a qué distancia quedó. Es la base de las dos cuentas
+ *  que el teléfono hace en cada lectura de GPS — cuánto falta para la maniobra
+ *  y cuánto se apartó del camino. */
+type Proyeccion = { indice: number; t: number; metros: number };
+
+function proyectarEnTrazado(p: Coordenada, geometria: [number, number][]): Proyeccion | null {
+  if (geometria.length === 0) return null;
+
+  // A metros planos alrededor de p: a esta escala (cientos de metros) la
+  // curvatura de la Tierra no se nota y la cuenta es la de geometría del liceo.
+  const M_POR_GRADO_LAT = 111_320;
+  const mPorGradoLng = M_POR_GRADO_LAT * Math.cos((p.lat * Math.PI) / 180);
+  const x = ([lng]: [number, number]) => (lng - p.lng) * mPorGradoLng;
+  const y = ([, lat]: [number, number]) => (lat - p.lat) * M_POR_GRADO_LAT;
+
+  if (geometria.length === 1) {
+    return { indice: 0, t: 0, metros: Math.hypot(x(geometria[0]), y(geometria[0])) };
+  }
+
+  let mejor: Proyeccion = { indice: 0, t: 0, metros: Infinity };
+  for (let i = 0; i < geometria.length - 1; i++) {
+    const ax = x(geometria[i]);
+    const ay = y(geometria[i]);
+    const dx = x(geometria[i + 1]) - ax;
+    const dy = y(geometria[i + 1]) - ay;
+    const largo2 = dx * dx + dy * dy;
+
+    // Proyección de p (que está en el origen) sobre el segmento, recortada a
+    // sus extremos. largo2 = 0 son dos vértices repetidos: cuenta como punto.
+    const t = largo2 === 0 ? 0 : Math.max(0, Math.min(1, -(ax * dx + ay * dy) / largo2));
+    const metros = Math.hypot(ax + t * dx, ay + t * dy);
+    if (metros < mejor.metros) mejor = { indice: i, t, metros };
+  }
+  return mejor;
+}
+
+// Cuánto se apartó una posición del trazado, en metros. Se mide contra el
+// SEGMENTO más cercano y no contra el vértice más cercano: en una recta larga
+// Mapbox pone dos vértices a cuadras de distancia, así que ir justo por el medio
+// de esa recta daba "200 m de desvío" y habría hecho recalcular la ruta sin
+// motivo. Es lo que decide si el chofer sigue el camino o se salió (ver
+// use-navegacion).
+export function distanciaAPolilinea(p: Coordenada, geometria: [number, number][]): number {
+  return proyectarEnTrazado(p, geometria)?.metros ?? Infinity;
+}
+
 // Metros que faltan hasta el final de un trazado, SIGUIENDO el camino y no en
 // línea recta. Se calcula en el teléfono en cada lectura de GPS: es lo que
 // permite que el cartel y la voz sepan la distancia exacta a la próxima
-// maniobra sin volver a consultar la API (que se consulta cada 150 m).
+// maniobra sin volver a consultar la API.
+//
+// Se mide desde la PROYECCIÓN sobre el segmento que se está recorriendo. Antes
+// se sumaba la distancia al vértice anterior MÁS ese segmento entero, o sea que
+// el tramo en curso se contaba dos veces: yendo por una avenida de 500 m con un
+// vértice en cada punta, avanzar 100 m hacía que el cartel dijera que faltaban
+// 100 m MÁS que antes de arrancar, y recién al pasar la mitad pegaba un salto
+// hacia abajo. Con los avisos de voz atados a esta distancia, además, sonaban
+// tarde.
 export function metrosRestantes(posicion: Coordenada, geometria: [number, number][]): number {
   if (geometria.length === 0) return 0;
   const puntos = aCoordenadas(geometria);
-  const desde = indiceMasCercano(posicion, puntos);
+  if (puntos.length === 1) return Math.round(distanciaMetros(posicion, puntos[0]));
 
-  let total = distanciaMetros(posicion, puntos[desde]);
-  for (let i = desde; i < puntos.length - 1; i++) {
+  const proyeccion = proyectarEnTrazado(posicion, geometria);
+  if (!proyeccion) return 0;
+
+  // Lo que queda del segmento en curso, más los siguientes enteros.
+  let total =
+    distanciaMetros(puntos[proyeccion.indice], puntos[proyeccion.indice + 1]) *
+    (1 - proyeccion.t);
+  for (let i = proyeccion.indice + 1; i < puntos.length - 1; i++) {
     total += distanciaMetros(puntos[i], puntos[i + 1]);
   }
   return Math.round(total);
@@ -139,64 +200,396 @@ function distanciaOrden(orden: number[], costo: Costo): number {
   return total;
 }
 
-// Mejora local: prueba invertir cada segmento [i..j] y se queda con el mejor.
-// El primer punto (índice 0, la base) queda fijo como inicio de la ruta.
-function dosOpt(ordenInicial: number[], costo: Costo): number[] {
-  let orden = [...ordenInicial];
-  let mejorado = true;
-  while (mejorado) {
-    mejorado = false;
-    // i llega hasta el penúltimo índice y j hasta el ÚLTIMO (orden.length - 1):
-    // es una ruta abierta (no vuelve a la base), así que la última parada no
-    // está fija y también debe poder moverse con el 2-opt. Antes j se
-    // quedaba corto en "orden.length - 1" (excluyendo el último índice), lo
-    // que dejaba afuera cualquier mejora que involucrara la parada final.
-    for (let i = 1; i < orden.length - 1; i++) {
-      for (let j = i + 1; j < orden.length; j++) {
-        const candidato = [
-          ...orden.slice(0, i),
-          ...orden.slice(i, j + 1).reverse(),
-          ...orden.slice(j + 1),
-        ];
-        if (distanciaOrden(candidato, costo) < distanciaOrden(orden, costo)) {
-          orden = candidato;
-          mejorado = true;
+// Diferencia mínima para considerar que un cambio mejora. Los costos son metros
+// (cientos o miles), así que esto solo frena el ruido de coma flotante: sin él,
+// dos órdenes que valen lo mismo se turnarían para "mejorarse" mutuamente y el
+// bucle no terminaría nunca.
+const EPSILON = 1e-6;
+
+// ----------------------------------------------------------------------------
+// Lo que hace difícil este problema, y por qué se resuelve así
+// ----------------------------------------------------------------------------
+//
+// Ordenar 30 paradas es el problema del viajante: no hay forma conocida de
+// resolverlo exacto en tiempo razonable pasando de ~20 paradas. Así que hay dos
+// regímenes:
+//
+//   · Día chico (hasta MAX_EXACTO puntos): se resuelve EXACTO. El orden que
+//     sale es el mejor que existe, no "uno bueno".
+//   · Día grande: construcción + mejora local. Se apunta a quedar a un puñado
+//     de por ciento del óptimo, que es lo que se puede prometer.
+//
+// Y hay un detalle que cambia qué jugadas sirven: la matriz de calles es
+// ASIMÉTRICA. Ir de A a B no cuesta lo mismo que de B a A —sentidos únicos, la
+// costanera, la quebrada— y eso rompe la simplificación clásica del 2-opt, que
+// da vuelta un tramo suponiendo que recorrerlo al revés cuesta igual. Por eso
+// acá el 2-opt suma explícitamente el tramo invertido, y por eso se agrega el
+// Or-opt, que MUEVE un grupo de paradas sin darlo vuelta y es la jugada que de
+// verdad rinde cuando los costos son asimétricos.
+
+/** Hasta este tamaño se resuelve exacto. El límite lo pone la memoria: la tabla
+ *  es 2^(n-1) × (n-1) números, o sea ~850 KB con 14 puntos y 4 MB con 16. En el
+ *  teléfono de un chofer no conviene pedir más, y 14 puntos son 13 paradas: la
+ *  jornada corta real. */
+const MAX_EXACTO = 14;
+
+/** Cuántas paradas seguidas prueba mover el Or-opt. Más de 3 casi no encuentra
+ *  nada nuevo y multiplica el trabajo. */
+const MAX_SEGMENTO_OROPT = 3;
+
+/** Arranques distintos del vecino más cercano. Esa heurística se casa con su
+ *  primera decisión —y es la que más pesa—, así que se la fuerza a empezar por
+ *  cada una de las paradas más cercanas a la base y se corre la mejora local
+ *  sobre todas. */
+const MAX_ARRANQUES = 4;
+
+/** Tope de vueltas de mejora local. Cada vuelta mejora de verdad (el EPSILON lo
+ *  garantiza), así que el bucle termina solo; esto es un cinturón por si un
+ *  costo raro —NaN de una matriz mal formada— rompiera esa garantía. */
+const MAX_VUELTAS = 400;
+
+// ----------------------------------------------------------------------------
+// Óptimo exacto (Held-Karp)
+// ----------------------------------------------------------------------------
+// Programación dinámica sobre subconjuntos: dp[conjunto][j] = lo mínimo que
+// cuesta salir de la base, visitar exactamente ese conjunto de paradas y quedar
+// parado en j. Es exponencial (2^n), pero con n chico son milisegundos y a
+// cambio no queda ninguna duda: no existe un orden mejor.
+//
+// Devuelve null si no hay ningún recorrido completo posible (tramos sin camino
+// entre sí, que Mapbox marca como Infinity): ahí no hay óptimo que dar y manda
+// la heurística, que al menos devuelve algo.
+function exacto(n: number, costo: Costo): number[] | null {
+  const m = n - 1; // paradas, sin contar la base
+  const combinaciones = 1 << m;
+  const dp = new Float64Array(combinaciones * m).fill(Infinity);
+  const desde = new Int16Array(combinaciones * m).fill(-1);
+
+  for (let j = 0; j < m; j++) dp[(1 << j) * m + j] = costo(0, j + 1);
+
+  for (let conjunto = 1; conjunto < combinaciones; conjunto++) {
+    for (let j = 0; j < m; j++) {
+      if (!(conjunto & (1 << j))) continue;
+      const hasta = dp[conjunto * m + j];
+      if (!Number.isFinite(hasta)) continue;
+
+      for (let k = 0; k < m; k++) {
+        if (conjunto & (1 << k)) continue;
+        const siguiente = conjunto | (1 << k);
+        const total = hasta + costo(j + 1, k + 1);
+        if (total < dp[siguiente * m + k]) {
+          dp[siguiente * m + k] = total;
+          desde[siguiente * m + k] = j;
         }
       }
     }
   }
-  return orden;
+
+  const todas = combinaciones - 1;
+  let ultimo = -1;
+  let mejor = Infinity;
+  for (let j = 0; j < m; j++) {
+    if (dp[todas * m + j] < mejor) {
+      mejor = dp[todas * m + j];
+      ultimo = j;
+    }
+  }
+  if (ultimo === -1 || !Number.isFinite(mejor)) return null;
+
+  const orden: number[] = [];
+  let conjunto = todas;
+  let j = ultimo;
+  while (j >= 0) {
+    orden.push(j + 1);
+    const previo = desde[conjunto * m + j];
+    conjunto ^= 1 << j;
+    j = previo;
+  }
+  orden.reverse();
+  return [0, ...orden];
 }
 
-/** Vecino más cercano + 2-opt sobre un costo cualquiera. */
-function heuristica(n: number, costo: Costo): number[] {
-  const visitado = new Array(n).fill(false);
+// ----------------------------------------------------------------------------
+// Construcción: dos formas distintas de armar un primer orden
+// ----------------------------------------------------------------------------
+
+/** Vecino más cercano. `primero` fuerza por cuál parada empezar (multi-arranque). */
+function vecinoMasCercano(n: number, costo: Costo, primero?: number): number[] {
+  const visitado = new Array<boolean>(n).fill(false);
   visitado[0] = true;
   const orden = [0];
   let actual = 0;
+
   for (let k = 1; k < n; k++) {
     // Con la matriz de calles un costo puede ser Infinity (dos paradas sin
-    // camino entre sí, según Mapbox), cosa que en línea recta no pasaba nunca.
+    // camino entre sí, según Mapbox), cosa que en línea recta no pasa nunca.
     // Si TODAS las que quedan son inalcanzables no hay "más cercana", así que
     // se toma la primera pendiente: mejor una parada en un orden discutible que
     // un índice -1 metido en la ruta.
     let mejor = -1;
-    let mejorDist = Infinity;
-    for (let j = 0; j < n; j++) {
-      if (visitado[j]) continue;
-      if (mejor === -1) mejor = j;
-      const d = costo(actual, j);
-      if (d < mejorDist) {
-        mejorDist = d;
-        mejor = j;
+    if (k === 1 && primero != null && primero > 0 && primero < n) {
+      mejor = primero;
+    } else {
+      let mejorDist = Infinity;
+      for (let j = 0; j < n; j++) {
+        if (visitado[j]) continue;
+        if (mejor === -1) mejor = j;
+        const d = costo(actual, j);
+        if (d < mejorDist) {
+          mejorDist = d;
+          mejor = j;
+        }
       }
     }
     visitado[mejor] = true;
     orden.push(mejor);
     actual = mejor;
   }
+  return orden;
+}
 
-  return dosOpt(orden, costo);
+/** Inserción más barata: en cada vuelta mete la parada que menos alargue la
+ *  ruta, en el lugar donde menos la alargue. Suele arrancar bastante mejor que
+ *  el vecino más cercano, que deja las últimas paradas tiradas lejos. */
+function insercionMasBarata(n: number, costo: Costo): number[] {
+  const orden = [0];
+  const pendientes = new Set<number>();
+  for (let i = 1; i < n; i++) pendientes.add(i);
+
+  while (pendientes.size > 0) {
+    let mejorParada = -1;
+    let mejorPosicion = orden.length;
+    let mejorCosto = Infinity;
+
+    for (const parada of pendientes) {
+      for (let p = 1; p <= orden.length; p++) {
+        const a = orden[p - 1];
+        const b = p < orden.length ? orden[p] : -1;
+        const delta = costo(a, parada) + (b >= 0 ? costo(parada, b) - costo(a, b) : 0);
+        if (delta < mejorCosto) {
+          mejorCosto = delta;
+          mejorParada = parada;
+          mejorPosicion = p;
+        }
+      }
+    }
+    // Todo inalcanzable: se pega al final y se sigue.
+    if (mejorParada === -1) mejorParada = pendientes.values().next().value!;
+
+    orden.splice(mejorPosicion, 0, mejorParada);
+    pendientes.delete(mejorParada);
+  }
+  return orden;
+}
+
+// ----------------------------------------------------------------------------
+// Mejora local
+// ----------------------------------------------------------------------------
+
+function costoSegmento(seg: number[], costo: Costo): number {
+  let total = 0;
+  for (let i = 0; i < seg.length - 1; i++) total += costo(seg[i], seg[i + 1]);
+  return total;
+}
+
+// 2-opt: da vuelta el tramo [i..j] y mira si conviene.
+//
+// La diferencia con la versión anterior no es qué prueba, sino cuánto cuesta
+// probarlo: antes armaba el orden completo y lo sumaba entero, dos veces, por
+// cada par (i,j) — O(n) por candidato. Acá las sumas del tramo en sus dos
+// sentidos se arrastran al mover j, así que evaluar un candidato son cuatro
+// costos. Con 61 puntos eso baja de ~230.000 sumas por pasada a ~3.700, y ese
+// margen es el que después se gasta en probar MÁS órdenes, que es de donde sale
+// la mejora de verdad.
+function dosOptPasada(orden: number[], costo: Costo): boolean {
+  const n = orden.length;
+  let mejoro = false;
+
+  for (let i = 1; i < n - 1; i++) {
+    let derecho = 0; // suma del tramo [i..j] tal como está
+    let invertido = 0; // el mismo tramo recorrido al revés (¡no es lo mismo!)
+
+    for (let j = i + 1; j < n; j++) {
+      derecho += costo(orden[j - 1], orden[j]);
+      invertido += costo(orden[j], orden[j - 1]);
+
+      // El último punto NO está fijo: la ruta es abierta (no vuelve a la base),
+      // así que la parada final también puede moverse.
+      const hayCierre = j + 1 < n;
+      const antes =
+        costo(orden[i - 1], orden[i]) + derecho + (hayCierre ? costo(orden[j], orden[j + 1]) : 0);
+      const despues =
+        costo(orden[i - 1], orden[j]) + invertido + (hayCierre ? costo(orden[i], orden[j + 1]) : 0);
+
+      if (despues < antes - EPSILON) {
+        for (let a = i, b = j; a < b; a++, b--) {
+          [orden[a], orden[b]] = [orden[b], orden[a]];
+        }
+        mejoro = true;
+        break; // el tramo cambió: las sumas que venía arrastrando ya no valen
+      }
+    }
+  }
+  return mejoro;
+}
+
+// Or-opt: SACA un grupo de 1 a 3 paradas seguidas y lo mete en otro lado, con
+// el grupo en su orden o dado vuelta.
+//
+// Es la jugada que le faltaba, y la que más rinde con costos asimétricos: mover
+// un grupo sin invertirlo no cambia ningún tramo interno, así que el 2-opt
+// —que vive de invertir— se pierde justo las mejoras que no cuestan nada. El
+// caso típico del reparto es una parada que quedó encajada en medio de un
+// barrio al que no pertenece: el 2-opt no la puede sacar de ahí sin dar vuelta
+// media ruta.
+function orOptPasada(orden: number[], costo: Costo): boolean {
+  const n = orden.length;
+
+  for (let largo = 1; largo <= MAX_SEGMENTO_OROPT && largo < n - 1; largo++) {
+    for (let i = 1; i + largo <= n; i++) {
+      const seg = orden.slice(i, i + largo);
+      const previo = orden[i - 1];
+      const siguiente = i + largo < n ? orden[i + largo] : -1;
+
+      // Lo que se ahorra al sacarlo de donde está.
+      const saca =
+        costo(previo, seg[0]) +
+        (siguiente >= 0 ? costo(seg[largo - 1], siguiente) - costo(previo, siguiente) : 0);
+      if (!Number.isFinite(saca)) continue;
+
+      const resto = [...orden.slice(0, i), ...orden.slice(i + largo)];
+      const segInvertido = [...seg].reverse();
+      const internoDerecho = costoSegmento(seg, costo);
+      const internoInvertido = costoSegmento(segInvertido, costo);
+
+      for (let p = 1; p <= resto.length; p++) {
+        if (p === i) continue; // volver a ponerlo donde estaba no es una mejora
+        const a = resto[p - 1];
+        const b = p < resto.length ? resto[p] : -1;
+
+        for (const invertir of [false, true]) {
+          const s = invertir ? segInvertido : seg;
+          const interno = invertir ? internoInvertido : internoDerecho;
+          const pone =
+            costo(a, s[0]) +
+            (b >= 0 ? costo(s[largo - 1], b) - costo(a, b) : 0) +
+            (interno - internoDerecho);
+
+          if (pone < saca - EPSILON) {
+            resto.splice(p, 0, ...s);
+            for (let k = 0; k < n; k++) orden[k] = resto[k];
+            return true; // aplicado: se vuelve a empezar sobre el orden nuevo
+          }
+        }
+      }
+    }
+  }
+  return false;
+}
+
+/** Aplica las dos mejoras hasta que ninguna encuentra nada. */
+function mejorarLocal(inicial: number[], costo: Costo): number[] {
+  const orden = [...inicial];
+  for (let vuelta = 0; vuelta < MAX_VUELTAS; vuelta++) {
+    const cambio2opt = dosOptPasada(orden, costo);
+    const cambioOrOpt = orOptPasada(orden, costo);
+    if (!cambio2opt && !cambioOrOpt) break;
+  }
+  return orden;
+}
+
+// ----------------------------------------------------------------------------
+// Sacudir y volver a mejorar
+// ----------------------------------------------------------------------------
+//
+// La mejora local termina en un mínimo LOCAL: un orden donde ninguna de las
+// jugadas que sabe hacer mejora nada, aunque exista un orden bastante mejor un
+// poco más allá. En cuál de esos mínimos cae depende del arranque, así que
+// tocando un poco el algoritmo se puede salir MEJOR en promedio y PEOR en
+// algunos casos sueltos — medido contra la versión anterior, hasta 5,7% peor en
+// una de cada treinta jornadas. Que la ruta de un día concreto empeore no es un
+// costo aceptable, aunque el promedio mejore.
+//
+// El "double bridge" es la sacudida clásica para esto: corta la ruta en cuatro
+// e intercambia los dos trozos del medio. Se elige justamente porque el 2-opt
+// NO puede deshacerla en un solo paso —así que no vuelve caminando al mismo
+// mínimo— pero conserva el sentido de recorrido de cada trozo, que con costos
+// asimétricos es lo que evita arruinar la ruta de entrada.
+//
+// Se sacude, se vuelve a mejorar, y el resultado se acepta SOLO si es mejor.
+// Por eso esto no puede empeorar nada: en el peor caso se queda con lo que ya
+// tenía y se gastaron unos milisegundos.
+
+/** Cuántas sacudidas, según el tamaño. Una mejora local cuesta del orden de n²,
+ *  así que el número se escala al revés para que el trabajo total quede parejo
+ *  —unas décimas de segundo— en vez de dispararse en las jornadas grandes, que
+ *  son justo las que corren en el teléfono del chofer. */
+function sacudidasPara(n: number): number {
+  return Math.max(20, Math.min(200, Math.round(60_000 / (n * n))));
+}
+
+/** Números al azar reproducibles: la misma jornada tiene que dar siempre la
+ *  misma ruta, o el chofer regenera y le cambia el orden sin motivo. */
+function alAzar(semilla: number): () => number {
+  let s = semilla >>> 0;
+  return () => {
+    s = (s * 1664525 + 1013904223) >>> 0;
+    return s / 4294967296;
+  };
+}
+
+function doblePuente(orden: number[], azar: () => number): number[] {
+  const n = orden.length;
+  // Hacen falta al menos tres cortes después de la base.
+  if (n < 8) return orden;
+
+  const cortes = [
+    1 + Math.floor(azar() * (n - 3)),
+    1 + Math.floor(azar() * (n - 3)),
+    1 + Math.floor(azar() * (n - 3)),
+  ].sort((a, b) => a - b);
+  const [p1, p2, p3] = cortes;
+  if (p1 === p2 || p2 === p3) return orden;
+
+  return [
+    ...orden.slice(0, p1),
+    ...orden.slice(p2, p3),
+    ...orden.slice(p1, p2),
+    ...orden.slice(p3),
+  ];
+}
+
+/** Mejora todos los arranques, se queda con el mejor y después lo sacude unas
+ *  cuantas veces por si hay algo mejor a la vuelta de la esquina. */
+function mejorDeVariosArranques(arranques: number[][], costo: Costo): number[] {
+  let mejor = arranques[0];
+  let mejorCosto = Infinity;
+
+  for (const arranque of arranques) {
+    const candidato = mejorarLocal(arranque, costo);
+    const total = distanciaOrden(candidato, costo);
+    if (total < mejorCosto) {
+      mejorCosto = total;
+      mejor = candidato;
+    }
+  }
+
+  // La semilla sale del COSTO del mejor orden, no del tamaño: sembrarla solo
+  // con n le daba a todas las jornadas de 20 paradas exactamente la misma
+  // secuencia de sacudidas, y con una mala racha fija había jornadas que se
+  // quedaban clavadas en un valle malo. Sigue siendo reproducible —el mismo
+  // día da siempre la misma ruta— pero cada jornada explora distinto.
+  const azar = alAzar(Math.round(mejorCosto) * 31 + mejor.length);
+  const sacudidas = sacudidasPara(mejor.length);
+  for (let i = 0; i < sacudidas; i++) {
+    const candidato = mejorarLocal(doblePuente(mejor, azar), costo);
+    const total = distanciaOrden(candidato, costo);
+    if (total < mejorCosto - EPSILON) {
+      mejorCosto = total;
+      mejor = candidato;
+    }
+  }
+  return mejor;
 }
 
 // Recibe puntos donde puntos[0] es la base (depósito/oficina) y el resto son
@@ -217,21 +610,35 @@ export function ordenarParadas(puntos: Coordenada[], matriz?: number[][] | null)
   if (n <= 2) return puntos.map((_, i) => i);
 
   const enLineaRecta: Costo = (a, b) => distanciaMetros(puntos[a], puntos[b]);
-  const ordenRecto = heuristica(n, enLineaRecta);
-  if (!matriz) return ordenRecto;
+  // Un tramo sin dato (dos puntos sin camino entre ellos) no puede valer 0 o la
+  // mejora local lo elegiría siempre; se lo trata como imposible.
+  const costo: Costo = matriz ? (a, b) => matriz[a]?.[b] ?? Infinity : enLineaRecta;
 
-  // Un tramo sin dato (dos puntos sin camino entre ellos) no puede valer 0 o el
-  // 2-opt lo elegiría siempre; se lo trata como imposible.
-  const porCalle: Costo = (a, b) => matriz[a]?.[b] ?? Infinity;
-  const ordenCalle = heuristica(n, porCalle);
+  // Día chico: el óptimo exacto sale en milisegundos, así que no hay razón para
+  // conformarse con una aproximación.
+  if (n <= MAX_EXACTO) {
+    const optimo = exacto(n, costo);
+    if (optimo) return optimo;
+  }
 
-  // El 2-opt es una mejora LOCAL: arrancar desde un orden u otro puede terminar
-  // en mínimos distintos, y a veces el de línea recta cae en uno mejor. Como la
-  // matriz ya está pedida, los dos órdenes se miden con el costo real y se elige
-  // el ganador — no cuesta una consulta más y evita salir peor que antes.
-  return distanciaOrden(ordenCalle, porCalle) <= distanciaOrden(ordenRecto, porCalle)
-    ? ordenCalle
-    : ordenRecto;
+  const arranques = [vecinoMasCercano(n, costo), insercionMasBarata(n, costo)];
+
+  // El vecino más cercano se casa con su primera decisión, que es la que más
+  // pesa en cómo queda el resto. Se lo vuelve a correr empezando por cada una
+  // de las paradas más cercanas a la base.
+  const masCercanas = Array.from({ length: n - 1 }, (_, i) => i + 1)
+    .sort((a, b) => costo(0, a) - costo(0, b))
+    .slice(0, MAX_ARRANQUES);
+  for (const primero of masCercanas) arranques.push(vecinoMasCercano(n, costo, primero));
+
+  // Con matriz se agrega además el mejor orden EN LÍNEA RECTA como arranque:
+  // son dos paisajes distintos y a veces el de línea recta cae en un valle que
+  // el de calles no encuentra. Se mide con el costo real, así que no puede
+  // salir peor — es el mismo criterio que ya tenía esta función, ahora como un
+  // arranque más en vez de una comparación aparte.
+  if (matriz) arranques.push(mejorarLocal(vecinoMasCercano(n, enLineaRecta), enLineaRecta));
+
+  return mejorDeVariosArranques(arranques, costo);
 }
 
 // ----------------------------------------------------------------------------

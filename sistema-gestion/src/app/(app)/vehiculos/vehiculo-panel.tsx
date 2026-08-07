@@ -10,6 +10,7 @@ import {
   eliminarGasto,
   type FormState,
 } from "./actions";
+import { Checkbox } from "@/components/ui/checkbox";
 import { ConfirmForm } from "@/components/ui/confirm-form";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
@@ -273,12 +274,10 @@ export function VehiculoPanel({
             </Campo>
             <div className="flex items-end">
               <label className="flex items-center gap-2 text-sm">
-                <input
-                  type="checkbox"
+                <Checkbox
                   name="activo"
                   defaultChecked={vehiculo.activo}
                   onChange={autoguardar}
-                  className="h-4 w-4 accent-brand"
                 />
                 Vehículo activo
               </label>
@@ -392,7 +391,7 @@ export function VehiculoPanel({
           {gastos.length === 0 ? (
             <Vacio titulo="Sin gastos registrados." />
           ) : (
-            <div className="max-h-44 overflow-y-auto rounded-lg border border-[#f0f0f2]">
+            <div className="max-h-44 overflow-y-auto rounded-lg border border-border">
               <table className="w-full text-sm">
                 <tbody className="divide-y divide-border">
                   {gastos.map((gx) => (
@@ -436,7 +435,7 @@ export function VehiculoPanel({
             </div>
           )}
 
-          <div className="border-t border-[#f0f0f2] pt-3">
+          <div className="border-t border-divider pt-3">
             <p className="mb-2 text-sm font-medium">Agregar gasto</p>
             <GastoForm vehiculoId={vehiculo.patente} />
           </div>

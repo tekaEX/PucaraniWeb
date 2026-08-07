@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { PageHeader } from "@/components/page-header";
 import { buttonClass } from "@/components/ui/button";
 import { Kpi } from "@/components/ui/kpi";
+import { ErrorDatos } from "@/components/ui/error-datos";
 import { formatCLP } from "@/lib/format";
 import {
   FileText,
@@ -50,11 +51,11 @@ export default async function DashboardPage() {
   // costo quedarían truncadas por el tope de filas de Supabase al crecer.
   const rangoDesde = rangoPeriodo(prev).desde;
   const [
-    { data: cotData },
-    { data: viajesData },
-    { data: factData },
-    { data: gastosData },
-    { data: taxisData },
+    { data: cotData, error: eCot },
+    { data: viajesData, error: eViajes },
+    { data: factData, error: eFact },
+    { data: gastosData, error: eGastos },
+    { data: taxisData, error: eTaxis },
   ] = await Promise.all([
     supabase
       .from("cotizaciones")
@@ -85,6 +86,23 @@ export default async function DashboardPage() {
       .gte("fecha", rangoDesde)
       .lte("fecha", hasta),
   ]);
+  // Todos los KPI del inicio salen de estas cinco consultas. Descartar el error
+  // convertía cualquier falla en "un mes sin trabajo": cero cotizado, cero por
+  // cobrar, cero ingresos — indistinguible de la realidad, y es la primera
+  // pantalla que mira el dueño.
+  const errorPanel = eCot ?? eViajes ?? eFact ?? eGastos ?? eTaxis;
+  if (errorPanel) {
+    return (
+      <div>
+        <PageHeader title="Inicio" description={etiquetaPeriodo(periodo)} />
+        <ErrorDatos
+          titulo="No se pudieron leer los datos del periodo."
+          detalle={errorPanel.message}
+        />
+      </div>
+    );
+  }
+
   const cotPeriodo: { total: number }[] = cotData ?? [];
   const viajes = (viajesData ?? []) as unknown as Viaje[];
   const facturas = (factData ?? []) as unknown as Factura[];

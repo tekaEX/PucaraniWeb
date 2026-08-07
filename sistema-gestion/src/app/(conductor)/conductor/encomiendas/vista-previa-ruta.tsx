@@ -95,7 +95,7 @@ export function VistaPreviaRuta({
         {paradas.map((p, i) => (
           <li
             key={p.id}
-            className={`flex items-center gap-2.5 px-3 py-2 text-sm ${i > 0 ? "border-t border-[#e9e9ec]" : ""}`}
+            className={`flex items-center gap-2.5 px-3 py-2 text-sm ${i > 0 ? "border-t border-divider" : ""}`}
           >
             <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-brand text-[11px] font-semibold tabular-nums text-brand-foreground">
               {numero(i)}

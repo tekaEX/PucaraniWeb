@@ -4,6 +4,7 @@ import { useActionState, useRef, useState } from "react";
 import Link from "next/link";
 import { guardarFactura, type FormState } from "./actions";
 import { createClient } from "@/lib/supabase/client";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { MoneyInput, formatMiles } from "@/components/ui/money-input";
 import { Textarea } from "@/components/ui/textarea";
@@ -264,11 +265,9 @@ export function FacturaForm({
                   key={v.id}
                   className="flex cursor-pointer items-center gap-3 px-3 py-2.5 text-sm hover:bg-background/60"
                 >
-                  <input
-                    type="checkbox"
+                  <Checkbox
                     checked={seleccionVisible.includes(v.id)}
                     onChange={() => toggleViaje(v.id)}
-                    className="h-4 w-4 accent-brand"
                   />
                   <span className="w-24 shrink-0 text-muted">{formatDate(v.fecha_inicio)}</span>
                   <span className="flex-1">{v.descripcion}</span>

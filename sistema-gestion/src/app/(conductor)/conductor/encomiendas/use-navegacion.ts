@@ -2,58 +2,85 @@
 
 import { useEffect, useRef, useState } from "react";
 import {
-  distanciaMetros,
+  distanciaAPolilinea,
   metrosRestantes,
   obtenerNavegacion,
   type PasoNavegacion,
 } from "@/lib/rutas";
 import type { Coordenada } from "@/lib/geocoding";
 
-// Volver a pedir el tramo recién cuando el chofer se alejó esto de donde se
-// pidió el anterior — no en cada tick de GPS (watchPosition dispara seguido).
-// Con la API de Mapbox esto además es cuota: a 150 m, una jornada de 60 km son
-// unas 400 consultas por chofer.
+// Un tramo pedido a Mapbox NO trae una instrucción: trae TODAS las maniobras
+// hasta la parada, cada una con su trazado y sus avisos de voz. Recorrerlo es
+// cosa del teléfono — de qué maniobra estamos y cuántos metros faltan se
+// calcula con cada lectura de GPS, sin consultar nada.
 //
-// Que el intervalo sea largo NO empeora lo que ve el chofer: la distancia a la
-// maniobra se recalcula en el teléfono con cada lectura de GPS (ver abajo), así
-// que el cartel y la voz van finos igual.
-const DISTANCIA_MINIMA_REFRESCO_M = 150;
+// Solo se vuelve a pedir cuando el tramo dejó de servir:
+//   · cambió la parada de destino
+//   · el chofer se salió del camino (dobló donde no era, o la ruta arrancó por
+//     la calzada equivocada)
+//   · no hay tramo todavía, o el anterior no llegó
+//
+// Antes se re-pedía cada 150 metros, y no era un capricho: el cartel mostraba
+// siempre el PRIMER paso del último tramo, así que pedir otro era la única
+// forma de que la indicación avanzara. Una jornada de 60 km eran unas 400
+// consultas por chofer. Ahora son unas pocas por parada, y el cartel cambia en
+// el momento en que se cumple la maniobra en vez de esperar a que conteste la
+// red — o sea que además de costar menos, se siente mejor.
 
-// Tras una consulta que no trajo camino (sin señal, o Mapbox no respondió) se
-// espera esto antes de volver a intentar. Sin la espera, el reintento saldría
-// con la siguiente lectura de GPS —una o dos por segundo— y un tramo sin
-// cobertura se comería la cuota del mes en un rato.
+/** Se da por cumplida una maniobra al llegar a esta distancia de ella. Del
+ *  orden del error del GPS en ciudad: más chico y un paso no terminaría nunca. */
+const UMBRAL_MANIOBRA_M = 25;
+
+/** Apartarse más que esto del trazado es haberse salido del camino. Tiene que
+ *  superar el ancho de una avenida con bandejón y el rebote del GPS entre
+ *  edificios, o se pediría una ruta nueva en cada semáforo. */
+const UMBRAL_FUERA_DE_RUTA_M = 60;
+
+/** Dos lecturas seguidas afuera antes de recalcular: una sola puede ser un
+ *  salto del GPS, y recalcular de más es justo lo que se vino a evitar. */
+const LECTURAS_FUERA_PARA_RECALCULAR = 2;
+
+/** Piso entre dos consultas para un mismo destino: el freno para que un GPS
+ *  ruidoso en el centro no dispare una consulta por segundo. No aplica cuando
+ *  cambia la parada — eso tiene que verse al toque. */
+const MS_MINIMO_ENTRE_CONSULTAS = 10_000;
+
+/** Tras una consulta que no trajo camino (sin señal, o Mapbox no respondió) se
+ *  espera esto antes de reintentar. Sin la espera, el reintento saldría con la
+ *  siguiente lectura de GPS —una o dos por segundo— y un tramo sin cobertura se
+ *  comería la cuota del mes en un rato. */
 const MS_ESPERA_REINTENTO = 5_000;
 
 function mismoPunto(a: Coordenada | null | undefined, b: Coordenada | null | undefined): boolean {
   return a != null && b != null && a.lat === b.lat && a.lng === b.lng;
 }
 
+type Tramo = {
+  destino: Coordenada;
+  pasos: PasoNavegacion[];
+  geometria: [number, number][];
+  /** Si la consulta que lo trajo llevaba el rumbo del auto. Sin rumbo, Mapbox
+   *  puede haber enganchado la salida en la calzada contraria. */
+  conRumbo: boolean;
+};
+
 export type Navegacion = {
-  /** Próxima maniobra, con su texto ya en español, o null si no hay dato. */
+  /** Maniobra que se está recorriendo. Su `banner` nombra hacia dónde se va y
+   *  sus `avisos` son los que hay que decir en voz alta. */
   paso: PasoNavegacion | null;
+  /** La maniobra que viene DESPUÉS de recorrer `paso`: es la que hay que
+   *  dibujar como flecha. La de `paso` ya se ejecutó al empezarlo. */
+  siguiente: PasoNavegacion | null;
   /** Metros hasta la maniobra, recalculados con CADA lectura de GPS siguiendo
-   *  el trazado (no en línea recta). Es lo que se muestra y lo que dispara los
-   *  avisos de voz: la distancia que devolvió la API queda vieja apenas el
-   *  chofer avanza tres cuadras. */
+   *  el trazado (no en línea recta). */
   metrosAManiobra: number | null;
-  /** Trazado por calles desde la posición actual hasta la parada activa,
+  /** Trazado por calles desde donde se pidió hasta la parada activa,
    *  [lng, lat] por punto — esto es lo que se dibuja como "por dónde ir". */
   geometria: [number, number][] | null;
 };
 
-/** El tramo guarda A QUÉ DESTINO corresponde: al cerrar una parada el destino
- *  cambia, y sin la marca el cartel y la línea azul seguirían mostrando el
- *  camino a la casa donde el chofer ya entregó hasta que llegara el tramo
- *  nuevo. Mejor sin indicación que con la indicación de la parada anterior. */
-type Tramo = { destino: Coordenada; pasos: PasoNavegacion[]; geometria: [number, number][] };
+const VACIA: Navegacion = { paso: null, siguiente: null, metrosAManiobra: null, geometria: null };
 
-const VACIA: Navegacion = { paso: null, metrosAManiobra: null, geometria: null };
-
-// Cómo llegar desde "origen" (ubicación GPS actual) hasta "destino" (la parada
-// activa). El tramo se re-pide cuando cambia el destino o cuando el chofer
-// avanzó lo suficiente; la distancia a la maniobra, en cambio, se recalcula en
-// cada render.
 export function useNavegacion(
   activo: boolean,
   /** La posición del chofer trae además el rumbo, que se le pasa a Mapbox para
@@ -62,33 +89,23 @@ export function useNavegacion(
   destino: Coordenada | null,
 ): Navegacion {
   const [tramo, setTramo] = useState<Tramo | null>(null);
-  // Se incrementa para forzar un reintento cuando no hay nada más que lo
-  // dispare (ver el temporizador de más abajo).
+  /** En qué maniobra del tramo va el chofer. Solo avanza; se ajusta durante el
+   *  render (ver más abajo). */
+  const [indicePaso, setIndicePaso] = useState(0);
+  const [tramoAnterior, setTramoAnterior] = useState<Tramo | null>(null);
+  /** Se incrementa para forzar un reintento cuando no hay nada más que lo
+   *  dispare (ver el temporizador de más abajo). */
   const [reintento, setReintento] = useState(0);
 
-  // Última consulta que TERMINÓ BIEN. La decisión de volver a pedir se toma
-  // contra esto y no contra "lo último que se intentó", y esa es la corrección
-  // que hace que la navegación avance de parada:
-  //
-  // Antes se anotaba el intento ANTES de tener la respuesta y el efecto se
-  // limpiaba (cancelando la consulta en vuelo) en cada cambio de "origen", o
-  // sea una o dos veces por segundo. Al marcar un pedido como finalizado, la
-  // consulta del camino a la parada siguiente salía y la mataba el siguiente
-  // tick del GPS; el guardia, en cambio, ya creía tenerla, así que no se pedía
-  // otra hasta que el chofer se alejara 150 m. Quieto en la vereda —justo el
-  // caso de cerrar un pedido sin haber ido a la dirección— esos 150 m no
-  // llegaban nunca y la navegación se quedaba clavada en la parada anterior.
-  const cumplidaRef = useRef<{
-    origen: Coordenada;
-    destino: Coordenada;
-    conRumbo: boolean;
-  } | null>(null);
-  // Consulta en vuelo: el id sirve para descartar respuestas que quedaron
-  // viejas, y el destino para no pedir dos veces el mismo camino.
+  // Consulta en vuelo: el id descarta respuestas que quedaron viejas, y el
+  // destino evita pedir dos veces el mismo camino.
   const enVueloRef = useRef<{ id: number; destino: Coordenada } | null>(null);
   const ultimoIdRef = useRef(0);
-  // Espera tras un fallo, atada al destino que falló: un destino nuevo se
-  // intenta de inmediato (el chofer no tiene indicación de nada).
+  const ultimaConsultaRef = useRef(0);
+  /** Lecturas seguidas fuera del trazado. */
+  const fueraRef = useRef(0);
+  /** Espera tras un fallo, atada al destino que falló: un destino nuevo se
+   *  intenta de inmediato (el chofer no tiene indicación de nada). */
   const esperaRef = useRef<{ destino: Coordenada; hasta: number } | null>(null);
   const reintentoRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -109,37 +126,38 @@ export function useNavegacion(
     if (!habilitado) setTramo(null);
   }
 
+  // ---------------------------------------------------------------- pedir
   useEffect(() => {
     if (!habilitado || !origen || !destino) {
-      cumplidaRef.current = null;
       enVueloRef.current = null;
       esperaRef.current = null;
+      fueraRef.current = 0;
       // Lo que venga en camino es de otra parada (o de antes de apagarse).
       ultimoIdRef.current++;
       return;
     }
 
     const rumbo = origen.heading ?? null;
-    const cumplida = cumplidaRef.current;
+    const sirve = tramo != null && mismoPunto(tramo.destino, destino);
 
-    const destinoCambio = !mismoPunto(cumplida?.destino, destino);
-    const seAlejoLoSuficiente =
-      !cumplida || distanciaMetros(cumplida.origen, origen) >= DISTANCIA_MINIMA_REFRESCO_M;
+    // ¿Sigue sobre el camino? Se mide contra el trazado completo del tramo.
+    if (sirve && tramo) {
+      const desvio = distanciaAPolilinea(origen, tramo.geometria);
+      fueraRef.current = desvio > UMBRAL_FUERA_DE_RUTA_M ? fueraRef.current + 1 : 0;
+    }
 
+    const cambioDestino = !sirve;
     // Arrancando el viaje el chofer está DETENIDO, y detenido el GPS no entrega
     // rumbo: la primera consulta —justo la de salir a la calle— sale a ciegas y
     // Mapbox engancha la posición a la calzada que le quede más cerca. En una
-    // avenida dividida, con las dos calzadas a doce metros y el margen de error
-    // del GPS parado adentro de un condominio, eso es cara o sello; si sale
-    // cruz, la ruta arranca dando toda la vuelta a la manzana.
-    //
-    // Esperar los 150 m del refresco normal no sirve: para entonces el chofer ya
-    // se comprometió con la instrucción equivocada. Así que en cuanto aparece el
-    // rumbo —a los primeros metros de andar— se vuelve a pedir el tramo. Es una
-    // consulta de más por parada, como mucho.
-    const aparecioElRumbo = cumplida != null && !cumplida.conRumbo && rumbo != null;
+    // avenida dividida, con las dos calzadas a doce metros, eso es cara o
+    // sello; si sale cruz, la ruta arranca dando toda la vuelta a la manzana.
+    // En cuanto aparece el rumbo —a los primeros metros de andar— se vuelve a
+    // pedir. Es una consulta de más por parada, como mucho.
+    const aparecioElRumbo = sirve && tramo != null && !tramo.conRumbo && rumbo != null;
+    const seSalio = sirve && fueraRef.current >= LECTURAS_FUERA_PARA_RECALCULAR;
 
-    if (!destinoCambio && !seAlejoLoSuficiente && !aparecioElRumbo) return;
+    if (!cambioDestino && !aparecioElRumbo && !seSalio) return;
 
     // Ya se está pidiendo el camino a ESTE mismo destino: no se duplica la
     // consulta y —sobre todo— no se cancela la que viene en camino.
@@ -148,8 +166,15 @@ export function useNavegacion(
     const espera = esperaRef.current;
     if (espera && mismoPunto(espera.destino, destino) && Date.now() < espera.hasta) return;
 
+    // El piso entre consultas no corre cuando cambió la parada: esa indicación
+    // el chofer la necesita ahora.
+    if (!cambioDestino && Date.now() - ultimaConsultaRef.current < MS_MINIMO_ENTRE_CONSULTAS) {
+      return;
+    }
+
     const id = ++ultimoIdRef.current;
     enVueloRef.current = { id, destino };
+    ultimaConsultaRef.current = Date.now();
 
     void obtenerNavegacion(origen, destino, rumbo).then((res) => {
       // Otra consulta más nueva ya la reemplazó (cambió la parada, o el hook se
@@ -160,7 +185,7 @@ export function useNavegacion(
       if (!res || res.pasos.length === 0) {
         esperaRef.current = { destino, hasta: Date.now() + MS_ESPERA_REINTENTO };
         // Estando quieto el GPS puede dejar de avisar, y sin aviso no hay
-        // re-render que reintente. El margen extra evita que el reintento
+        // re-dibujado que reintente. El margen extra evita que el reintento
         // llegue un milisegundo antes de que venza la espera y se descarte.
         // Uno solo a la vez: si el anterior no alcanzó a disparar, se reemplaza.
         if (reintentoRef.current) clearTimeout(reintentoRef.current);
@@ -171,20 +196,56 @@ export function useNavegacion(
         return;
       }
 
-      cumplidaRef.current = { origen, destino, conRumbo: rumbo != null };
-      setTramo({ destino, pasos: res.pasos, geometria: res.geometria });
+      fueraRef.current = 0;
+      setTramo({ destino, pasos: res.pasos, geometria: res.geometria, conRumbo: rumbo != null });
     });
-  }, [habilitado, origen, destino, reintento]);
+  }, [habilitado, origen, destino, tramo, reintento]);
+
+  // ------------------------------------------------------------- avanzar
+  // El paso avanza SOLO, en el teléfono, cuando el chofer llega a la maniobra.
+  // Es lo que reemplaza a la consulta cada 150 metros. Se avanza en bucle
+  // porque dos maniobras pueden caer casi juntas ("gire y enseguida siga por la
+  // derecha") y una sola lectura de GPS puede dejar las dos atrás.
+  //
+  // Va durante el render y no en un efecto (mismo patrón que el ajuste de
+  // "habilitado" de arriba) por dos motivos: el índice se necesita en ESTE
+  // dibujado —cada lectura de GPS ya provoca uno, no hace falta otro— y sobre
+  // todo tiene que ser un contador que solo avanza. Recalcularlo desde cero
+  // daría mal: metrosRestantes() a un paso que quedó tres kilómetros atrás no
+  // devuelve cero, devuelve tres kilómetros, y el cartel se quedaría clavado en
+  // la primera maniobra del tramo.
+  let indice = indicePaso;
+  if (tramoAnterior !== tramo) {
+    setTramoAnterior(tramo);
+    // El tramo nuevo arranca donde está el chofer, así que se empieza de cero.
+    indice = 0;
+    setIndicePaso(0);
+  }
+  if (habilitado && tramo && origen) {
+    let avanzado = Math.min(indice, tramo.pasos.length - 1);
+    while (
+      avanzado < tramo.pasos.length - 1 &&
+      metrosRestantes(origen, tramo.pasos[avanzado].geometria) <= UMBRAL_MANIOBRA_M
+    ) {
+      avanzado++;
+    }
+    if (avanzado !== indice) {
+      indice = avanzado;
+      setIndicePaso(avanzado);
+    }
+  }
 
   // El tramo de la parada anterior no se muestra ni un instante.
   if (!habilitado || !tramo || !mismoPunto(tramo.destino, destino)) return VACIA;
 
-  // El primer paso es la maniobra que viene. Mapbox a veces abre con un paso de
-  // distancia 0 (ya estás justo ahí), que no hay nada que anunciar.
-  const paso = tramo.pasos.find((p) => p.distanciaM > 0) ?? tramo.pasos[0] ?? null;
+  const paso = tramo.pasos[indice] ?? null;
 
   return {
     paso,
+    // La flecha del cartel es la maniobra QUE VIENE. La de `paso` es la que se
+    // ejecutó al empezarlo, así que dibujarla mostraba el giro ya hecho: yendo
+    // derecho hacia un giro a la derecha, la flecha decía "siga derecho".
+    siguiente: tramo.pasos[indice + 1] ?? null,
     metrosAManiobra:
       origen && paso && paso.geometria.length > 0
         ? metrosRestantes(origen, paso.geometria)
