@@ -8,16 +8,18 @@ import { Vacio } from "@/components/ui/vacio";
 import { ErrorDatos } from "@/components/ui/error-datos";
 import { buttonClass } from "@/components/ui/button";
 import { Package, CalendarRange, Truck, Wallet, CircleDollarSign } from "lucide-react";
-import { formatCLP, formatDate, formatNumber, hoyChile } from "@/lib/format";
+import { formatCLP, formatDate, formatNumber, formatTime, hoyChile } from "@/lib/format";
 import { getPeriodo, rangoPeriodo, etiquetaPeriodo } from "@/lib/periodo";
 import {
   agruparPorDia,
+  tarifaDelDia,
   valorPedido,
   type ConteoDia,
   type EventoActividad,
 } from "@/lib/encomiendas/pago";
 import type {
   EncomiendaIngresoReal,
+  EncomiendaJornada,
   EncomiendaPago,
   EncomiendaReglaPago,
 } from "@/types/db";
@@ -49,12 +51,21 @@ type Dia = {
    *  null solo si el día no se pudo calcular: sin conductor (eliminado después)
    *  o sin regla configurada todavía. */
   cifras: EncomiendaPago | null;
+  /** El sobre del día (0032): a qué hora salió la ruta y si ya terminó. Una
+   *  jornada abierta es una ruta EN CURSO y por eso todavía no tiene cifras —
+   *  la plata se cuenta una sola vez, al cerrar. */
+  jornada: EncomiendaJornada | null;
   /** Eventos cargados a mano desde la oficina (0028) y total del día: con los
    *  dos se distingue un día íntegramente manual de uno que el teléfono mandó
    *  a medias y la oficina completó. */
   manuales: number;
   total: number;
 };
+
+/** Una ruta que todavía está pasando. No tiene cifras y no debe tenerlas. */
+function enCurso(d: Dia): boolean {
+  return d.jornada != null && d.jornada.cerrada_en == null;
+}
 
 export default async function EncomiendasPage() {
   // Mismo periodo global que el resto de la app: el mes/año lo fija el
@@ -72,6 +83,7 @@ export default async function EncomiendasPage() {
     { data: actividadData, error: errorActividad },
     { data: reglasData, error: errorReglas },
     { data: pagosData, error: errorPagos },
+    { data: jornadasData, error: errorJornadas },
     { data: choferesData, error: errorChoferes },
     { data: ingresosRealesData, error: errorIngresosReales },
   ] = await Promise.all([
@@ -88,6 +100,13 @@ export default async function EncomiendasPage() {
     // Las cifras ya congeladas de cada día del periodo. De acá salen TODOS los
     // números de plata de esta pantalla: no se recalcula nada al vuelo.
     supabase.from("encomienda_pagos").select("*").gte("fecha", desde).lte("fecha", hasta),
+    // El sobre de cada día: si la ruta está en curso o ya terminó (0032).
+    supabase
+      .from("encomienda_jornadas")
+      .select("*")
+      .gte("fecha", desde)
+      .lte("fecha", hasta)
+      .returns<EncomiendaJornada[]>(),
     // Para el selector de "Agregar día". Se piden por categoría y no todos los
     // choferes: cargarle un día de encomiendas a un conductor de taxis o de
     // operación metería a otra área en esta liquidación.
@@ -114,7 +133,7 @@ export default async function EncomiendasPage() {
   // corto sin parecerlo: sin actividad se ve un mes sin trabajo, sin pagos sale
   // "$0", sin la regla el panel se cree sin configurar. Antes los errores se
   // descartaban y el resultado era indistinguible de un mes tranquilo.
-  const errorPlata = errorActividad ?? errorReglas ?? errorPagos;
+  const errorPlata = errorActividad ?? errorReglas ?? errorPagos ?? errorJornadas;
   if (errorPlata) {
     return (
       <div>
@@ -132,6 +151,7 @@ export default async function EncomiendasPage() {
 
   const regla = (reglasData ?? null) as EncomiendaReglaPago | null;
   const pagos = (pagosData ?? []) as EncomiendaPago[];
+  const jornadas = (jornadasData ?? []) as EncomiendaJornada[];
   // Este NO entra en errorPlata: que falte el ingreso real no vuelve falso
   // ningún número de la pantalla —el estimado sigue siendo el estimado—, solo
   // deja sin hacer la comparación. El aviso va dentro del diálogo, donde sirve.
@@ -155,6 +175,7 @@ export default async function EncomiendasPage() {
     choferNombre: d.eventos[0]?.chofer?.nombre ?? "Conductor eliminado",
     conteo: d.conteo,
     cifras: pagos.find((p) => p.fecha === d.fecha && p.chofer_id === d.choferId) ?? null,
+    jornada: jornadas.find((j) => j.fecha === d.fecha && j.chofer_id === d.choferId) ?? null,
     manuales: d.manuales,
     total: d.eventos.length,
   }));
@@ -168,11 +189,12 @@ export default async function EncomiendasPage() {
   const totalIngresos = dias.reduce((a, d) => a + (d.cifras?.ingresos_totales ?? 0), 0);
   const totalPago = dias.reduce((a, d) => a + (d.cifras?.pago_total ?? 0), 0);
   const promedioDia = diasCalendario > 0 ? totalEntregados / diasCalendario : 0;
-  // Días trabajados a los que la base no les pudo poner cifras: suman $0 a los
-  // dos totales de arriba y hay que decirlo, o los números quedan cortos sin
-  // que se note. Con la regla configurada esto solo pasa si el conductor fue
-  // eliminado; sin regla, le pasa a todos.
-  const diasSinCifras = dias.filter((d) => d.cifras == null).length;
+  // Días sin cifras que NO son una ruta en curso. Una jornada abierta también
+  // suma $0, pero eso no es un problema que reportar: es una ruta que todavía
+  // está pasando y se va a contar cuando termine. Mezclarlas haría que el aviso
+  // se encendiera todas las tardes.
+  const diasSinCifras = dias.filter((d) => d.cifras == null && !enCurso(d)).length;
+  const diasEnCurso = dias.filter(enCurso).length;
 
   // Ingreso real del periodo: null si todavía no se cargó ninguno (distinto de
   // cero, que sería "no entró nada").
@@ -318,9 +340,13 @@ export default async function EncomiendasPage() {
           sub={
             diasSinCifras > 0
               ? `${diasSinCifras} día(s) sin calcular, no incluidos`
-              : "Por día trabajado + por pedido"
+              : diasEnCurso > 0
+                ? `${diasEnCurso} ruta(s) en curso, se suman al terminar`
+                : "Por día trabajado + por pedido"
           }
-          subClass={diasSinCifras > 0 ? "text-danger" : "text-muted"}
+          subClass={
+            diasSinCifras > 0 ? "text-danger" : diasEnCurso > 0 ? "text-info" : "text-muted"
+          }
           icon={Wallet}
           tint="bg-warn-bg text-warn"
         />
@@ -391,6 +417,7 @@ export default async function EncomiendasPage() {
                   omitidos: d.conteo.omitidos,
                   manuales: d.manuales,
                   total: d.total,
+                  tarifa: tarifaDelDia(d.cifras),
                 }))}
               />
               {/* Acá estaba "Confirmar pagos del periodo". No queda nada que
@@ -418,6 +445,7 @@ export default async function EncomiendasPage() {
                   <tr>
                     <th className="px-4 py-2.5 font-medium">Día</th>
                     <th className="px-4 py-2.5 font-medium">Conductor</th>
+                    <th className="px-4 py-2.5 font-medium">Jornada</th>
                     <th className="px-4 py-2.5 text-right font-medium">Entregados</th>
                     <th className="px-4 py-2.5 text-right font-medium">No entreg.</th>
                     <th className="px-4 py-2.5 text-right font-medium">Ingresos</th>
@@ -438,6 +466,20 @@ export default async function EncomiendasPage() {
                           </Link>
                         </td>
                         <td className="px-4 py-3 text-muted">{d.choferNombre}</td>
+                        {/* De cuándo a cuándo salió la ruta. Reemplaza a la
+                            lista de horas de cada entrega: con la ruta hecha de
+                            corrido, ese par es todo lo que dice algo. */}
+                        <td className="whitespace-nowrap px-4 py-3 text-xs text-muted">
+                          {enCurso(d) ? (
+                            <Badge tone="amber">En curso</Badge>
+                          ) : d.jornada?.inicio && d.jornada.cerrada_en ? (
+                            <span className="tabular-nums">
+                              {formatTime(d.jornada.inicio)} – {formatTime(d.jornada.cerrada_en)}
+                            </span>
+                          ) : (
+                            "—"
+                          )}
+                        </td>
                         <td className="px-4 py-3 text-right tabular-nums">
                           {formatNumber(d.conteo.entregados)}
                         </td>
@@ -460,6 +502,10 @@ export default async function EncomiendasPage() {
                         >
                           {d.cifras ? (
                             formatCLP(d.cifras.pago_total)
+                          ) : enCurso(d) ? (
+                            // No es un problema: la ruta todavía está pasando y
+                            // se cuenta cuando termine.
+                            <span className="font-normal text-muted">Al terminar</span>
                           ) : (
                             <Badge tone="red">
                               {d.choferId ? "Sin regla" : "Sin conductor"}

@@ -33,6 +33,15 @@ export type Ubicacion = {
   /** Rumbo en grados (0-360, 0 = norte), o null si todavía no se conoce
    *  (recién montado, o el chofer está detenido y nunca se movió). */
   heading: number | null;
+  /** Radio de error que declara el GPS, en metros. Con esto se descartan las
+   *  lecturas que pondrían el punto adentro de una manzana (ver
+   *  use-ubicacion-actual). */
+  precisionM?: number | null;
+  /** Cuándo la tomó el GPS (ms). Sirve para saber que el punto quedó viejo:
+   *  filtrar lecturas malas sin decirlo dejaría el punto congelado. */
+  tomadaEn?: number;
+  /** Velocidad en m/s cuando el aparato la entrega (iOS a veces no). */
+  velocidad?: number | null;
 };
 
 // Estilo pensado para manejar: calles más gruesas, menos ruido de puntos de
@@ -96,11 +105,44 @@ const CENTRO_ARICA: [number, number] = [-70.3126, -18.4783];
 // que hace que se vea "hacia adelante" y no desde arriba. Después de eso el
 // zoom queda en manos del chofer.
 const ZOOM_NAVEGACION = 17;
-const PITCH_NAVEGACION = 50;
+const PITCH_NAVEGACION = 55;
 
 // El GPS avisa cada uno o dos segundos, así que animar cerca de un segundo hace
 // que el mapa "fluya" en vez de dar saltos de una posición a la otra.
 const MS_DESPLAZAMIENTO = 1000;
+
+// ----------------------------------------------------------------------------
+// Dónde queda el punto del chofer en la pantalla
+// ----------------------------------------------------------------------------
+// Centrado, la mitad de arriba muestra la calle que ya se pasó y lo que viene
+// —lo único que sirve manejando— queda apretado contra la hoja deslizable.
+// Ningún navegador lo hace así: el punto va abajo y la pantalla mira adelante.
+//
+// Se consigue con `padding`, no moviendo el centro: el padding corre el centro
+// de la CÁMARA, así que además el punto pasa a ser el PIVOTE del giro. Con el
+// centro movido a mano, al doblar el mapa gira alrededor del medio de la
+// pantalla y el punto describe un arco — se ve como si el auto derrapara.
+//
+// Es una propiedad que queda pegada al mapa, así que toda llamada de cámara
+// tiene que pasar la suya (los fitBounds de acá abajo ya lo hacen).
+const PROPORCION_PADDING_ABAJO = 0.45;
+
+function paddingNavegacion(mapa: mapboxgl.Map): mapboxgl.PaddingOptions {
+  const alto = mapa.getContainer().clientHeight;
+  return { top: 0, left: 0, right: 0, bottom: Math.round(alto * PROPORCION_PADDING_ABAJO) };
+}
+
+// Por debajo de esto no se gira. El rumbo casi siempre viene estimado (en
+// iPhone el GPS no entrega heading), así que oscila uno o dos grados entre
+// lecturas aunque el auto vaya derecho: sin este piso el mapa vibra todo el
+// viaje, y cada vibración es una animación de un segundo que se pisa con la
+// siguiente.
+const GRADOS_MINIMOS_PARA_GIRAR = 4;
+
+/** Diferencia entre dos rumbos, siempre 0-180. */
+function difAngulo(a: number, b: number): number {
+  return Math.abs(((a - b + 540) % 360) - 180);
+}
 
 const FUENTE_DIA = "ruta-dia";
 const FUENTE_NAV = "ruta-navegacion";
@@ -126,7 +168,10 @@ function soportaWebGL(): boolean {
   }
 }
 
-const TAMANO_MARCADOR = 72; // el cono de visión necesita espacio alrededor del punto
+// El elemento del suelo se dibuja acostado sobre la calle: a 55° de
+// inclinación la perspectiva se come casi la mitad del alto, así que necesita
+// bastante más lienzo del que termina ocupando en pantalla.
+const TAMANO_MARCADOR = 128;
 
 function colorPunto(p: PuntoMapa, previa: boolean): string {
   // En una ruta propuesta ninguna parada es "la que sigue" todavía: van todas
@@ -158,33 +203,85 @@ function elementoParada(p: PuntoMapa, previa = false): HTMLElement {
   return el;
 }
 
-// Punto de ubicación con cono de visión, como el de Mapas de iPhone: el punto
-// azul marca dónde estás y el cono translúcido hacia dónde vas.
+// ----------------------------------------------------------------------------
+// El marcador del chofer
+// ----------------------------------------------------------------------------
+// TODO lo que lo compone vive en el plano de la CALLE: se crea con
+// pitchAlignment "map", así que Mapbox le aplica rotateX(inclinación) +
+// rotateZ(giro) y queda acostado sobre el pavimento. Inclinando o girando el
+// mapa, el marcador se inclina y gira con él — está pegado al terreno, no
+// dibujado sobre el vidrio.
 //
-// El cono se dibuja apuntando hacia ARRIBA y ya no hay que girarlo a mano: el
-// marcador se crea con rotationAlignment "map", así que Mapbox lo mantiene
-// alineado con el terreno y basta con darle el rumbo real. Con leaflet-rotate
-// había que calcular (rumbo + giro del mapa) en cada dibujado.
+// Nada de esto puede alinearse a la pantalla, ni siquiera el punto redondo. Un
+// elemento derecho mientras el mapa se inclina se despega de la calle y flota:
+// deja de ser "el chofer está acá" y pasa a ser una calcomanía en la ventana.
+//
+// La figura es UNA sola —el disco— y adentro lleva una flecha blanca con el
+// sentido del auto, como el marcador de Mapas. Antes eran dos figuras
+// distintas según hubiera rumbo o no, y el cambio de una a otra se veía como
+// un parpadeo: ahora lo único que aparece y desaparece es la flecha de adentro.
+//
+//   · con rumbo    disco + flecha blanca + haz de visión;
+//   · sin rumbo    el disco solo. Una flecha apuntando a cualquier lado es peor
+//                  que no tener flecha, y un haz que no significa nada es una
+//                  afirmación falsa sobre hacia dónde mira el auto.
+//
+// La sombra de contacto va siempre: es lo que apoya la figura en la calle.
+
+/** Sombra, haz, disco y flecha: todo en el plano de la calle. */
 function elementoUbicacion(): HTMLElement {
   const el = document.createElement("div");
-  el.style.cssText = `position:relative;width:${TAMANO_MARCADOR}px;height:${TAMANO_MARCADOR}px;pointer-events:none`;
-  const c = TAMANO_MARCADOR / 2;
+  el.style.cssText = `position:absolute;width:${TAMANO_MARCADOR}px;height:${TAMANO_MARCADOR}px;pointer-events:none;will-change:transform`;
   el.innerHTML = `
-<div data-cono style="position:absolute;inset:0;opacity:0;transition:opacity .3s ease-out">
-  <svg width="${TAMANO_MARCADOR}" height="${TAMANO_MARCADOR}" viewBox="0 0 ${TAMANO_MARCADOR} ${TAMANO_MARCADOR}">
-    <defs>
-      <radialGradient id="cono-ubicacion-chofer" cx="50%" cy="50%" r="50%">
-        <stop offset="0%" stop-color="#1d3a8f" stop-opacity=".55"/>
-        <stop offset="70%" stop-color="#1d3a8f" stop-opacity=".12"/>
-        <stop offset="100%" stop-color="#1d3a8f" stop-opacity="0"/>
-      </radialGradient>
-    </defs>
-    <path d="M${c} ${c} L18 7.2 A34 34 0 0 1 54 7.2 Z" fill="url(#cono-ubicacion-chofer)"/>
-  </svg>
-</div>
-<div style="position:absolute;left:50%;top:50%;width:16px;height:16px;margin:-8px 0 0 -8px;border-radius:9999px;background:#1d3a8f;border:3px solid #fff;box-shadow:0 0 0 2px rgba(29,58,143,.35),0 1px 5px rgba(0,0,0,.45)"></div>`;
+<svg width="${TAMANO_MARCADOR}" height="${TAMANO_MARCADOR}" viewBox="0 0 128 128" style="display:block">
+  <defs>
+    <!-- El haz se desvanece hacia adelante en vez de cortarse: un borde duro
+         parecía el alcance de un sensor y no "por acá voy". -->
+    <radialGradient id="pucarani-cono" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#2f56c9" stop-opacity=".45"/>
+      <stop offset="55%" stop-color="#2f56c9" stop-opacity=".15"/>
+      <stop offset="100%" stop-color="#2f56c9" stop-opacity="0"/>
+    </radialGradient>
+    <!-- El disco se aclara hacia adelante. Acostado sobre la calle, ese
+         degradado es lo que le da volumen: sin él es una mancha plana. -->
+    <linearGradient id="pucarani-disco" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#4a76e8"/>
+      <stop offset="55%" stop-color="#2547ad"/>
+      <stop offset="100%" stop-color="#16307a"/>
+    </linearGradient>
+    <!-- Sombra de contacto: sin ella la flecha flota sobre la calle. -->
+    <radialGradient id="pucarani-sombra" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#0b1020" stop-opacity=".35"/>
+      <stop offset="60%" stop-color="#0b1020" stop-opacity=".14"/>
+      <stop offset="100%" stop-color="#0b1020" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+
+  <!-- Haz de 60° saliendo del punto, como el de Mapas. Solo con rumbo. -->
+  <g data-cono style="opacity:0;transition:opacity .35s ease-out">
+    <path d="M64 64 L33 10.3 A62 62 0 0 1 95 10.3 Z" fill="url(#pucarani-cono)"/>
+  </g>
+
+  <!-- Va siempre: es lo que apoya la figura en el pavimento. -->
+  <ellipse cx="64" cy="70" rx="24" ry="20" fill="url(#pucarani-sombra)"/>
+
+  <!-- El disco, centrado en la coordenada. También acostado: al inclinar el
+       mapa se convierte en una elipse, que es exactamente lo que hace un
+       círculo pintado en el suelo. El borde oscuro apenas se nota, pero es lo
+       que lo despega de un pavimento claro. -->
+  <circle cx="64" cy="64" r="20" fill="#fff" stroke="#0b1020" stroke-opacity=".12"/>
+  <circle cx="64" cy="64" r="16" fill="url(#pucarani-disco)"/>
+
+  <!-- La flecha del sentido del auto, adentro del disco. Alargada a propósito:
+       a 55° la perspectiva se come el 43% del alto, y una flecha de
+       proporciones normales queda como una raya. -->
+  <g data-flecha style="opacity:0;transition:opacity .3s ease-out">
+    <path d="M64 51.5 L73.5 74.5 L64 69 L54.5 74.5 Z" fill="#fff"/>
+  </g>
+</svg>`;
   return el;
 }
+
 
 /** Ruta calculada y todavía sin guardar, para que el chofer la vea antes de
  *  aceptarla. Mientras esté puesta, el mapa muestra ESTA ruta —encuadrada
@@ -199,6 +296,7 @@ export function RutaMapa({
   puntos,
   miUbicacion,
   rumbo,
+  claveDestino,
   geometria,
   geometriaNavegacion,
   previa,
@@ -215,6 +313,10 @@ export function RutaMapa({
    *  el cono de visión. Sale del camino que viene por delante en la ruta (ver
    *  rumboDelCamino) y, si no hay ruta, del rumbo del GPS. */
   rumbo?: number | null;
+  /** Identifica la parada a la que se está yendo. Cuando cambia —se terminó una
+   *  entrega y arrancó el tramo siguiente— el mapa vuelve a acomodarse al
+   *  camino nuevo: centro, zoom, inclinación y orientación. */
+  claveDestino?: string | null;
   /** Trazado de la ruta completa del día ([lng, lat] por punto). Se dibuja
    *  apagado, como referencia. */
   geometria?: [number, number][] | null;
@@ -247,6 +349,9 @@ export function RutaMapa({
   const [soportaMapa] = useState(soportaWebGL);
 
   const entroModoNavegacionRef = useRef(false);
+  /** A qué parada se acomodó la vista por última vez. null = todavía a
+   *  ninguna, así que en cuanto se conozca el rumbo hay que acomodarse. */
+  const claveOrientadaRef = useRef<string | null>(null);
   const encuadreInicialRef = useRef(false);
   const usuarioMovioRef = useRef(false);
   // El chofer tiene el dedo en el mapa: el código no toca la vista hasta que
@@ -496,66 +601,109 @@ export function RutaMapa({
   useEffect(() => {
     const mapa = mapaRef.current;
     if (!mapa || !mapaListo || !miUbicacion || !siguiendo) {
-      if (!siguiendo) entroModoNavegacionRef.current = false;
+      if (!siguiendo) {
+        // Al retomar el seguimiento hay que volver a acomodar la vista, así que
+        // se olvidan las dos cosas: que se entró, y a qué camino se apuntó.
+        entroModoNavegacionRef.current = false;
+        claveOrientadaRef.current = null;
+      }
       return;
     }
     if (gestoRef.current) return;
 
     const centro: [number, number] = [miUbicacion.lng, miUbicacion.lat];
 
-    if (!entroModoNavegacionRef.current) {
+    // Acomodarse al camino, que pasa en tres momentos y con una sola condición:
+    //
+    //   · al ENTRAR a modo navegación;
+    //   · en cuanto aparece el rumbo del camino. Al abrir la app, la entrada
+    //     corre con la primera lectura de GPS —cuando el tramo todavía no llegó
+    //     de Mapbox—, así que no hay hacia dónde mirar; y detenido en el galpón
+    //     el iPhone no entrega rumbo, nunca, así que sin esto la vista se
+    //     quedaría torcida hasta empezar a andar;
+    //   · al cambiar de parada, que es un camino nuevo.
+    //
+    // La clave se registra solo cuando hay rumbo: mientras no lo haya, la
+    // condición sigue pendiente y se dispara sola apenas llegue el tramo.
+    const entrando = !entroModoNavegacionRef.current;
+    const otroCamino = rumbo != null && claveOrientadaRef.current !== (claveDestino ?? null);
+
+    if (entrando || otroCamino) {
       entroModoNavegacionRef.current = true;
+      if (rumbo != null) claveOrientadaRef.current = claveDestino ?? null;
       usuarioMovioRef.current = false;
       mapa.easeTo({
         center: centro,
         zoom: ZOOM_NAVEGACION,
         pitch: PITCH_NAVEGACION,
         bearing: rumbo ?? mapa.getBearing(),
-        duration: 1200,
+        // El punto baja al tercio inferior en la misma animación.
+        padding: paddingNavegacion(mapa),
+        // Entrar es un movimiento anunciado; acomodarse a un camino nuevo tiene
+        // que sentirse como un ajuste y no como si el mapa volviera a empezar.
+        duration: entrando ? 1200 : 800,
         essential: true,
       });
       return;
     }
 
+    // Sin rumbo conocido se conserva el que ya tiene: pasarle 0 enderezaría
+    // el mapa al norte cada vez que el chofer se detiene en un semáforo. Y un
+    // cambio de un par de grados tampoco se aplica: es ruido del rumbo
+    // estimado, no una curva.
+    const actual = mapa.getBearing();
+    const girar = rumbo != null && difAngulo(rumbo, actual) >= GRADOS_MINIMOS_PARA_GIRAR;
+
     mapa.easeTo({
       center: centro,
-      // Sin rumbo conocido se conserva el que ya tiene: pasarle 0 enderezaría
-      // el mapa al norte cada vez que el chofer se detiene en un semáforo.
-      bearing: rumbo ?? mapa.getBearing(),
+      bearing: girar ? rumbo : actual,
+      // Se repite en cada movimiento: el alto del contenedor cambia al girar el
+      // teléfono o al aparecer la barra del navegador, y un padding calculado
+      // con el alto viejo deja el punto corrido.
+      padding: paddingNavegacion(mapa),
       duration: MS_DESPLAZAMIENTO,
       easing: (t) => t, // lineal: el GPS entrega posiciones a ritmo constante
       essential: true,
     });
-  }, [miUbicacion, rumbo, siguiendo, mapaListo]);
+  }, [miUbicacion, rumbo, claveDestino, siguiendo, mapaListo]);
 
-  // Punto de ubicación + cono de visión. El marcador se crea UNA vez y después
-  // solo se le actualiza la posición y el rumbo.
+  // El marcador del chofer. Se crea UNA vez y después solo se le actualiza la
+  // posición, el rumbo y qué figura se muestra.
   useEffect(() => {
     const mapa = mapaRef.current;
     if (!mapa || !mapaListo || !miUbicacion) return;
 
+    const centro: [number, number] = [miUbicacion.lng, miUbicacion.lat];
+
     if (!marcadorUbicacionRef.current) {
       marcadorUbicacionRef.current = new mapboxgl.Marker({
         element: elementoUbicacion(),
-        // Alineados con el terreno: el cono queda apoyado en la calle y
-        // apuntando al rumbo real, sin que haya que compensar el giro del mapa.
+        // Acostado sobre la calle y girando con ella. De acá sale la
+        // perspectiva —Mapbox le aplica rotateX(inclinación)— y por eso basta
+        // con darle el rumbo real, sin compensar el giro del mapa.
         rotationAlignment: "map",
         pitchAlignment: "map",
       })
-        .setLngLat([miUbicacion.lng, miUbicacion.lat])
+        .setLngLat(centro)
         .addTo(mapa);
     } else {
-      marcadorUbicacionRef.current.setLngLat([miUbicacion.lng, miUbicacion.lat]);
+      marcadorUbicacionRef.current.setLngLat(centro);
     }
 
+    // Sin rumbo se deja en 0: da igual hacia dónde apunte un disco, y de todas
+    // formas ni la flecha ni el haz se están dibujando.
     marcadorUbicacionRef.current.setRotation(rumbo ?? 0);
 
-    const cono = marcadorUbicacionRef.current
-      .getElement()
-      .querySelector<HTMLElement>("[data-cono]");
-    // Sin rumbo conocido no se dibuja el cono: mostrarlo apuntando a cualquier
-    // lado sería peor que no mostrarlo (igual que hace iPhone).
-    if (cono) cono.style.opacity = rumbo == null ? "0" : "1";
+    // El disco está siempre; lo que aparece con el rumbo es la flecha de
+    // adentro y el haz.
+    const el = marcadorUbicacionRef.current.getElement();
+    const mostrar = (selector: string, visible: boolean) => {
+      const g = el.querySelector<SVGGElement>(selector);
+      if (g) g.style.opacity = visible ? "1" : "0";
+    };
+    const conRumbo = rumbo != null;
+    mostrar("[data-cono]", conRumbo);
+    mostrar("[data-flecha]", conRumbo);
   }, [miUbicacion, rumbo, mapaListo]);
 
   const mensajeError = !TOKEN

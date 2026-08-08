@@ -6,11 +6,16 @@
 // conductor, aunque haya trabajado (ver la cabecera de la migración 0028).
 //
 // El formulario muestra la plata ANTES de guardar —ingresos estimados y lo que
-// se le va a pagar con la regla vigente a esa fecha— porque es lo que la
-// persona que carga el día está tratando de decidir. Se calcula con las mismas
-// funciones puras que usa el panel y que la confirmación del pago
-// (lib/encomiendas/pago.ts): una sola cuenta, sin una versión "de vista previa"
-// que pueda desviarse de la de verdad.
+// se le va a pagar con la tarifa elegida— porque es lo que la persona que carga
+// el día está tratando de decidir. Se calcula con las mismas funciones puras
+// que usa el panel y que la confirmación del pago (lib/encomiendas/pago.ts):
+// una sola cuenta, sin una versión "de vista previa" que pueda desviarse de la
+// de verdad.
+//
+// Y con qué tarifa se calcula SE ELIGE acá (0033). La regla de pago es una sola
+// y rige hacia adelante, así que para un día de hace tres meses que se pagaba
+// distinto no hay ninguna tabla de donde sacar su tarifa: los números los
+// escribe quien liquida, y valen solo para ese día.
 
 import { useEffect, useState, useTransition } from "react";
 import { createPortal } from "react-dom";
@@ -20,11 +25,26 @@ import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { Field } from "@/components/ui/label";
 import { formatCLP, formatNumber } from "@/lib/format";
-import { calcularPagoDia, ingresoEstimado, valorPedido } from "@/lib/encomiendas/pago";
+import {
+  calcularPagoDia,
+  ingresoEstimado,
+  valorPedido,
+  type TarifaPago,
+} from "@/lib/encomiendas/pago";
 import type { EncomiendaReglaPago } from "@/types/db";
+import {
+  CamposTarifa,
+  tarifaDeValores,
+  valoresDeTarifa,
+  type ValoresTarifa,
+} from "./campos-tarifa";
 import { agregarDiaManual } from "./actions";
 
 export type ChoferOpcion = { id: string; nombre: string };
+
+/** Con qué tarifa se valora el día que se está cargando. Lo lee el servidor del
+ *  campo modo_tarifa (ver agregarDiaManual). */
+type ModoTarifa = "dia" | "actual" | "editada";
 
 /** Lo que ya hay cargado en el periodo que se está mirando, para poder avisar
  *  que lo nuevo se SUMA en vez de reemplazar. Solo cubre el periodo en pantalla:
@@ -39,6 +59,10 @@ export type DiaConocido = {
   manuales: number;
   /** Total de eventos del día, para saber si la carga manual es todo o parte. */
   total: number;
+  /** La tarifa con la que ese día YA está calculado (0031). Agregarle actividad
+   *  lo recalcula con esta, no con la regla de ahora, así que la vista previa
+   *  tiene que usarla o mostraría una cifra que la base no va a escribir. */
+  tarifa: TarifaPago | null;
 };
 
 export function AgregarDia({
@@ -64,6 +88,14 @@ export function AgregarDia({
 }) {
   const [abierto, setAbierto] = useState(false);
   const [listo, setListo] = useState(false);
+
+  // La tarifa elegida vive acá y no en el diálogo, para que sobreviva a cerrar
+  // y volver a abrir. Cargar un mes viejo son veinte días seguidos con la misma
+  // tarifa: volver a teclearla en cada uno es donde aparecen los errores.
+  const [modo, setModo] = useState<ModoTarifa>("dia");
+  const [tarifaEditada, setTarifaEditada] = useState<ValoresTarifa>(() =>
+    valoresDeTarifa(regla),
+  );
 
   // El servidor vuelve a comprobar las dos cosas: esto es para no dejar
   // escribir un formulario entero antes de decir que no se puede.
@@ -98,6 +130,10 @@ export function AgregarDia({
           regla={regla}
           diasConocidos={diasConocidos}
           hoy={hoy}
+          modo={modo}
+          onModo={setModo}
+          tarifaEditada={tarifaEditada}
+          onTarifaEditada={setTarifaEditada}
           onCerrar={() => setAbierto(false)}
           onGuardado={() => {
             setAbierto(false);
@@ -114,6 +150,10 @@ function DialogoAgregarDia({
   regla,
   diasConocidos,
   hoy,
+  modo,
+  onModo,
+  tarifaEditada,
+  onTarifaEditada,
   onCerrar,
   onGuardado,
 }: {
@@ -121,6 +161,10 @@ function DialogoAgregarDia({
   regla: EncomiendaReglaPago;
   diasConocidos: DiaConocido[];
   hoy: string;
+  modo: ModoTarifa;
+  onModo: (modo: ModoTarifa) => void;
+  tarifaEditada: ValoresTarifa;
+  onTarifaEditada: (valores: ValoresTarifa) => void;
   onCerrar: () => void;
   onGuardado: () => void;
 }) {
@@ -149,15 +193,29 @@ function DialogoAgregarDia({
   const nEntregados = Math.max(0, Math.trunc(Number(entregados) || 0));
   const nOmitidos = Math.max(0, Math.trunc(Number(omitidos) || 0));
 
-  const conteo = { entregados: nEntregados, omitidos: nOmitidos };
-  const pago = calcularPagoDia(conteo, regla);
-  const ingresos = ingresoEstimado(nEntregados, valorPedido(regla));
-
   // Lo que ya hay registrado de ese (conductor, día). Si viene del teléfono, lo
   // que se cargue acá se suma; si ya era carga manual, la reemplaza. Las dos
   // cosas hay que decirlas antes de apretar Guardar, no después.
   const yaHay = diasConocidos.find((d) => d.fecha === fecha && d.choferId === choferId);
   const delTelefono = yaHay ? yaHay.total - yaHay.manuales : 0;
+
+  // "Mantener la del día" solo existe si el día YA tiene una: al cambiar la
+  // fecha o el conductor a uno sin registrar, la opción desaparece y hay que
+  // caer en la regla actual. Sin este ajuste el select mostraría una opción
+  // elegida que no está en la lista, y se enviaría un modo imposible.
+  const modoEfectivo: ModoTarifa = modo === "dia" && !yaHay?.tarifa ? "actual" : modo;
+
+  // La vista previa tiene que calcular con la MISMA tarifa que va a usar la
+  // base, o el número que se muestra antes de guardar no es el que se guarda.
+  const conteo = { entregados: nEntregados, omitidos: nOmitidos };
+  const tarifa: TarifaPago =
+    modoEfectivo === "editada"
+      ? tarifaDeValores(tarifaEditada)
+      : modoEfectivo === "dia" && yaHay?.tarifa
+        ? yaHay.tarifa
+        : regla;
+  const pago = calcularPagoDia(conteo, tarifa);
+  const ingresos = ingresoEstimado(nEntregados, valorPedido(tarifa));
 
   function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -254,6 +312,33 @@ function DialogoAgregarDia({
               />
             </Field>
 
+            {/* Con qué tarifa se calcula. Un select y nada más mientras no se
+                elija editarla: el caso normal es cargar el día de ayer, y ahí
+                esto tiene que estorbar lo menos posible. */}
+            <Field label="Calcular con" htmlFor="modo_tarifa" className="sm:col-span-2">
+              <Select
+                id="modo_tarifa"
+                name="modo_tarifa"
+                value={modoEfectivo}
+                onChange={(e) => onModo(e.target.value as ModoTarifa)}
+              >
+                {yaHay?.tarifa ? (
+                  <option value="dia">
+                    La tarifa con la que ya está este día ({formatCLP(yaHay.tarifa.valor_pedido)}{" "}
+                    por entrega)
+                  </option>
+                ) : null}
+                <option value="actual">
+                  La regla de pago actual ({formatCLP(valorPedido(regla))} por entrega)
+                </option>
+                <option value="editada">Otra tarifa, solo para este día</option>
+              </Select>
+            </Field>
+
+            {modoEfectivo === "editada" ? (
+              <CamposTarifa valores={tarifaEditada} onChange={onTarifaEditada} />
+            ) : null}
+
             <dl className="rounded-xl bg-background px-4 py-3 text-sm sm:col-span-2">
               <div className="flex items-center justify-between">
                 <dt className="text-muted">Ingresos estimados</dt>
@@ -264,20 +349,35 @@ function DialogoAgregarDia({
                 <dd className="font-semibold tabular-nums">{formatCLP(pago.total)}</dd>
               </div>
               <p className="mt-2 text-xs text-muted">
-                Estimado a {formatCLP(valorPedido(regla))} por entrega · pago ={" "}
+                Estimado a {formatCLP(valorPedido(tarifa))} por entrega · pago ={" "}
                 {formatCLP(pago.base)} por pedidos + {formatCLP(pago.dia)} por el día
                 {pago.bono > 0 ? ` + ${formatCLP(pago.bono)} de bono` : ""}
               </p>
             </dl>
 
-            {/* La regla es una sola y no tiene vigencia (0031): un día viejo se
-                calcula con la tarifa de HOY, no con la que corría en su fecha.
-                Es correcto —se está registrando ahora— pero no es evidente, y
-                cargar un día de hace tres meses es justo cuando importa. */}
-            {fecha < hoy ? (
+            {/* Qué implica lo elegido. Lo que sorprende no es la cuenta, es el
+                alcance: que una tarifa editada NO cambie la regla, y que elegir
+                la regla actual sí mueva un día que ya estaba calculado con
+                otra. */}
+            {modoEfectivo === "editada" ? (
+              <p className="rounded-lg border border-info/25 bg-info-bg px-3 py-2 text-xs text-info sm:col-span-2">
+                Esta tarifa vale <strong>solo para este día</strong>: la regla de pago no se toca y
+                los demás días siguen como están.
+              </p>
+            ) : modoEfectivo === "dia" && yaHay?.tarifa ? (
+              <p className="rounded-lg border border-info/25 bg-info-bg px-3 py-2 text-xs text-info sm:col-span-2">
+                El día se mantiene calculado a {formatCLP(yaHay.tarifa.valor_pedido)} por entrega,
+                que es con lo que ya estaba.
+              </p>
+            ) : yaHay?.tarifa ? (
+              <p className="rounded-lg border border-warn/25 bg-warn-bg px-3 py-2 text-xs text-warn sm:col-span-2">
+                Este día estaba calculado a {formatCLP(yaHay.tarifa.valor_pedido)} por entrega: al
+                guardar se recalcula <strong>entero</strong> con la regla actual.
+              </p>
+            ) : fecha < hoy ? (
               <p className="rounded-lg border border-border bg-background px-3 py-2 text-xs text-muted sm:col-span-2">
-                Es un día pasado: se calcula con la regla de pago que está vigente ahora, que es la
-                que muestra el cuadro de arriba.
+                Es un día pasado y todavía no está registrado: se va a calcular con la regla de
+                pago que rige ahora. Si ese día se pagaba distinto, elige “Otra tarifa”.
               </p>
             ) : null}
 

@@ -86,13 +86,21 @@ export function rumboDelCamino(
   posicion: Coordenada,
   geometria: [number, number][],
   metrosAdelante = 45,
+  /** Desde qué vértice mirar hacia adelante. Se le pasa el que ya emparejó el
+   *  pegado del punto (ver ajustarATrazado): sin él se busca el más cercano de
+   *  TODO el trazado, y una ruta que vuelve a pasar por la misma calle puede
+   *  hacer que el rumbo salga de la pasada equivocada. */
+  desdeIndice?: number,
 ): number | null {
   if (geometria.length < 2) return null;
   const puntos = aCoordenadas(geometria);
 
   // El trazado se pidió desde una posición anterior, así que primero hay que
   // ubicar por qué parte de él va el chofer ahora.
-  const masCerca = indiceMasCercano(posicion, puntos);
+  const masCerca =
+    desdeIndice != null && desdeIndice >= 0 && desdeIndice < puntos.length
+      ? desdeIndice
+      : indiceMasCercano(posicion, puntos);
 
   // Desde ahí se avanza por el trazado hasta juntar la distancia de
   // anticipación: ese punto es "hacia dónde sigue el camino".
@@ -118,7 +126,16 @@ export function rumboDelCamino(
  *  y cuánto se apartó del camino. */
 type Proyeccion = { indice: number; t: number; metros: number };
 
-function proyectarEnTrazado(p: Coordenada, geometria: [number, number][]): Proyeccion | null {
+/** La proyección, mirando solo los segmentos [desde, hasta). Acotar el rango es
+ *  lo que impide que el punto salte a una pasada POSTERIOR del trazado por la
+ *  misma calle (ver ajustarATrazado); con el rango completo es la proyección de
+ *  toda la vida. */
+function proyectarEnRango(
+  p: Coordenada,
+  geometria: [number, number][],
+  desde: number,
+  hasta: number,
+): Proyeccion | null {
   if (geometria.length === 0) return null;
 
   // A metros planos alrededor de p: a esta escala (cientos de metros) la
@@ -132,8 +149,11 @@ function proyectarEnTrazado(p: Coordenada, geometria: [number, number][]): Proye
     return { indice: 0, t: 0, metros: Math.hypot(x(geometria[0]), y(geometria[0])) };
   }
 
-  let mejor: Proyeccion = { indice: 0, t: 0, metros: Infinity };
-  for (let i = 0; i < geometria.length - 1; i++) {
+  const primero = Math.max(0, Math.min(desde, geometria.length - 2));
+  const ultimo = Math.max(primero + 1, Math.min(hasta, geometria.length - 1));
+
+  let mejor: Proyeccion = { indice: primero, t: 0, metros: Infinity };
+  for (let i = primero; i < ultimo; i++) {
     const ax = x(geometria[i]);
     const ay = y(geometria[i]);
     const dx = x(geometria[i + 1]) - ax;
@@ -149,6 +169,10 @@ function proyectarEnTrazado(p: Coordenada, geometria: [number, number][]): Proye
   return mejor;
 }
 
+function proyectarEnTrazado(p: Coordenada, geometria: [number, number][]): Proyeccion | null {
+  return proyectarEnRango(p, geometria, 0, geometria.length - 1);
+}
+
 // Cuánto se apartó una posición del trazado, en metros. Se mide contra el
 // SEGMENTO más cercano y no contra el vértice más cercano: en una recta larga
 // Mapbox pone dos vértices a cuadras de distancia, así que ir justo por el medio
@@ -157,6 +181,164 @@ function proyectarEnTrazado(p: Coordenada, geometria: [number, number][]): Proye
 // use-navegacion).
 export function distanciaAPolilinea(p: Coordenada, geometria: [number, number][]): number {
   return proyectarEnTrazado(p, geometria)?.metros ?? Infinity;
+}
+
+// ----------------------------------------------------------------------------
+// Pegar la posición al camino
+// ----------------------------------------------------------------------------
+// El GPS de un teléfono en ciudad se equivoca por decenas de metros, así que
+// dibujar el punto donde dice la lectura lo pone adentro de una manzana, sobre
+// un techo o en el cerro. Ningún navegador serio muestra eso: proyectan la
+// posición sobre la ruta que se está siguiendo y dibujan ahí.
+//
+// HASTA DÓNDE SE PEGA. 90 metros, y no es un número al voleo: el primer punto
+// del trazado es donde MAPBOX enganchó a la calle la lectura del propio chofer
+// al calcular el tramo, o sea la mejor respuesta que existe a "por dónde sale
+// este auto al camino". Una casa, un galpón o un estacionamiento están a 20-60
+// m de la calle, así que con menos tolerancia el punto se queda adentro del
+// patio — que fue justo lo que se vio probando.
+//
+// Más allá de 90 m ya no es error de GPS: el chofer está en otra calle. Ahí el
+// punto se despega y se dibuja donde de verdad está, mientras la detección de
+// desvío (UMBRAL_FUERA_DE_RUTA_M, 60 m sobre la lectura CRUDA) pide la ruta
+// nueva. Que el punto se despegue después de que arrancó el recálculo es lo
+// correcto: primero se admite el desvío, después se muestra.
+//
+// Y ojo con qué se hace con el resultado: esto es PRESENTACIÓN. La decisión de
+// si el chofer se salió del camino se toma con la posición CRUDA (ver
+// use-navegacion), porque un punto pegado está sobre la ruta por definición y
+// nunca acusaría un desvío.
+const TOLERANCIA_PEGADO_M = 90;
+
+// CUÁNTO TRAZADO SE MIRA. La proyección global tiene un problema en una ciudad
+// en damero: si la ruta vuelve a pasar cerca —y en Arica pasa seguido—, el
+// punto puede engancharse en un tramo POSTERIOR y aparecer diez cuadras
+// adelante, con recortarTrazado borrando media ruta detrás de él.
+//
+// Se busca entonces solo hacia adelante desde el último vértice emparejado, y
+// hasta 300 m: holgadísimo contra lo que cubre un auto entre dos lecturas de
+// GPS (56 m a 100 km/h).
+//
+// Hacia atrás no se busca NADA, y eso es una decisión: el avance por el trazado
+// tiene que ser monótono. Medido sobre el tramo real de Arica con ruido de ±16
+// m, permitir aunque sea un poco de retroceso hace que el punto se deslice para
+// atrás media cuadra en los vértices —el auto pegando un salto hacia atrás en
+// mitad de la calle, que es de lo que más se nota—. El precio es que un pico de
+// ruido puede adelantar el emparejado un segmento y dejar el punto esperando en
+// el vértice un segundo, hasta que el auto lo alcanza. Se corrige solo y no se
+// ve; el retroceso sí.
+const VENTANA_ADELANTE_M = 300;
+const HOLGURA_ATRAS_M = 0;
+
+export type PosicionPegada = {
+  lat: number;
+  lng: number;
+  /** Cuánto se corrigió: la distancia real entre la lectura y el camino. */
+  desvioM: number;
+  /** Vértice del trazado desde el que sigue el camino por recorrer. */
+  indice: number;
+};
+
+export type OpcionesPegado = {
+  /** Último vértice emparejado, para buscar alrededor de él. Sin esto se busca
+   *  desde el principio, que es lo que corresponde en un trazado recién pedido:
+   *  el punto cae en el INICIO de la ruta, la salida al camino. */
+  desdeIndice?: number;
+  toleranciaM?: number;
+  ventanaM?: number;
+  holguraAtrasM?: number;
+};
+
+/** Cuántos vértices hay que retroceder desde `indice` para juntar `metros`. */
+function retroceder(geometria: [number, number][], indice: number, metros: number): number {
+  let acumulado = 0;
+  let i = indice;
+  while (i > 0 && acumulado < metros) {
+    const [lngA, latA] = geometria[i - 1];
+    const [lngB, latB] = geometria[i];
+    acumulado += distanciaMetros({ lat: latA, lng: lngA }, { lat: latB, lng: lngB });
+    i--;
+  }
+  return i;
+}
+
+/** Cuántos vértices hay que avanzar desde `indice` para juntar `metros`. */
+function avanzar(geometria: [number, number][], indice: number, metros: number): number {
+  let acumulado = 0;
+  let i = indice;
+  while (i < geometria.length - 1 && acumulado < metros) {
+    const [lngA, latA] = geometria[i];
+    const [lngB, latB] = geometria[i + 1];
+    acumulado += distanciaMetros({ lat: latA, lng: lngA }, { lat: latB, lng: lngB });
+    i++;
+  }
+  return i;
+}
+
+export function ajustarATrazado(
+  posicion: Coordenada,
+  geometria: [number, number][],
+  opciones: OpcionesPegado = {},
+): PosicionPegada | null {
+  if (geometria.length < 2) return null;
+
+  const {
+    desdeIndice = 0,
+    toleranciaM = TOLERANCIA_PEGADO_M,
+    ventanaM = VENTANA_ADELANTE_M,
+    holguraAtrasM = HOLGURA_ATRAS_M,
+  } = opciones;
+
+  const partida = Math.max(0, Math.min(desdeIndice, geometria.length - 2));
+  const enVentana = proyectarEnRango(
+    posicion,
+    geometria,
+    retroceder(geometria, partida, holguraAtrasM),
+    avanzar(geometria, partida, ventanaM),
+  );
+
+  // La ventana es una preferencia, no una cárcel. Si adentro no hay nada cerca,
+  // se busca en el trazado entero: pasa cuando el teléfono estuvo suspendido
+  // —una llamada entrante, un túnel— y el chofer avanzó kilómetros sin que
+  // llegara una sola lectura. Sin este respaldo, el índice se quedaría clavado
+  // atrás y el punto no volvería a pegarse en todo el tramo.
+  //
+  // El riesgo conocido es el contrario: si el tramo vuelve a pasar por la misma
+  // calle, el respaldo puede enganchar la pasada equivocada. Se prefiere así
+  // porque un tramo va derecho a UNA parada y rara vez se dobla sobre sí mismo,
+  // mientras que un teléfono que se suspende es cosa de todos los días.
+  const proyeccion =
+    enVentana && enVentana.metros <= toleranciaM
+      ? enVentana
+      : proyectarEnTrazado(posicion, geometria);
+
+  if (!proyeccion || proyeccion.metros > toleranciaM) return null;
+
+  // El punto exacto dentro del segmento. A esta escala —dos vértices a decenas
+  // de metros— interpolar en grados y no en metros no cambia nada medible.
+  const [lngA, latA] = geometria[proyeccion.indice];
+  const [lngB, latB] = geometria[proyeccion.indice + 1];
+  return {
+    lat: latA + (latB - latA) * proyeccion.t,
+    lng: lngA + (lngB - lngA) * proyeccion.t,
+    desvioM: proyeccion.metros,
+    indice: proyeccion.indice,
+  };
+}
+
+/** El trazado que FALTA recorrer: arranca en el punto pegado y sigue hasta el
+ *  final. Lo que quedó atrás se descarta.
+ *
+ *  Es lo que hace que la línea azul salga del punto del chofer en vez de venir
+ *  desde media cuadra más atrás. Dibujar el tramo ya recorrido no es solo feo:
+ *  con el mapa girado e inclinado, esa cola apunta hacia atrás y se lee como un
+ *  camino que hay que tomar. */
+export function recortarTrazado(
+  geometria: [number, number][],
+  pegado: PosicionPegada,
+): [number, number][] {
+  if (geometria.length < 2) return geometria;
+  return [[pegado.lng, pegado.lat], ...geometria.slice(pegado.indice + 1)];
 }
 
 // Metros que faltan hasta el final de un trazado, SIGUIENDO el camino y no en

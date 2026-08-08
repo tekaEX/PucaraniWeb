@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import {
@@ -17,10 +17,12 @@ import { cn } from "@/lib/utils";
 import { formatDistancia } from "@/lib/format";
 import { BottomSheet } from "@/components/encomiendas/bottom-sheet";
 import { Seccion } from "@/components/encomiendas/seccion";
-import type { PreviaRuta, PuntoMapa } from "./ruta-mapa";
-import { rumboDelCamino } from "@/lib/rutas";
+import type { PreviaRuta, PuntoMapa, Ubicacion } from "./ruta-mapa";
+import { recortarTrazado, rumboDelCamino } from "@/lib/rutas";
 import { useUbicacionActual } from "./use-ubicacion-actual";
 import { useNavegacion } from "./use-navegacion";
+import { usePantallaEncendida } from "./use-pantalla-encendida";
+import { usePuntoEnRuta } from "./use-punto-en-ruta";
 import { useVozNavegacion } from "./use-voz";
 import { InstruccionNavegacion } from "./instruccion-navegacion";
 import type {
@@ -65,6 +67,20 @@ const BOTON_PRINCIPAL =
   "flex h-12 items-center justify-center gap-2 rounded-full bg-brand text-[15px] font-semibold text-brand-foreground shadow-[0_1px_2px_rgba(11,93,86,0.3)] transition-transform active:scale-[0.97] disabled:pointer-events-none disabled:opacity-50";
 const BOTON_RESULTADO =
   "flex h-12 items-center justify-center gap-1.5 whitespace-nowrap rounded-full text-sm font-semibold transition-transform active:scale-[0.97] disabled:pointer-events-none disabled:opacity-50";
+
+/** Cuánto se le respeta al chofer el mapa quieto después de arrastrarlo, antes
+ *  de volver a seguirlo solo. */
+const MS_VOLVER_A_SEGUIR = 12_000;
+
+/** Con la última lectura más vieja que esto, el punto que se ve ya no es dónde
+ *  está el chofer. Pasa en un pasaje angosto o entre cerros, y también cuando se
+ *  vienen descartando lecturas malas (ver use-ubicacion-actual). */
+const MS_UBICACION_VIEJA = 12_000;
+
+/** Precisión declarada por encima de la cual el punto ya no ubica ni la
+ *  manzana. Es el mismo criterio con el que se descartan lecturas; acá sirve
+ *  para avisar cuando la ÚLTIMA aceptada era mala. */
+const PRECISION_DUDOSA_M = 40;
 
 // Mensaje centrado para los casos en que no hay nada que hacer (sin ruta ese
 // día, o ruta terminada).
@@ -146,6 +162,20 @@ export function RutaConductor({
   // encerrar los z-index internos de Leaflet, así que nada de adentro puede
   // quedar por encima de la hoja, z-20).
   const [siguiendo, setSiguiendo] = useState(true);
+  /** Sube con cada arrastre: reinicia la cuenta para volver a seguir. */
+  const [arrastres, setArrastres] = useState(0);
+
+  // Soltado a mano, el seguimiento vuelve SOLO a los 12 segundos, como en
+  // Mapas. Manejando, el mapa se arrastra sin querer con la rodilla o al
+  // esquivar la hoja, y quedarse esperando a que alguien apriete "centrar" es
+  // dejar al chofer mirando un mapa quieto de una cuadra que ya pasó. Los 12 s
+  // alcanzan para mirar una calle adelante y no interrumpen a quien está
+  // explorando de verdad: cada arrastre vuelve a arrancar la cuenta.
+  useEffect(() => {
+    if (siguiendo) return;
+    const t = setTimeout(() => setSiguiendo(true), MS_VOLVER_A_SEGUIR);
+    return () => clearTimeout(t);
+  }, [siguiendo, arrastres]);
 
   const hayRuta = paradas.length > 0;
 
@@ -170,6 +200,11 @@ export function RutaConductor({
     if (!activa || activa.pedido.lat == null || activa.pedido.lng == null) return null;
     return { lat: activa.pedido.lat, lng: activa.pedido.lng };
   }, [activa]);
+  // Recibe la posición CRUDA, no la pegada al camino (ver más abajo). Es la que
+  // decide si el chofer se salió de la ruta, y un punto pegado está sobre la
+  // ruta por definición: alimentarlo con eso haría que un desvío no se detecte
+  // NUNCA y el chofer siga escuchando indicaciones de un camino que ya no está
+  // tomando. Pegar el punto es presentación; esto es la decisión.
   const navegacion = useNavegacion(!soloLectura && !!destinoActivo, miUbicacion, destinoActivo);
   // Los avisos los dice el teléfono en voz alta (Mapbox los entrega ya escritos
   // en español). Solo en el día activo: en un día pasado no hay nada que decir.
@@ -181,18 +216,86 @@ export function RutaConductor({
     navegacion.metrosAManiobra,
   );
 
+  // La pantalla apagada suspende el GPS: sin esto el punto se congela a los
+  // treinta segundos de no tocar nada, que es exactamente lo que pasa
+  // manejando.
+  usePantallaEncendida(!soloLectura && hayRuta);
+
+  // ------------------------------------------------------------------------
+  // El punto pegado al camino
+  // ------------------------------------------------------------------------
+  // La lectura cruda del GPS cae adentro de las manzanas —en ciudad se equivoca
+  // por decenas de metros— y, arrancando la jornada, adentro del galpón.
+  // Mientras haya un trazado que seguir, el punto se dibuja SOBRE él.
+  const pegado = usePuntoEnRuta(miUbicacion, navegacion.geometria);
+
   // Hacia dónde orientar la vista: el camino que viene por delante en la
-  // propia ruta. Se prefiere eso antes que el rumbo del GPS —que solo existe
-  // yendo en movimiento— y, sobre todo, antes que la brújula del teléfono,
-  // que apunta hacia donde quedó apoyado el aparato en el auto y no hacia
-  // donde va el camino.
+  // propia ruta. Se prefiere eso antes que el rumbo del GPS —que en iPhone
+  // llega null casi siempre, y en el resto solo existe yendo en movimiento— y,
+  // sobre todo, antes que la brújula del teléfono, que apunta hacia donde quedó
+  // apoyado el aparato en el auto y no hacia donde va el camino.
+  //
+  // Se mide desde el punto YA PEGADO y sobre su mismo vértice: mirar 45 m
+  // adelante desde una lectura que cayó sobre una manzana daba un rumbo torcido
+  // en cada curva, y buscar el vértice más cercano de todo el trazado podía
+  // caer en otra pasada por la misma calle.
   const rumbo = useMemo(() => {
-    if (miUbicacion && navegacion.geometria) {
-      const delCamino = rumboDelCamino(miUbicacion, navegacion.geometria);
+    const desde = pegado ?? miUbicacion;
+    if (desde && navegacion.geometria) {
+      const delCamino = rumboDelCamino(desde, navegacion.geometria, 45, pegado?.indice);
       if (delCamino != null) return delCamino;
     }
     return miUbicacion?.heading ?? null;
-  }, [miUbicacion, navegacion.geometria]);
+  }, [pegado, miUbicacion, navegacion.geometria]);
+
+  // Lo que ve el chofer. Sin trazado —o apartado de él— se muestra la lectura
+  // cruda: inventar una posición sobre un camino que no se está siguiendo sería
+  // peor que un punto impreciso.
+  const ubicacionMostrada: Ubicacion | null = useMemo(
+    () => (pegado && miUbicacion ? { ...miUbicacion, lat: pegado.lat, lng: pegado.lng } : miUbicacion),
+    [pegado, miUbicacion],
+  );
+
+  // La línea azul arranca en el punto y no media cuadra más atrás: con el mapa
+  // girado, la cola del tramo ya recorrido apunta hacia atrás y se lee como un
+  // camino a tomar.
+  const trazadoPorDelante = useMemo(
+    () =>
+      pegado && navegacion.geometria
+        ? recortarTrazado(navegacion.geometria, pegado)
+        : navegacion.geometria,
+    [pegado, navegacion.geometria],
+  );
+
+  // Descartar lecturas malas en silencio deja el punto congelado sin que nadie
+  // sepa por qué, y ese es justo el momento en que el chofer necesita saber que
+  // no se fíe del mapa.
+  //
+  // Que la última lectura haya quedado vieja se mira con un reloj propio:
+  // mientras el GPS avisa, cada lectura provoca un dibujado, pero cuando DEJA
+  // de avisar —que es justo el caso a denunciar— no hay nada que lo dispare. Va
+  // dentro del intervalo y no en el dibujado porque leer el reloj es impuro: el
+  // mismo render daría distinto según cuándo ocurra.
+  const ubicacionRef = useRef(miUbicacion);
+  useEffect(() => {
+    ubicacionRef.current = miUbicacion;
+  }, [miUbicacion]);
+
+  const [ubicacionVieja, setUbicacionVieja] = useState(false);
+  useEffect(() => {
+    if (soloLectura || !hayRuta) return;
+    const t = setInterval(() => {
+      const tomadaEn = ubicacionRef.current?.tomadaEn;
+      setUbicacionVieja(tomadaEn != null && Date.now() - tomadaEn > MS_UBICACION_VIEJA);
+    }, 2_000);
+    return () => clearInterval(t);
+  }, [soloLectura, hayRuta]);
+
+  const señalDebil =
+    !soloLectura &&
+    miUbicacion != null &&
+    (ubicacionVieja ||
+      (miUbicacion.precisionM != null && miUbicacion.precisionM > PRECISION_DUDOSA_M));
 
   // La flecha de arriba a la izquierda deshace el último paso, como el botón de
   // atrás del navegador: si el chofer venía mirando el día de ayer, vuelve a
@@ -316,10 +419,16 @@ export function RutaConductor({
       <div className="absolute inset-0 z-0">
         <RutaMapa
           puntos={puntos}
-          miUbicacion={miUbicacion}
+          // La pegada al camino, no la cruda: ver el bloque de arriba.
+          miUbicacion={ubicacionMostrada}
           rumbo={rumbo}
+          // Cambia al terminar una entrega: es la señal de "arrancó otro
+          // tramo", y con ella el mapa se acomoda al camino nuevo.
+          claveDestino={
+            destinoActivo ? `${destinoActivo.lat},${destinoActivo.lng}` : null
+          }
           geometria={geometria}
-          geometriaNavegacion={navegacion.geometria}
+          geometriaNavegacion={trazadoPorDelante}
           previa={previa}
           // Con una ruta propuesta a la vista el mapa NO sigue al chofer: se
           // queda quieto mostrándola entera. Al aceptarla o descartarla vuelve
@@ -330,7 +439,11 @@ export function RutaConductor({
           // la ruta y el mapa habría dejado de seguirlo sin que se entienda por
           // qué.
           onArrastre={() => {
-            if (!previa) setSiguiendo(false);
+            if (previa) return;
+            setSiguiendo(false);
+            // Cada arrastre reinicia la cuenta para volver a seguir: mirando
+            // el mapa un rato largo, el auto-recentrado no interrumpe.
+            setArrastres((n) => n + 1);
           }}
         />
       </div>
@@ -362,6 +475,13 @@ export function RutaConductor({
         {!soloLectura && errorUbicacion ? (
           <p className="rounded-xl bg-warn-bg px-3 py-2 text-xs text-warn shadow-md">
             {errorUbicacion}
+          </p>
+        ) : señalDebil ? (
+          // Sin esto, la app se ve normal mientras el punto lleva medio minuto
+          // clavado: el chofer no tiene forma de saber que lo que ve no es
+          // dónde está.
+          <p className="self-start rounded-full bg-warn-bg px-3 py-1.5 text-xs text-warn shadow-md">
+            Señal de GPS débil: la ubicación puede estar desactualizada.
           </p>
         ) : null}
       </div>

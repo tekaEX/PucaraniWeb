@@ -15,10 +15,12 @@ import { CloudOff, MapPinOff, Plus, X } from "lucide-react";
 import { DiaNav } from "@/components/encomiendas/dia-nav";
 import { Seccion } from "@/components/encomiendas/seccion";
 import {
+  cerrarRuta,
   leerPedidos,
   leerRuta,
   marcarEntrega,
   marcarLlamada,
+  rutaTerminada,
   type PedidoLocal,
   type RutaLocal,
 } from "@/lib/encomiendas/local/almacen";
@@ -106,7 +108,7 @@ export function PantallaEncomiendas({
   // guardó nada: la ruta que rige sigue siendo la de "ruta".
   const [propuesta, setPropuesta] = useState<PropuestaRuta | null>(null);
 
-  const { pendientes: sinEnviar, enviando, intentar } = useEnvioActividad(esHoy);
+  const { pendientes: sinEnviar, enviando, intentar } = useEnvioActividad(esHoy, choferId, fecha);
 
   // Separada de recargar() a propósito: no escribe estado, así que el efecto de
   // abajo puede llamarla y recién después aplicar el resultado. Mezclar las dos
@@ -175,10 +177,22 @@ export function PantallaEncomiendas({
   const onEntrega = useCallback(
     async (pedidoId: string, resultado: "entregado" | "omitido") => {
       await marcarEntrega({ fecha, pedidoId, choferId }, resultado);
+
+      // Si esa era la última parada, la jornada terminó. Cerrarla es lo que le
+      // dice al servidor que ya puede valorar el día (0032): mientras siga
+      // abierta no se calcula ni un peso, justamente para que el panel no
+      // muestre la liquidación de una ruta que todavía está pasando.
+      //
+      // Se relee del teléfono en vez de mirar el estado de React: `recargar` es
+      // asíncrono y el estado de esta pasada todavía no incluye la parada que
+      // se acaba de cerrar.
+      const [rutaGuardada] = await leerTodo();
+      if (rutaTerminada(rutaGuardada)) await cerrarRuta(fecha);
+
       await recargar();
       intentar();
     },
-    [fecha, choferId, recargar, intentar],
+    [fecha, choferId, leerTodo, recargar, intentar],
   );
 
   const onPedidoGuardado = useCallback(() => void recargar(), [recargar]);

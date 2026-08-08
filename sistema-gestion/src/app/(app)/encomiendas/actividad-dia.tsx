@@ -9,46 +9,53 @@
 // Desde la oficina no había forma de que una ruta generada acá le llegara.
 
 import { useState, useTransition } from "react";
-import { Check, X, Phone, Wallet, Truck, CloudOff, Trash2 } from "lucide-react";
+import { Clock, Wallet, Truck, Trash2 } from "lucide-react";
 import { Card, CardBody, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Dialogo } from "@/components/ui/dialogo";
+import { Select } from "@/components/ui/select";
+import { Field } from "@/components/ui/label";
 import { formatCLP, formatNumber, formatTime } from "@/lib/format";
-import { eliminarDiaManual } from "./actions";
+import {
+  calcularPagoDia,
+  ingresoEstimado,
+  tarifaDelDia,
+  valorPedido,
+  type ConteoDia,
+  type TarifaPago,
+} from "@/lib/encomiendas/pago";
+import {
+  CamposTarifa,
+  tarifaDeValores,
+  valoresDeTarifa,
+  type ValoresTarifa,
+} from "./campos-tarifa";
+import { eliminarDiaManual, repreciarDia, repreciarDiaConTarifa } from "./actions";
 import type {
   EncomiendaActividadOrigen,
   EncomiendaActividadTipo,
+  EncomiendaJornada,
   EncomiendaPago,
+  EncomiendaReglaPago,
 } from "@/types/db";
 
 export type EventoDia = {
   id: string;
   tipo: EncomiendaActividadTipo;
-  /** Cuándo ocurrió según el teléfono. */
-  hora: string;
-  /** Cuándo llegó al servidor. */
-  created_at: string;
   /** 'app' = lo mandó el teléfono · 'manual' = lo cargó la oficina (0028). */
   origen: EncomiendaActividadOrigen;
 };
 
-// A partir de acá la diferencia entre "cuándo pasó" y "cuándo llegó" deja de ser
-// latencia normal y pasa a ser una zona sin cobertura, que es información útil:
-// dice dónde el conductor trabaja a ciegas sin tener que preguntárselo.
-const MINUTOS_RETRASO_NOTABLE = 10;
-
-const PRESENTACION: Record<
-  EncomiendaActividadTipo,
-  { etiqueta: string; icono: React.ReactNode }
-> = {
-  entrega: { etiqueta: "Entregado", icono: <Check className="h-4 w-4 text-ok" /> },
-  omision: { etiqueta: "No entregado", icono: <X className="h-4 w-4 text-danger" /> },
-  llamada: { etiqueta: "Salió a repartir", icono: <Phone className="h-4 w-4 text-muted" /> },
-};
-
-function minutosEntre(desde: string, hasta: string): number {
-  return (new Date(hasta).getTime() - new Date(desde).getTime()) / 60_000;
-}
+// Acá vivían PRESENTACION (el ícono y la etiqueta de cada tipo de evento) y
+// MINUTOS_RETRASO_NOTABLE, que marcaba las entregas cuya hora del teléfono
+// quedaba muy atrás de la de llegada al servidor — la señal de que el conductor
+// había trabajado sin cobertura.
+//
+// Se fueron con la bitácora por evento (0032). Con la ruta hecha de corrido, la
+// hora de cada entrega no dice nada que no diga el par (empezó, terminó), y el
+// indicador de "sin señal" perdió sentido: ahora el cierre de la jornada puede
+// llegar mucho después de la última entrega sin que eso signifique nada raro.
 
 export function ActividadDia({
   choferId,
@@ -56,6 +63,8 @@ export function ActividadDia({
   fecha,
   eventos,
   pago,
+  jornada,
+  regla,
 }: {
   /** null si el conductor fue eliminado: el día se ve, pero no se liquida. */
   choferId: string | null;
@@ -63,12 +72,19 @@ export function ActividadDia({
   fecha: string;
   eventos: EventoDia[];
   /** Las cifras que la base congeló para este día (0031). null si no se pudo
-   *  calcular: sin conductor, o sin regla de pago configurada. */
+   *  calcular: la ruta sigue en curso, no hay regla, o no hay conductor. */
   pago: EncomiendaPago | null;
+  /** El sobre del día (0032): de cuándo a cuándo salió la ruta. */
+  jornada: EncomiendaJornada | null;
+  /** La regla de pago de ahora, para el diálogo de recalcular: es una de las
+   *  dos tarifas con las que se puede volver a valorar el día, y el punto de
+   *  partida cuando se va a escribir otra. */
+  regla: EncomiendaReglaPago | null;
 }) {
   const [pendingBorrar, startTransitionBorrar] = useTransition();
   const [errorBorrar, setErrorBorrar] = useState<string | null>(null);
   const [confirmandoBorrado, setConfirmandoBorrado] = useState(false);
+  const [recalculando, setRecalculando] = useState(false);
 
   function onBorrarManual() {
     if (!choferId) return;
@@ -83,16 +99,8 @@ export function ActividadDia({
   const entregados = eventos.filter((e) => e.tipo === "entrega").length;
   const omitidos = eventos.filter((e) => e.tipo === "omision").length;
 
-  // La bitácora de abajo solo lista lo que vino del TELÉFONO. Los eventos
-  // cargados a mano no tienen hora real —la columna es `not null`, así que
-  // llevan un relleno (ver horaRelleno en actions.ts)— y ponerlos en la línea
-  // de tiempo sería inventar: aparecerían treinta filas idénticas a la misma
-  // hora, y encima con el aviso de "sin señal" encendido, porque entre esa hora
-  // de relleno y el momento en que la oficina cargó el día pueden pasar
-  // semanas. Van resumidos en su propio bloque, que es todo lo que se sabe.
-  const delTelefono = eventos
-    .filter((e) => e.origen === "app")
-    .sort((a, b) => a.hora.localeCompare(b.hora));
+  const delTelefono = eventos.filter((e) => e.origen === "app");
+  const enCursoJornada = jornada != null && jornada.cerrada_en == null;
   const manuales = eventos.filter((e) => e.origen === "manual");
   const manualEntregados = manuales.filter((e) => e.tipo === "entrega").length;
   const manualOmitidos = manuales.filter((e) => e.tipo === "omision").length;
@@ -187,39 +195,38 @@ export function ActividadDia({
           </div>
         ) : null}
 
-        {/* Un día íntegramente manual no tiene bitácora que mostrar: el bloque
-            de arriba ya dice todo lo que se sabe de él. */}
-        {delTelefono.length === 0 ? null : (
-        <ol className="max-h-72 space-y-1 overflow-y-auto">
-          {delTelefono.map((e) => {
-            const retraso = minutosEntre(e.hora, e.created_at);
-            const presentacion = PRESENTACION[e.tipo];
-            return (
-              <li
-                key={e.id}
-                className="flex items-center gap-3 rounded-lg border border-border px-3 py-2 text-sm"
-              >
-                <span className="w-11 shrink-0 text-xs tabular-nums text-muted">
-                  {formatTime(e.hora)}
-                </span>
-                {presentacion.icono}
-                <span className="min-w-0 flex-1 truncate">{presentacion.etiqueta}</span>
-                {retraso >= MINUTOS_RETRASO_NOTABLE ? (
-                  <span
-                    className="flex shrink-0 items-center gap-1 text-xs text-warn"
-                    title={`Marcado a las ${formatTime(e.hora)}, recibido a las ${formatTime(e.created_at)}: el conductor estuvo sin señal.`}
-                  >
-                    <CloudOff className="h-3.5 w-3.5" />
-                    {Math.round(retraso)} min
+        {/* De cuándo a cuándo salió la ruta. Reemplaza a la lista de las
+            treinta entregas con su hora: con la ruta hecha de corrido, ese par
+            es lo único que informa, y era la lista lo que hacía difícil ver el
+            día de un vistazo.
+
+            Un día cargado desde la oficina no tiene inicio —nadie sabe a qué
+            hora empezó— y el bloque de arriba ya cuenta lo que se sabe de él. */}
+        {jornada ? (
+          <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl bg-background px-4 py-3 text-sm">
+            <span className="flex items-center gap-2 text-muted">
+              <Clock className="h-4 w-4 shrink-0" />
+              Jornada
+            </span>
+            {jornada.cerrada_en == null ? (
+              <span className="flex items-center gap-2">
+                <Badge tone="amber">En curso</Badge>
+                {jornada.inicio ? (
+                  <span className="text-xs text-muted">
+                    salió a las {formatTime(jornada.inicio)}
                   </span>
                 ) : null}
-              </li>
-            );
-          })}
-        </ol>
-        )}
+              </span>
+            ) : (
+              <span className="tabular-nums">
+                {jornada.inicio ? formatTime(jornada.inicio) : "—"} a{" "}
+                {formatTime(jornada.cerrada_en)}
+              </span>
+            )}
+          </div>
+        ) : null}
 
-        <div className="flex items-center justify-between gap-3 border-t border-divider pt-3">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-t border-divider pt-3">
           <div className="flex items-center gap-2 text-sm">
             <Wallet className="h-4 w-4 shrink-0 text-muted" />
             {pago ? (
@@ -232,21 +239,181 @@ export function ActividadDia({
                   {pago.pedidos_entregados === 1 ? "" : "s"}
                   {pago.pago_bono > 0 ? ` · ${formatCLP(pago.pago_bono)} de bono` : ""}
                 </span>
+                {/* Con qué tarifa se calculó ESTE día, que no tiene por qué ser
+                    la que rige hoy: la regla se puede haber cambiado después y
+                    los días ya registrados conservan la suya (0031). Sin esto,
+                    el botón de al lado no se entiende. */}
+                {pago.regla_valor_pedido != null ? (
+                  <span className="block text-xs text-muted">
+                    Calculado a {formatCLP(pago.regla_valor_pedido)} por entrega ·{" "}
+                    {pago.regla_tipo_pago === "porcentaje"
+                      ? `${pago.regla_valor_pago}% por pedido`
+                      : `${formatCLP(Number(pago.regla_valor_pago ?? 0))} por pedido`}
+                  </span>
+                ) : null}
               </span>
             ) : (
               // Acá había un botón "Confirmar pago". No queda nada que
               // confirmar: la base escribe las cifras del día apenas se
               // registra (0031). Si igual no hay, es por una de dos razones
               // concretas, y conviene decir cuál.
-              <span className="text-danger">
-                {choferId
-                  ? "Sin regla de pago configurada: este día no se pudo calcular."
-                  : "El conductor fue eliminado: este día no se puede liquidar."}
+              // Tres razones distintas para no tener cifras, y conviene decir
+              // cuál: una ruta en curso no es un problema, las otras dos sí.
+              <span className={enCursoJornada ? "text-muted" : "text-danger"}>
+                {!choferId
+                  ? "El conductor fue eliminado: este día no se puede liquidar."
+                  : enCursoJornada
+                    ? "La ruta sigue en curso. El pago se calcula cuando termine."
+                    : "Sin regla de pago configurada: este día no se pudo calcular."}
               </span>
             )}
           </div>
+          {/* Un día conserva su tarifa para siempre, así que corregir la regla
+              no arregla un día que se calculó con una regla mal escrita. Esta
+              es la única forma de moverlo, y es de a un día a propósito. */}
+          {choferId && !enCursoJornada ? (
+            <Button
+              onClick={() => setRecalculando(true)}
+              size="sm"
+              variant="secondary"
+              title="Vuelve a calcular este día con la regla actual o con otra tarifa."
+            >
+              Recalcular
+            </Button>
+          ) : null}
         </div>
       </CardBody>
+
+      {recalculando && choferId ? (
+        <DialogoRecalcular
+          choferId={choferId}
+          fecha={fecha}
+          conteo={{ entregados, omitidos }}
+          // Se edita a partir de la tarifa del propio día: se está corrigiendo
+          // ESE día, no escribiendo uno nuevo. Sin cifras todavía, el punto de
+          // partida es la regla.
+          partida={tarifaDelDia(pago) ?? regla}
+          regla={regla}
+          onCerrar={() => setRecalculando(false)}
+        />
+      ) : null}
     </Card>
+  );
+}
+
+// ----------------------------------------------------------------------------
+// Volver a valorar el día
+//
+// Dos caminos y un solo botón: la regla de pago de ahora, o una tarifa escrita
+// a mano que vale solo para este día (0033). El segundo existe porque la regla
+// rige hacia adelante — para un día viejo que se pagaba distinto no hay ninguna
+// tabla de donde sacar su tarifa.
+//
+// Muestra en cuánto queda el día ANTES de confirmar, con las mismas funciones
+// puras del panel (lib/encomiendas/pago.ts): volver a valorar algo que ya se
+// contó como pagado no puede ser a ciegas.
+// ----------------------------------------------------------------------------
+function DialogoRecalcular({
+  choferId,
+  fecha,
+  conteo,
+  partida,
+  regla,
+  onCerrar,
+}: {
+  choferId: string;
+  fecha: string;
+  conteo: ConteoDia;
+  partida: TarifaPago | null;
+  regla: EncomiendaReglaPago | null;
+  onCerrar: () => void;
+}) {
+  // Sin regla configurada, "la regla actual" no es una opción: no hay ninguna.
+  // Queda la tarifa a mano, que además es la forma de rescatar un día que
+  // aparece "Sin regla" en el panel.
+  const [modo, setModo] = useState<"actual" | "editada">(regla ? "actual" : "editada");
+  const [valores, setValores] = useState<ValoresTarifa>(() => valoresDeTarifa(partida));
+  const [error, setError] = useState<string | null>(null);
+  const [pending, startTransition] = useTransition();
+
+  const tarifa = modo === "editada" ? tarifaDeValores(valores) : regla;
+  const pago = calcularPagoDia(conteo, tarifa);
+  const ingresos = ingresoEstimado(conteo.entregados, valorPedido(tarifa));
+
+  function onSubmit(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    const datos = new FormData(e.currentTarget);
+    setError(null);
+    startTransition(async () => {
+      const res =
+        modo === "editada"
+          ? await repreciarDiaConTarifa(choferId, fecha, datos)
+          : await repreciarDia(choferId, fecha);
+      if (res.error) setError(res.error);
+      else onCerrar();
+    });
+  }
+
+  return (
+    <Dialogo
+      titulo="Recalcular el día"
+      descripcion={`${formatNumber(conteo.entregados)} entregado${conteo.entregados === 1 ? "" : "s"} · ${formatNumber(conteo.omitidos)} no entregado${conteo.omitidos === 1 ? "" : "s"}`}
+      onCerrar={onCerrar}
+    >
+      <form onSubmit={onSubmit} className="grid gap-4 sm:grid-cols-2">
+        <Field label="Calcular con" htmlFor="modo" className="sm:col-span-2">
+          <Select
+            id="modo"
+            value={modo}
+            onChange={(e) => setModo(e.target.value as "actual" | "editada")}
+          >
+            {regla ? (
+              <option value="actual">
+                La regla de pago actual ({formatCLP(valorPedido(regla))} por entrega)
+              </option>
+            ) : null}
+            <option value="editada">Otra tarifa, solo para este día</option>
+          </Select>
+        </Field>
+
+        {modo === "editada" ? <CamposTarifa valores={valores} onChange={setValores} /> : null}
+
+        <dl className="rounded-xl bg-white px-4 py-3 text-sm sm:col-span-2">
+          <div className="flex items-center justify-between">
+            <dt className="text-muted">Ingresos estimados</dt>
+            <dd className="font-semibold tabular-nums text-ok">{formatCLP(ingresos)}</dd>
+          </div>
+          <div className="mt-1.5 flex items-center justify-between border-t border-divider pt-1.5">
+            <dt className="text-muted">A pagar al conductor</dt>
+            <dd className="font-semibold tabular-nums">{formatCLP(pago.total)}</dd>
+          </div>
+          <p className="mt-2 text-xs text-muted">
+            {formatCLP(pago.base)} por pedidos + {formatCLP(pago.dia)} por el día
+            {pago.bono > 0 ? ` + ${formatCLP(pago.bono)} de bono` : ""}
+          </p>
+        </dl>
+
+        <p className="text-xs text-muted sm:col-span-2">
+          {modo === "editada"
+            ? "La tarifa vale solo para este día: la regla de pago no se toca."
+            : "Solo se mueve este día. Los demás conservan las cifras con las que se calcularon."}
+        </p>
+
+        {error ? (
+          <p className="rounded-lg border border-danger/20 bg-danger-bg px-3 py-2 text-sm text-danger sm:col-span-2">
+            {error}
+          </p>
+        ) : null}
+
+        <div className="flex flex-wrap items-center justify-end gap-2 sm:col-span-2">
+          <Button type="button" variant="outline" onClick={onCerrar} disabled={pending}>
+            Cancelar
+          </Button>
+          <Button type="submit" disabled={pending}>
+            {pending ? "Recalculando…" : "Recalcular"}
+          </Button>
+        </div>
+      </form>
+    </Dialogo>
   );
 }

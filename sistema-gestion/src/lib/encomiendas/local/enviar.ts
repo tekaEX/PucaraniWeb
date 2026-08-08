@@ -14,7 +14,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
-import { leerCola, quitarDeCola, type EventoCola } from "./almacen";
+import { leerCola, leerRuta, quitarDeCola, type EventoCola } from "./almacen";
 
 // Un tope por consulta para no armar un cuerpo enorme con una conexión mala:
 // una jornada completa sin señal son ~60 eventos, así que en la práctica va
@@ -41,6 +41,34 @@ export type ResultadoEnvio = {
   /** Lo que sigue en la cola después de este lote. */
   pendientes: number;
 };
+
+/** Manda el estado de la jornada del día: cuándo empezó la ruta y, si terminó,
+ *  cuándo (0032). Es lo que decide si el servidor valora el día o lo deja en
+ *  curso, así que va en cada intento de sincronización y no una sola vez.
+ *
+ *  No usa cola: es un upsert sobre (conductor, día), o sea que reenviar el
+ *  mismo estado no hace nada. Con la cola de eventos hace falta porque cada
+ *  evento es una fila distinta que hay que poder tachar de a una; acá hay un
+ *  solo dato que siempre se puede volver a escribir entero. */
+export async function sincronizarJornada(choferId: string, fecha: string): Promise<void> {
+  const ruta = await leerRuta(fecha);
+  // Sin ruta generada no hay jornada que abrir. Un día que solo tiene llamadas
+  // sueltas lo levanta el barrido nocturno del servidor.
+  if (!ruta) return;
+
+  const supabase = createClient();
+  const { error } = await supabase.from("encomienda_jornadas").upsert(
+    {
+      chofer_id: choferId,
+      fecha,
+      inicio: ruta.generadaEn,
+      cerrada_en: ruta.cerradaEn,
+    },
+    { onConflict: "chofer_id,fecha" },
+  );
+
+  if (error) throw new Error(error.message);
+}
 
 /** Manda un lote de la cola. Si el servidor no responde, LANZA y la cola queda
  *  intacta: no se borra nada que no esté confirmado. */
@@ -81,7 +109,15 @@ export type EstadoEnvio = {
 
 // Mantiene la cola vaciándose sola: al montar, cuando vuelve la conexión,
 // cuando el chofer regresa a la app y cada minuto mientras quede algo.
-export function useEnvioActividad(activo: boolean): EstadoEnvio {
+//
+// `activo` es "esta pantalla es la de HOY". Importa más que antes: la jornada
+// se manda con el estado que tiene el teléfono, así que sincronizar mirando un
+// día viejo podría reabrir una jornada que el servidor ya cerró.
+export function useEnvioActividad(
+  activo: boolean,
+  choferId: string,
+  fecha: string,
+): EstadoEnvio {
   const [pendientes, setPendientes] = useState(0);
   const [enviando, setEnviando] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -103,6 +139,13 @@ export function useEnvioActividad(activo: boolean): EstadoEnvio {
           setError(null);
           if (enviados === 0 || restantes === 0) break;
         }
+        // DESPUÉS de los eventos, no antes: cerrar la jornada es lo que hace
+        // que el servidor cuente el día, y tiene que contar con todo lo que el
+        // teléfono tenía guardado. Al revés, un cierre que llega antes que las
+        // últimas entregas valoraría el día a medias — se arreglaría solo
+        // cuando llegaran (el trigger recalcula un día ya cerrado), pero por un
+        // rato el panel mostraría una liquidación corta.
+        await sincronizarJornada(choferId, fecha);
       } catch (e) {
         setError(e instanceof Error ? e.message : "No se pudo enviar la actividad.");
         // El contador tiene que seguir a la vista aunque el envío falle: es la
@@ -117,7 +160,7 @@ export function useEnvioActividad(activo: boolean): EstadoEnvio {
         setEnviando(false);
       }
     })();
-  }, []);
+  }, [choferId, fecha]);
 
   useEffect(() => {
     if (!activo) return;

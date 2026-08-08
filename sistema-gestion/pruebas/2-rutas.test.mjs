@@ -9,6 +9,9 @@ import {
   rumboEntre,
   rumboDelCamino,
   metrosRestantes,
+  distanciaAPolilinea,
+  ajustarATrazado,
+  recortarTrazado,
   ordenarParadas,
   matrizDistancias,
   obtenerRutaCalles,
@@ -103,6 +106,126 @@ test("metrosRestantes: trazado vacío = 0, y decrece al avanzar", () => {
     anterior = m;
   }
   assert.equal(metrosRestantes({ lat: geo[39][1], lng: geo[39][0] }, geo), 0);
+});
+
+// ------------------------------------------------- pegar el punto al camino
+// El defecto que esto arregla se ve en terreno: el punto azul dibujado en la
+// lectura cruda del GPS aparece adentro de una manzana o sobre un techo.
+
+test("ajustarATrazado: una lectura con error lateral vuelve a la calle", () => {
+  // Recta norte-sur de 40 puntos y una lectura 20 m al costado.
+  const geo = Array.from({ length: 40 }, (_, i) => [-70.2899, -18.4711 + i * 0.0002]);
+  const desviada = { lat: -18.4711 + 20 * 0.0002, lng: -70.2899 + 0.00019 }; // ~20 m al este
+
+  const antes = distanciaAPolilinea(desviada, geo);
+  assert.ok(antes > 15 && antes < 25, `la lectura de prueba estaba a ${antes} m`);
+
+  const pegada = ajustarATrazado(desviada, geo);
+  assert.ok(pegada, "una lectura a 20 m tiene que pegarse");
+  assert.ok(
+    distanciaAPolilinea(pegada, geo) < 1,
+    "el punto pegado tiene que quedar SOBRE el trazado",
+  );
+  assert.ok(Math.abs(pegada.desvioM - antes) < 1, "desvioM tiene que ser lo que se corrigió");
+});
+
+test("ajustarATrazado: desde adentro de la casa, el punto sale al inicio del camino", () => {
+  // El caso real de arrancar la jornada: el trazado empieza donde Mapbox
+  // enganchó al chofer en la calle, y el GPS lo pone 45 m adentro del galpón.
+  const geo = Array.from({ length: 40 }, (_, i) => [-70.2899, -18.4711 + i * 0.0002]);
+  const enElGalpon = { lat: -18.4711, lng: -70.2899 + 0.00043 }; // ~45 m al este
+
+  const pegada = ajustarATrazado(enElGalpon, geo);
+  assert.ok(pegada, "a 45 m de la calle el punto TIENE que pegarse: si no, sale en el patio");
+  assert.equal(pegada.indice, 0, "tiene que caer en el inicio de la ruta");
+  assert.ok(distanciaAPolilinea(pegada, geo) < 1);
+});
+
+test("ajustarATrazado: se pega hasta 90 m; más allá se dibuja donde de verdad está", () => {
+  const geo = Array.from({ length: 40 }, (_, i) => [-70.2899, -18.4711 + i * 0.0002]);
+  const alCostado = (grados) => ({ lat: -18.4711 + 20 * 0.0002, lng: -70.2899 + grados });
+
+  // ~80 m: todavía es el patio de una casa grande o un estacionamiento.
+  assert.ok(ajustarATrazado(alCostado(0.00076), geo), "a 80 m tiene que seguir pegándose");
+  // ~120 m: eso ya es otra calle, y ahí mentir sería peor.
+  assert.equal(ajustarATrazado(alCostado(0.00114), geo), null);
+
+  // Y sin trazado tampoco hay nada a qué pegarse.
+  assert.equal(ajustarATrazado(EMPRESA, []), null);
+  assert.equal(ajustarATrazado(EMPRESA, [[-70.2899, -18.4711]]), null);
+});
+
+test("ajustarATrazado: la ventana impide saltar a otra pasada por la misma calle", () => {
+  // Trazado en U: sube 400 m, cruza 40 m al este y vuelve a bajar. Las dos
+  // ramas quedan a 40 m entre sí, o sea DENTRO de la tolerancia de 90 m: sin
+  // ventana de búsqueda, el punto podría engancharse en la rama de vuelta y
+  // aparecer al final de la ruta.
+  const subida = Array.from({ length: 20 }, (_, i) => [-70.2899, -18.4711 + i * 0.0002]);
+  const bajada = Array.from({ length: 20 }, (_, i) => [
+    -70.2899 + 0.00038,
+    -18.4711 + (19 - i) * 0.0002,
+  ]);
+  const geo = [...subida, ...bajada];
+
+  // Arrancando (índice 0), una lectura junto al inicio de la subida tiene que
+  // engancharse ahí y no en el final de la bajada, que le queda a 40 m.
+  const alInicio = { lat: -18.4711 + 0.00005, lng: -70.2899 + 0.00006 };
+  const pegada = ajustarATrazado(alInicio, geo, { desdeIndice: 0, ventanaM: 150 });
+  assert.ok(pegada);
+  assert.ok(
+    pegada.indice < subida.length,
+    `se enganchó en la pasada de vuelta (índice ${pegada.indice} de ${geo.length})`,
+  );
+});
+
+test("ajustarATrazado: avanzando por el camino, el punto pegado también avanza", () => {
+  const geo = Array.from({ length: 40 }, (_, i) => [-70.2899, -18.4711 + i * 0.0002]);
+  const fin = { lat: geo[39][1], lng: geo[39][0] };
+
+  // Arrastrando el índice de una lectura a la otra, igual que usePuntoEnRuta.
+  let indice = 0;
+  let anterior = Infinity;
+  for (let i = 0; i < 35; i += 5) {
+    // Cada lectura con su propio error lateral, alternado como rebota el GPS.
+    const lado = i % 10 === 0 ? 0.00012 : -0.00012;
+    const cruda = { lat: geo[i][1], lng: geo[i][0] + lado };
+    const pegada = ajustarATrazado(cruda, geo, { desdeIndice: indice });
+    assert.ok(pegada, `la lectura ${i} tendría que haberse pegado`);
+    assert.ok(pegada.indice >= indice, "el índice emparejado no puede retroceder");
+    indice = pegada.indice;
+
+    const falta = distanciaMetros(pegada, fin);
+    assert.ok(falta < anterior, `el punto pegado no avanzó: ${falta} >= ${anterior}`);
+    anterior = falta;
+  }
+});
+
+test("ajustarATrazado: un hueco largo del GPS no deja el punto sin pegar", () => {
+  // El teléfono se suspendió (una llamada entrante) y el chofer avanzó 700 m
+  // sin una sola lectura: la ventana de 300 m no alcanza. El respaldo global es
+  // lo que evita que el punto quede suelto por el resto del tramo.
+  const geo = Array.from({ length: 40 }, (_, i) => [-70.2899, -18.4711 + i * 0.0002]);
+  const muyAdelante = { lat: geo[35][1], lng: geo[35][0] + 0.0001 };
+
+  const pegada = ajustarATrazado(muyAdelante, geo, { desdeIndice: 0 });
+  assert.ok(pegada, "sin respaldo global el punto se quedaría sin pegar todo el tramo");
+  assert.ok(pegada.indice >= 34, `enganchó en el índice ${pegada.indice}, no donde está`);
+});
+
+test("recortarTrazado: la línea arranca en el punto y nunca se alarga", () => {
+  const geo = Array.from({ length: 40 }, (_, i) => [-70.2899, -18.4711 + i * 0.0002]);
+  const cruda = { lat: geo[20][1], lng: geo[20][0] + 0.00012 };
+  const pegada = ajustarATrazado(cruda, geo);
+
+  const recortado = recortarTrazado(geo, pegada);
+  assert.deepEqual(recortado[0], [pegada.lng, pegada.lat], "tiene que empezar en el punto");
+  assert.ok(recortado.length < geo.length, "lo ya recorrido tiene que desaparecer");
+  assert.deepEqual(recortado.at(-1), geo.at(-1), "el destino no se toca");
+  // Lo que falta recorrer, medido sobre el trazado recortado, es lo mismo que
+  // medía antes: recortar no puede cambiar la distancia que se muestra.
+  const antes = metrosRestantes(pegada, geo);
+  const despues = metrosRestantes(pegada, recortado);
+  assert.ok(Math.abs(antes - despues) <= 1, `${antes} vs ${despues}`);
 });
 
 // --------------------------------------------------------- ordenarParadas

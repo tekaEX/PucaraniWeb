@@ -590,6 +590,25 @@ export interface EncomiendaIngresoReal {
   updated_at: string;
 }
 
+/** Una ruta de reparto: cuándo empezó y cuándo terminó (0032).
+ *
+ *  Es el sobre del día. Mientras `cerrada_en` sea null la jornada está EN CURSO
+ *  y el día no se valora: no hay fila en EncomiendaPago y el panel no muestra
+ *  plata. Al cerrarse —el conductor llega a la última parada, la oficina carga
+ *  el día a mano, o el barrido nocturno la cierra— la base congela las cifras
+ *  de una sola vez. */
+export interface EncomiendaJornada {
+  id: string;
+  empresa_id: string;
+  chofer_id: string | null;
+  fecha: string;
+  /** Cuándo se generó la ruta. null en jornadas levantadas desde la oficina. */
+  inicio: string | null;
+  /** Cuándo se cerró la última parada. null = sigue en curso. */
+  cerrada_en: string | null;
+  created_at: string;
+}
+
 /** Lo que valió un (conductor, día): ingreso estimado y desglose del pago.
  *
  *  Lo escribe la base sola —un trigger sobre encomienda_actividad, ver 0031—
@@ -614,4 +633,17 @@ export interface EncomiendaPago {
   pago_total: number;
   /** Cuándo la base congeló estas cifras. */
   calculado_en: string;
+
+  // La tarifa con la que se calculó ESTE día (0031). Se copia de la regla la
+  // primera vez que el día se congela y no cambia después, aunque la regla sí:
+  // es lo que hace que sumarle una entrega a un día en curso no lo arrastre a
+  // una regla que cambió hace diez minutos. null solo en filas anteriores a la
+  // 0031, que la migración vuelve a calcular.
+  regla_valor_pedido: number | null;
+  regla_tipo_pago: EncomiendaTipoPago | null;
+  /** numeric en Postgres: PostgREST lo devuelve como string ("15.00"). */
+  regla_valor_pago: number | null;
+  regla_monto_dia: number | null;
+  regla_meta_entregas_dia: number | null;
+  regla_bono_monto: number | null;
 }

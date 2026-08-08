@@ -9,7 +9,7 @@ import { hoyChile } from "@/lib/format";
 import { DiaNav } from "@/components/encomiendas/dia-nav";
 import { agruparPorDia, type EventoActividad } from "@/lib/encomiendas/pago";
 import { ActividadDia, type EventoDia } from "../actividad-dia";
-import type { EncomiendaPago } from "@/types/db";
+import type { EncomiendaJornada, EncomiendaPago, EncomiendaReglaPago } from "@/types/db";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Actividad del día — Encomiendas" };
@@ -34,24 +34,40 @@ export default async function EncomiendasDiaPage({
 
   const supabase = await createClient();
 
-  // Ya no hacen falta las reglas de pago: los ingresos y el pago del día están
-  // escritos en encomienda_pagos desde que el día se registró (0031). Antes
-  // había que traerlas para resolver a cuánto se valoraba cada entrega esa
-  // fecha, y esta pantalla rehacía la cuenta por su cuenta.
+  // Los ingresos y el pago del día NO se recalculan acá: están escritos en
+  // encomienda_pagos desde que el día se registró (0031). La regla se pide para
+  // otra cosa —el diálogo de recalcular, que ofrece volver a valorar el día con
+  // ella o con una tarifa escrita a mano (0033)— y por eso es una sola fila.
   const [
     { data: actividadData, error: errorActividad },
     { data: pagosData, error: errorPagos },
+    { data: jornadasData, error: errorJornadas },
+    { data: reglaData },
   ] = await Promise.all([
+    // hora y created_at ya no se piden: la línea de tiempo por evento se fue
+    // (0032). Lo que se muestra del día es de cuándo a cuándo salió la ruta, y
+    // eso vive en encomienda_jornadas.
     supabase
       .from("encomienda_actividad")
-      .select("id, chofer_id, fecha, tipo, origen, hora, created_at, chofer:choferes(id,nombre)")
+      .select("id, chofer_id, fecha, tipo, origen, chofer:choferes(id,nombre)")
       .eq("fecha", fecha)
       .returns<Fila[]>(),
     supabase.from("encomienda_pagos").select("*").eq("fecha", fecha),
+    supabase
+      .from("encomienda_jornadas")
+      .select("*")
+      .eq("fecha", fecha)
+      .returns<EncomiendaJornada[]>(),
+    // Hay una sola (0031). Su error no entra en errorCarga: sin ella no se
+    // puede recalcular con la regla, pero todo lo que esta pantalla MUESTRA
+    // —actividad y cifras ya congeladas— sigue siendo verdad.
+    supabase.from("encomienda_reglas_pago").select("*").limit(1).maybeSingle(),
   ]);
 
-  const errorCarga = errorActividad ?? errorPagos;
+  const errorCarga = errorActividad ?? errorPagos ?? errorJornadas;
   const pagos = (pagosData ?? []) as EncomiendaPago[];
+  const jornadas = (jornadasData ?? []) as EncomiendaJornada[];
+  const regla = (reglaData ?? null) as EncomiendaReglaPago | null;
   const porConductor = agruparPorDia(actividadData ?? []);
 
   return (
@@ -83,8 +99,8 @@ export default async function EncomiendasDiaPage({
               : "Ningún conductor registró actividad este día."}
           </p>
           <p className="max-w-sm text-xs text-muted">
-            Los pedidos y la ruta los maneja el conductor en su teléfono. Acá aparece cada
-            entrega en cuanto su teléfono la envía.
+            Los pedidos y la ruta los maneja el conductor en su teléfono. Acá aparece la
+            jornada en cuanto su teléfono la envía, y el pago cuando termina la ruta.
           </p>
         </Card>
       ) : (
@@ -97,6 +113,8 @@ export default async function EncomiendasDiaPage({
               fecha={fecha}
               eventos={d.eventos}
               pago={pagos.find((p) => p.chofer_id === d.choferId) ?? null}
+              jornada={jornadas.find((j) => j.chofer_id === d.choferId) ?? null}
+              regla={regla}
             />
           ))}
         </div>

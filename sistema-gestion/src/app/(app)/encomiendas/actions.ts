@@ -33,6 +33,88 @@ async function esAdminUOperador(): Promise<boolean> {
 }
 
 // ----------------------------------------------------------------------------
+// La tarifa: los seis números que definen cuánto vale un día
+//
+// Son exactamente los mismos para la regla global (guardarReglaPago) y para la
+// tarifa que se le dicta a un día suelto al cargarlo (0033), así que se leen y
+// se validan en un solo lugar. Si se validaran por separado, la regla podría
+// aceptar algo que el día rechaza —o al revés— y la diferencia solo aparecería
+// en un sueldo mal calculado.
+// ----------------------------------------------------------------------------
+
+// El porcentaje NO puede leerse con num(): ese helper borra los puntos para
+// soportar el formato chileno de miles ("1.234.567"), y el <input type=
+// "number" step="0.1"> del formulario envía "7.5" — que num() convertiría en
+// 75. Un 7,5 % guardado como 75 % es diez veces el pago del conductor, todos
+// los días, sin ningún aviso. Acá el punto SÍ es separador decimal.
+function porcentaje(v: FormDataEntryValue | null): number {
+  const n = Number(String(v ?? "").trim().replace(",", "."));
+  return Number.isFinite(n) ? n : 0;
+}
+
+type Tarifa = {
+  tipo_pago: string;
+  valor_pago: number;
+  valor_pedido: number;
+  monto_dia: number;
+  meta_entregas_dia: number | null;
+  bono_monto: number | null;
+};
+
+function leerTarifa(formData: FormData): { tarifa: Tarifa } | { error: string } {
+  const tipo_pago = sReq(formData.get("tipo_pago"));
+  if (!["porcentaje", "monto_fijo"].includes(tipo_pago)) {
+    return { error: "Tipo de pago inválido." };
+  }
+
+  // El % admite decimales; el monto fijo por pedido son pesos con separador
+  // de miles. Dos formatos distintos, dos parsers distintos.
+  const valor_pago =
+    tipo_pago === "porcentaje"
+      ? porcentaje(formData.get("valor_pago"))
+      : num(formData.get("valor_pago"));
+  if (valor_pago < 0) return { error: "El valor de pago no puede ser negativo." };
+  if (tipo_pago === "porcentaje" && valor_pago > 100) {
+    return { error: "El porcentaje no puede superar 100." };
+  }
+
+  // Sin valor por entrega no hay ingreso estimado, y con tipo_pago porcentaje
+  // tampoco hay sueldo: el 7 % de cero es cero. Así que se exige.
+  const valor_pedido = intNull(formData.get("valor_pedido"));
+  if (valor_pedido == null || valor_pedido <= 0) {
+    return { error: "Pon cuánto se estima que entra por cada entrega." };
+  }
+
+  const monto_dia = intNull(formData.get("monto_dia")) ?? 0;
+  if (monto_dia < 0) return { error: "El monto por día no puede ser negativo." };
+
+  const meta_entregas_dia = intNull(formData.get("meta_entregas_dia"));
+  const bono_monto = intNull(formData.get("bono_monto"));
+  if ((meta_entregas_dia == null) !== (bono_monto == null)) {
+    return { error: "Para el bono, completa tanto la meta de entregas como el monto." };
+  }
+
+  return {
+    tarifa: { tipo_pago, valor_pago, valor_pedido, monto_dia, meta_entregas_dia, bono_monto },
+  };
+}
+
+/** Los argumentos con los que la base valora un día con una tarifa dictada a
+ *  mano (encomienda_valorar_dia, 0033). */
+function argumentosValorar(choferId: string, fecha: string, tarifa: Tarifa) {
+  return {
+    p_chofer_id: choferId,
+    p_fecha: fecha,
+    p_valor_pedido: tarifa.valor_pedido,
+    p_tipo_pago: tarifa.tipo_pago,
+    p_valor_pago: tarifa.valor_pago,
+    p_monto_dia: tarifa.monto_dia,
+    p_meta_entregas_dia: tarifa.meta_entregas_dia,
+    p_bono_monto: tarifa.bono_monto,
+  };
+}
+
+// ----------------------------------------------------------------------------
 // Cargar a mano un día que el teléfono no registró (0028)
 //
 // Un día de trabajo solo existe si hay filas en encomienda_actividad, y hasta
@@ -67,7 +149,10 @@ function horaRelleno(fecha: string): string {
  *
  *  Lo que el TELÉFONO mandó no se toca nunca: si ese día ya tenía 20 entregas
  *  sincronizadas y acá se cargan 12, el día queda en 32. La pantalla avisa de
- *  esa suma antes de guardar. */
+ *  esa suma antes de guardar.
+ *
+ *  Con qué tarifa se valora el día lo decide el campo modo_tarifa: la que el
+ *  día ya tiene, la regla de ahora, o una escrita a mano solo para ese día. */
 export async function agregarDiaManual(
   _prev: FormState,
   formData: FormData,
@@ -95,6 +180,31 @@ export async function agregarDiaManual(
     return {
       error: `Son ${entregados + omitidos} registros para un solo día (el tope es ${MAX_EVENTOS_DIA}). Revisa los números.`,
     };
+  }
+
+  // Con qué tarifa se valora este día. Lo elige quien carga:
+  //
+  //   "dia"     la que el día ya tiene congelada. Es el default y el único modo
+  //             que no escribe plata: se usa al completar un día que el
+  //             teléfono ya empezó a registrar.
+  //   "actual"  la regla de pago de ahora.
+  //   "editada" una tarifa escrita a mano para ESTE día, sin tocar la regla.
+  //             Es lo que hace cargables los días viejos que se pagaban
+  //             distinto (ver la 0033).
+  const modo = sReq(formData.get("modo_tarifa")) || "dia";
+  if (!["dia", "actual", "editada"].includes(modo)) {
+    return { error: "No se entendió con qué tarifa calcular el día." };
+  }
+
+  // La tarifa se valida ANTES de escribir nada: un error acá tiene que dejar el
+  // día sin guardar. Si se validara después del insert, un porcentaje mal
+  // tecleado dejaría el día cargado y valorado con la regla de hoy, que es
+  // justo lo que se estaba tratando de evitar.
+  let tarifa: Tarifa | null = null;
+  if (modo === "editada") {
+    const leida = leerTarifa(formData);
+    if ("error" in leida) return { error: leida.error };
+    tarifa = leida.tarifa;
   }
 
   const supabase = await createClient();
@@ -174,12 +284,81 @@ export async function agregarDiaManual(
   const { error } = await supabase.from("encomienda_actividad").insert(filas);
   if (error) return { error: `No se pudo guardar el día: ${error.message}` };
 
-  // Las cifras del día las acaba de escribir la base sola: el insert de arriba
-  // disparó el trigger que lo congela (0031). Ojo con lo que eso implica para un
-  // día viejo: se revalúa con la regla de AHORA, no con la que corría en su
-  // fecha. Es lo correcto —ese día se está registrando en este momento— pero
-  // significa que corregir a mano un día de hace tres meses le aplica la tarifa
-  // de hoy. El diálogo muestra las cifras antes de guardar, así que se ve.
+  // La jornada tiene que quedar CERRADA: la oficina no está abriendo una ruta,
+  // está anotando un día que ya pasó. Sin esto el día quedaría "en curso" para
+  // siempre y no se valoraría nunca (0032) — los triggers de actividad solo
+  // calculan sobre jornadas cerradas.
+  //
+  // Va después del insert de actividad: cerrar la jornada es lo que dispara el
+  // cálculo, así que tiene que encontrar los eventos ya puestos.
+  //
+  // NO es un upsert a secas. Si la jornada ya estaba cerrada —el conductor la
+  // terminó y la oficina está corrigiendo el conteo— pisar cerrada_en movería
+  // la hora de fin de la ruta a la hora de la corrección, que es mentira. En
+  // ese caso no hay nada que hacer: el insert de arriba ya recalculó el día.
+  //
+  // inicio queda null cuando la jornada se crea acá, a propósito: nadie sabe a
+  // qué hora empezó ese día, y la hora de relleno lo haría parecer un dato.
+  const { data: jornada, error: errLeer } = await supabase
+    .from("encomienda_jornadas")
+    .select("id, cerrada_en")
+    .eq("chofer_id", chofer_id)
+    .eq("fecha", fecha)
+    .maybeSingle();
+  if (errLeer) {
+    return { error: `Se guardó el día, pero no se pudo leer la jornada: ${errLeer.message}` };
+  }
+
+  if (!jornada || jornada.cerrada_en == null) {
+    const ahora = new Date().toISOString();
+    const { error: errJornada } = jornada
+      ? await supabase
+          .from("encomienda_jornadas")
+          .update({ cerrada_en: ahora })
+          .eq("id", jornada.id)
+      : await supabase
+          .from("encomienda_jornadas")
+          .insert({ chofer_id, fecha, cerrada_en: ahora });
+    if (errJornada) {
+      return {
+        error: `Se guardó el día, pero no se pudo cerrar la jornada: ${errJornada.message}`,
+      };
+    }
+  }
+
+  // Llegado acá el día YA tiene cifras: cerrar la jornada disparó el trigger que
+  // lo congela (0031 + 0032), y lo hizo con la tarifa que el día tenía o, si es
+  // nuevo, con la regla de ahora. Eso es exactamente el modo "dia".
+  //
+  // Los otros dos modos vuelven a valorarlo. Va después y no antes porque las
+  // dos funciones cuentan la actividad del día: tienen que encontrarla ya
+  // escrita. El precio es que un día con tarifa editada se calcula dos veces —
+  // la segunda es la que queda.
+  if (modo === "editada" && tarifa) {
+    const { error: errTarifa } = await supabase.rpc(
+      "encomienda_valorar_dia",
+      argumentosValorar(chofer_id, fecha, tarifa),
+    );
+    if (errTarifa) {
+      return {
+        error: `Se guardó el día, pero quedó calculado con la regla actual: ${errTarifa.message}`,
+      };
+    }
+  } else if (modo === "actual") {
+    // Un día nuevo ya quedó con la regla de ahora, así que esto no lo mueve.
+    // Importa cuando el día YA existía con otra tarifa: elegir "regla actual"
+    // tiene que significar eso, no "la que traía".
+    const { error: errRepreciar } = await supabase.rpc("encomienda_repreciar_dia", {
+      p_chofer_id: chofer_id,
+      p_fecha: fecha,
+    });
+    if (errRepreciar) {
+      return {
+        error: `Se guardó el día, pero no se pudo recalcular con la regla actual: ${errRepreciar.message}`,
+      };
+    }
+  }
+
   revalidatePath("/encomiendas");
   revalidatePath("/encomiendas/dia");
   return { ok: true };
@@ -205,12 +384,96 @@ export async function eliminarDiaManual(choferId: string, fecha: string): Promis
     .eq("origen", "manual");
   if (error) return { error: `No se pudo borrar la carga manual: ${error.message}` };
 
-  // Acá había una segunda parte: contar lo que quedaba del día y, si no quedaba
-  // nada, borrar también la fila de encomienda_pagos —o habría quedado plata a
-  // pagar por un día que ya nadie puede ver—. Lo hace el trigger de la 0031: el
-  // delete de arriba recalcula el día, y un día con cero eventos se lleva su
-  // liquidación. Si en cambio quedó actividad del teléfono, el día sobrevive y
-  // sus cifras se reescriben sin lo que se acaba de borrar.
+  // La fila de encomienda_pagos la limpia el trigger: el delete de arriba
+  // recalcula el día, y un día con cero eventos se lleva su liquidación. Si
+  // quedó actividad del teléfono, el día sobrevive y sus cifras se reescriben
+  // sin lo que se acaba de borrar.
+  //
+  // La jornada sí hay que borrarla acá. No cuelga de la actividad —es una tabla
+  // aparte (0032)— así que sobreviviría al día entero: el panel mostraría una
+  // ruta de ese día sin una sola entrega, y el barrido nocturno la miraría
+  // todas las noches.
+  const { count: quedan, error: errConteo } = await supabase
+    .from("encomienda_actividad")
+    .select("id", { count: "exact", head: true })
+    .eq("chofer_id", choferId)
+    .eq("fecha", fecha);
+  if (errConteo) {
+    return { error: `Se borró la actividad, pero quedó la jornada: ${errConteo.message}` };
+  }
+
+  if (!quedan) {
+    const { error: errJornada } = await supabase
+      .from("encomienda_jornadas")
+      .delete()
+      .eq("chofer_id", choferId)
+      .eq("fecha", fecha);
+    if (errJornada) {
+      return { error: `Se borró la actividad, pero quedó la jornada: ${errJornada.message}` };
+    }
+  }
+
+  revalidatePath("/encomiendas");
+  revalidatePath("/encomiendas/dia");
+  return { ok: true };
+}
+
+/** Vuelve a valorar un día con la regla de pago que rige AHORA.
+ *
+ *  Cada día conserva la tarifa con la que se calculó, así que cambiar la regla
+ *  no lo mueve (0031). Esto es la salida para el caso en que la regla estaba
+ *  mal escrita cuando ese día se registró: corregir la regla no arregla lo ya
+ *  calculado, hay que decirlo día por día.
+ *
+ *  La cuenta la rehace la base —encomienda_repreciar_dia, que comprueba el rol
+ *  por dentro— y no este código: es la misma función que corre el trigger, así
+ *  que un día repreciado no puede quedar calculado distinto a uno nuevo. */
+export async function repreciarDia(choferId: string, fecha: string): Promise<FormState> {
+  if (!(await esAdminUOperador())) {
+    return { error: "No tienes permiso para recalcular pagos." };
+  }
+
+  const supabase = await createClient();
+  const { error } = await supabase.rpc("encomienda_repreciar_dia", {
+    p_chofer_id: choferId,
+    p_fecha: fecha,
+  });
+  if (error) return { error: `No se pudo recalcular: ${error.message}` };
+
+  revalidatePath("/encomiendas");
+  revalidatePath("/encomiendas/dia");
+  return { ok: true };
+}
+
+/** Vuelve a valorar un día con una tarifa escrita a mano, sin tocar la regla.
+ *
+ *  Es la otra mitad de repreciarDia, y existe porque la regla rige hacia
+ *  adelante: para un día de hace tres meses que se pagaba distinto no hay
+ *  ninguna tabla de la que sacar su tarifa. Los números los pone quien liquida.
+ *
+ *  La cuenta la rehace la base (encomienda_valorar_dia, 0033), que valida y
+ *  comprueba el rol por dentro: es la misma función que congela cualquier otro
+ *  día, así que un día valorado a mano no puede quedar calculado con otra
+ *  aritmética. */
+export async function repreciarDiaConTarifa(
+  choferId: string,
+  fecha: string,
+  formData: FormData,
+): Promise<FormState> {
+  if (!(await esAdminUOperador())) {
+    return { error: "No tienes permiso para recalcular pagos." };
+  }
+
+  const leida = leerTarifa(formData);
+  if ("error" in leida) return { error: leida.error };
+
+  const supabase = await createClient();
+  const { error } = await supabase.rpc(
+    "encomienda_valorar_dia",
+    argumentosValorar(choferId, fecha, leida.tarifa),
+  );
+  if (error) return { error: `No se pudo recalcular: ${error.message}` };
+
   revalidatePath("/encomiendas");
   revalidatePath("/encomiendas/dia");
   return { ok: true };
@@ -225,16 +488,6 @@ export async function eliminarDiaManual(choferId: string, fecha: string): Promis
 // "¿cuánto entró de verdad este mes?"— y mandar a otra página obligaba a
 // recordar la cifra o a ir y volver.
 // ----------------------------------------------------------------------------
-
-// El porcentaje NO puede leerse con num(): ese helper borra los puntos para
-// soportar el formato chileno de miles ("1.234.567"), y el <input type=
-// "number" step="0.1"> del formulario envía "7.5" — que num() convertiría en
-// 75. Un 7,5 % guardado como 75 % es diez veces el pago del conductor, todos
-// los días, sin ningún aviso. Acá el punto SÍ es separador decimal.
-function porcentaje(v: FormDataEntryValue | null): number {
-  const n = Number(String(v ?? "").trim().replace(",", "."));
-  return Number.isFinite(n) ? n : 0;
-}
 
 // HAY UNA SOLA REGLA Y SE EDITA ENCIMA (0031). Antes cada guardado insertaba
 // una fila nueva con su propia fecha de vigencia —también al corregir un dedazo
@@ -260,41 +513,11 @@ export async function guardarReglaPago(
     return { error: "No tienes permiso para cambiar las reglas de pago." };
   }
 
-  const tipo_pago = sReq(formData.get("tipo_pago"));
-  if (!["porcentaje", "monto_fijo"].includes(tipo_pago)) {
-    return { error: "Tipo de pago inválido." };
-  }
-
-  // El % admite decimales; el monto fijo por pedido son pesos con separador
-  // de miles. Dos formatos distintos, dos parsers distintos.
-  const valor_pago =
-    tipo_pago === "porcentaje"
-      ? porcentaje(formData.get("valor_pago"))
-      : num(formData.get("valor_pago"));
-  if (valor_pago < 0) return { error: "El valor de pago no puede ser negativo." };
-  if (tipo_pago === "porcentaje" && valor_pago > 100) {
-    return { error: "El porcentaje no puede superar 100." };
-  }
-
-  // Sin valor por entrega no hay ingreso estimado, y con tipo_pago porcentaje
-  // tampoco hay sueldo: el 7 % de cero es cero. Así que se exige.
-  const valor_pedido = intNull(formData.get("valor_pedido"));
-  if (valor_pedido == null || valor_pedido <= 0) {
-    return { error: "Pon cuánto se estima que entra por cada entrega." };
-  }
-
-  const monto_dia = intNull(formData.get("monto_dia")) ?? 0;
-  if (monto_dia < 0) return { error: "El monto por día no puede ser negativo." };
-
-  const meta_entregas_dia = intNull(formData.get("meta_entregas_dia"));
-  const bono_monto = intNull(formData.get("bono_monto"));
-  if ((meta_entregas_dia == null) !== (bono_monto == null)) {
-    return { error: "Para el bono, completa tanto la meta de entregas como el monto." };
-  }
+  const leida = leerTarifa(formData);
+  if ("error" in leida) return { error: leida.error };
+  const campos = leida.tarifa;
 
   const supabase = await createClient();
-
-  const campos = { tipo_pago, valor_pago, valor_pedido, monto_dia, meta_entregas_dia, bono_monto };
 
   // Se busca la fila que hay (hay una o ninguna) y se decide entre modificarla
   // o crearla. No se usa upsert: el cliente no conoce el empresa_id —lo pone un

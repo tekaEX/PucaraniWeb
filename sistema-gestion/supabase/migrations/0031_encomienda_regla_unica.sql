@@ -22,19 +22,27 @@
 -- Lo que se conserva no es la regla: es EL RESULTADO. Cada vez que cambia la
 -- actividad de un (conductor, día), un trigger recalcula ese día y escribe sus
 -- números en encomienda_pagos — ingresos, pago por pedidos, fijo del día y
--- bono. A partir de ahí ese día ya no depende de la regla: son cifras escritas.
+-- bono— JUNTO CON LA TARIFA que usó para calcularlos (sección 2b).
 --
--- De ahí sale, gratis, lo que se pidió: cambiar la regla NO mueve ni un peso de
--- lo ya registrado, porque para esos días no se dispara nada. El cambio se ve
--- en los días que se registren después.
+-- Un día que ya existe se recalcula siempre con SU tarifa, no con la regla de
+-- ahora. De ahí sale lo que se pidió, y sin depender de cuándo pase nada:
+-- cambiar la regla rige para los días que todavía no existen.
 --
--- El único caso en que un día viejo se recalcula es que alguien le toque la
--- actividad (cargarlo o corregirlo a mano desde la oficina). Es correcto: ese
--- día se está registrando ahora, así que se valora con la regla de ahora.
+-- Eso cubre el caso incómodo, que es el conductor repartiendo mientras se
+-- cambia la regla: el día en curso YA existe —tiene entregas desde la mañana—
+-- así que termina completo con la tarifa con la que empezó, y la regla nueva
+-- empieza a valer mañana. Sin la tarifa por día, el resultado dependía de si el
+-- conductor alcanzaba a marcar una entrega más después del cambio.
 --
--- Y un cambio de regla a media jornada revalúa el día ENTERO con la regla
--- nueva, no media mañana con una y la tarde con otra. Es lo que hay que querer:
--- un día partido en dos tarifas no se lo puede explicar nadie.
+-- Para mover un día ya congelado hay que pedirlo explícitamente, de a un día,
+-- con el botón "Recalcular" (sección 3b). Es la salida para cuando la regla
+-- estaba mal escrita, no algo que pase solo.
+--
+-- Y como la regla rige hacia adelante, un día PASADO que se carga hoy —cosa que
+-- la oficina hace seguido— también puede llevar una tarifa dictada a mano, que
+-- es el tercer origen posible y el único que no sale de ninguna tabla: son los
+-- números que alguien escribe en el formulario. Ver el parámetro p_valor_pedido
+-- de la sección 3 y encomienda_valorar_dia en la 0033.
 --
 -- ----------------------------------------------------------------------------
 -- DÓNDE VIVE LA FÓRMULA
@@ -50,15 +58,27 @@
 -- está anotado en los dos lados.
 --
 -- ----------------------------------------------------------------------------
--- QUÉ BORRA
+-- QUÉ BORRA — SOLO LA PRIMERA VEZ
 --
 --   1. Toda la actividad de encomiendas y sus liquidaciones hasta el 2026-08-07
---      inclusive: los días de prueba con los que se armó el módulo.
+--      inclusive: los días de prueba con los que se armó el módulo. Esto pasa
+--      ÚNICAMENTE en una base que todavía no vio esta migración (ver sección 1).
 --   2. Todas las reglas de pago menos la más nueva.
 --   3. Las columnas encomienda_reglas_pago.vigente_desde y .chofer_id, y
 --      encomienda_pagos.regla_id — el mecanismo que reemplazan ya no existe.
 --
--- ANTES DE CORRER ESTO — comprobá qué se va a perder:
+-- ⚠️ NO LA CORRAS CON UN CONDUCTOR REPARTIENDO.
+--
+-- El corte (fecha < '2026-08-08') incluye HOY, así que se lleva también el día
+-- que esté en curso. Y hay una segunda razón, peor: el teléfono guarda las
+-- entregas que marca sin señal y las reenvía cuando vuelve el internet (0026),
+-- así que eventos marcados antes de la migración pueden llegar después y
+-- resucitar un día que acabás de borrar — a medias, con solo la parte que
+-- todavía estaba en la cola.
+--
+-- Corrila con la jornada terminada y el teléfono del conductor sincronizado.
+--
+-- ANTES DE CORRER ESTO EN UNA BASE NUEVA — comprobá qué se va a perder:
 --
 --     select fecha, count(*) as registros
 --       from encomienda_actividad
@@ -71,19 +91,40 @@
 -- ============================================================================
 
 -- ----------------------------------------------------------------------------
--- 1. Los días de prueba
+-- 1. Los días de prueba — SOLO EN UNA BASE QUE NUNCA CORRIÓ ESTA MIGRACIÓN
 --
 -- El corte es una fecha FIJA y no `current_date` a propósito: así volver a
 -- correr este archivo el mes que viene no barre con los días reales que se
 -- hayan registrado desde entonces. Un `delete ... where fecha < current_date`
 -- dentro de una migración re-ejecutable es una bomba de tiempo.
 --
+-- Pero una fecha fija tampoco alcanzaba, y casi cuesta caro: después de la
+-- primera corrida se cargaron desde la oficina DÍAS PASADOS de trabajo real
+-- —anteriores al corte—, así que volver a correr el archivo (obligatorio, para
+-- que la base se quede con la versión de la función que congela la tarifa) los
+-- habría borrado sin decir nada.
+--
+-- Por eso el borrado va detrás del mismo guard que usa la sección 2:
+-- vigente_desde solo existe mientras esta migración no haya corrido nunca acá.
+-- Es la marca exacta de "base pre-0031", y con ella la sección se vuelve un
+-- no-op a partir de la segunda corrida.
+--
 -- Los pagos van primero: no hay FK entre las dos tablas —encomienda_pagos
 -- guarda (chofer_id, fecha), no un id de actividad—, así que borrar la
 -- actividad NO se lleva la liquidación con ella.
 -- ----------------------------------------------------------------------------
-delete from encomienda_pagos where fecha < '2026-08-08';
-delete from encomienda_actividad where fecha < '2026-08-08';
+do $$
+begin
+  if exists (
+    select 1 from information_schema.columns
+     where table_schema = 'public'
+       and table_name = 'encomienda_reglas_pago'
+       and column_name = 'vigente_desde'
+  ) then
+    delete from encomienda_pagos where fecha < '2026-08-08';
+    delete from encomienda_actividad where fecha < '2026-08-08';
+  end if;
+end $$;
 
 -- ----------------------------------------------------------------------------
 -- 2. Una sola regla
@@ -152,7 +193,39 @@ create trigger trg_encomienda_reglas_updated before update on encomienda_reglas_
   for each row execute function set_updated_at();
 
 comment on table encomienda_reglas_pago is
-  'La regla de pago del conductor. UNA fila: se edita encima, sin historial ni vigencias. Cambiarla no mueve los días ya registrados — esos tienen sus cifras congeladas en encomienda_pagos. Ver 0031.';
+  'La regla de pago del conductor. UNA fila: se edita encima, sin historial ni vigencias. Cambiarla no mueve los días ya registrados — esos tienen su propia tarifa congelada en encomienda_pagos. Ver 0031.';
+
+-- ----------------------------------------------------------------------------
+-- 2b. La tarifa con la que se calculó cada día, guardada EN EL DÍA
+-- ----------------------------------------------------------------------------
+-- Sin esto, un día seguía dependiendo de la regla mientras estuviera vivo, y el
+-- caso que lo destapa es el conductor repartiendo AHORA:
+--
+--   09:00  el conductor lleva 20 entregas, el día vale X
+--   14:00  se cambia la regla
+--   14:05  el conductor marca la entrega 21 → el trigger recalcula el día
+--          ENTERO con la regla nueva
+--
+-- Y si esa entrega 21 no llegaba, el día se quedaba con la regla vieja. O sea
+-- que el efecto de cambiar la regla dependía de si el conductor marcaba una
+-- entrega más — la misma acción, dos resultados, sin forma de saber cuál tocó.
+--
+-- Guardando la tarifa en el día, un día existente se recalcula SIEMPRE con la
+-- suya. La regla nueva rige para los días que todavía no existen, que es lo que
+-- significa "los cambios se ven hacia los días siguientes".
+--
+-- De paso devuelve la auditoría que se perdió al sacar regla_id, y mejor: son
+-- los valores, no un puntero a una fila que después cambia.
+alter table encomienda_pagos
+  add column if not exists regla_valor_pedido integer,
+  add column if not exists regla_tipo_pago text,
+  add column if not exists regla_valor_pago numeric(10,2),
+  add column if not exists regla_monto_dia integer,
+  add column if not exists regla_meta_entregas_dia integer,
+  add column if not exists regla_bono_monto integer;
+
+comment on column encomienda_pagos.regla_valor_pedido is
+  'La tarifa con la que se calculó ESTE día. Se copia de la regla la primera vez que el día se congela y no cambia después, aunque la regla sí. Para moverla hay que pedirlo explícitamente: encomienda_repreciar_dia (con la regla de ahora) o encomienda_valorar_dia (con una tarifa escrita a mano, 0033). Ver 0031.';
 
 -- ----------------------------------------------------------------------------
 -- 3. La cuenta
@@ -165,27 +238,74 @@ comment on table encomienda_reglas_pago is
 -- escritura sobre encomienda_pagos (RLS, 0017) — ni debe tenerlo: no puede
 -- poder escribir su propia liquidación. La función corre como dueña de las
 -- tablas y hace la escritura por él.
-create or replace function private.encomienda_congelar_dia(p_chofer_id uuid, p_fecha date)
+-- Las versiones de menos argumentos de corridas anteriores tienen que irse: con
+-- los nuevos teniendo default, convivir haría ambigua toda llamada corta.
+drop function if exists private.encomienda_congelar_dia(uuid, date);
+drop function if exists private.encomienda_congelar_dia(uuid, date, boolean);
+
+create or replace function private.encomienda_congelar_dia(
+  p_chofer_id uuid,
+  p_fecha date,
+  -- true = volver a valorar el día descartando la tarifa que tenía. Es la única
+  -- forma de mover un día ya congelado, y se pide a mano desde la pantalla del
+  -- día (encomienda_repreciar_dia).
+  p_repreciar boolean default false,
+  -- Tarifa EXPLÍCITA para este día. Cuando viene, manda sobre la del día y
+  -- sobre la regla, y queda congelada en la fila como cualquier otra.
+  --
+  -- Es la tercera fuente posible de tarifa y existe porque cargar días PASADOS
+  -- desde la oficina es un caso real: la regla es una sola y rige hacia
+  -- adelante, así que sin esto un día de hace tres meses solo se podía valorar
+  -- con la tarifa de hoy. La pide la app por encomienda_valorar_dia (0033), que
+  -- comprueba rol y validez antes de llegar acá.
+  p_valor_pedido      integer default null,
+  p_tipo_pago         text    default null,
+  p_valor_pago        numeric default null,
+  p_monto_dia         integer default null,
+  p_meta_entregas_dia integer default null,
+  p_bono_monto        integer default null
+)
 returns void
 language plpgsql
 security definer
 set search_path = public
 as $$
 declare
-  v_regla      encomienda_reglas_pago%rowtype;
-  v_entregados int;
-  v_omitidos   int;
-  v_eventos    int;
-  v_ingresos   int;
-  v_base       int;
-  v_dia        int;
-  v_bono       int;
+  v_entregados   int;
+  v_omitidos     int;
+  v_eventos      int;
+  v_valor_pedido int;
+  v_tipo_pago    text;
+  v_valor_pago   numeric;
+  v_monto_dia    int;
+  v_meta         int;
+  v_bono_monto   int;
+  v_tiene_tarifa boolean := false;
+  v_ingresos     int;
+  v_base         int;
+  v_dia          int;
+  v_bono         int;
 begin
   -- Día sin conductor: la FK es on delete set null (0026), así que el día se
   -- sigue viendo cuando se elimina a alguien, pero no hay a quién pagarle.
   if p_chofer_id is null then
     return;
   end if;
+
+  -- ANTES de contar, no después. Dos sincronizaciones del teléfono cayendo a la
+  -- vez sobre el mismo día se pisaban: cada transacción contaba sin ver la fila
+  -- que la otra estaba insertando, las dos escribían el mismo total y una
+  -- entrega quedaba sin pagar. Con el candado, la segunda espera y cuenta
+  -- cuando la primera ya está confirmada.
+  --
+  -- Es por (conductor, día) y dura hasta el fin de la transacción, así que no
+  -- frena la actividad de otro conductor ni la de otro día. Los bucles que
+  -- llaman acá recorren los días ORDENADOS, para que dos transacciones que
+  -- tocan los mismos días los tomen siempre en el mismo orden y no se traben
+  -- entre sí.
+  perform pg_advisory_xact_lock(
+    hashtextextended(p_chofer_id::text || '|' || p_fecha::text, 0)
+  );
 
   select count(*) filter (where tipo = 'entrega'),
          count(*) filter (where tipo = 'omision'),
@@ -202,60 +322,132 @@ begin
     return;
   end if;
 
-  select * into v_regla from encomienda_reglas_pago limit 1;
+  -- Una tarifa dictada desde afuera gana sobre todo lo demás: es alguien
+  -- diciendo explícitamente con cuánto se pagaba ESTE día. Se piden los dos
+  -- campos que no tienen default en la regla —sin valor por entrega no hay
+  -- ingreso, y sin tipo de pago no hay fórmula—; los otros cuatro pueden venir
+  -- nulos y significan lo mismo que en la regla (sin fijo, sin bono).
+  if p_valor_pedido is not null and p_tipo_pago is not null then
+    v_valor_pedido := p_valor_pedido;
+    v_tipo_pago    := p_tipo_pago;
+    v_valor_pago   := coalesce(p_valor_pago, 0);
+    v_monto_dia    := coalesce(p_monto_dia, 0);
+    v_meta         := p_meta_entregas_dia;
+    v_bono_monto   := p_bono_monto;
+    v_tiene_tarifa := true;
+  end if;
 
-  -- Sin regla configurada no hay con qué calcular. No se escribe un cero: un
-  -- cero se lee como "este día no vale nada", que es una afirmación. Se deja el
-  -- día sin fila y el panel lo muestra como "Sin regla".
-  if not found then
-    return;
+  -- La tarifa del día es la que YA TIENE. Esto es lo que hace que sumar una
+  -- entrega a las 14:05 no arrastre el día entero a una regla que cambió a las
+  -- 14:00 (ver la sección 2b).
+  if not p_repreciar and not v_tiene_tarifa then
+    select regla_valor_pedido, regla_tipo_pago, regla_valor_pago,
+           regla_monto_dia, regla_meta_entregas_dia, regla_bono_monto
+      into v_valor_pedido, v_tipo_pago, v_valor_pago, v_monto_dia, v_meta, v_bono_monto
+      from encomienda_pagos
+     where chofer_id = p_chofer_id
+       and fecha = p_fecha
+       and regla_valor_pedido is not null;
+    v_tiene_tarifa := found;
+  end if;
+
+  -- Día nuevo (o repreciado a mano): toma la regla de ahora.
+  if not v_tiene_tarifa then
+    select valor_pedido, tipo_pago, valor_pago, monto_dia, meta_entregas_dia, bono_monto
+      into v_valor_pedido, v_tipo_pago, v_valor_pago, v_monto_dia, v_meta, v_bono_monto
+      from encomienda_reglas_pago
+     limit 1;
+
+    -- Sin regla configurada no hay con qué calcular. No se escribe un cero: un
+    -- cero se lee como "este día no vale nada", que es una afirmación. Se deja
+    -- el día sin fila y el panel lo muestra como "Sin regla".
+    if not found then
+      return;
+    end if;
   end if;
 
   -- Ingreso ESTIMADO: Starken maneja el valor de cada envío en su sistema y
   -- Pucarani nunca lo conoce (ver 0021). Lo real se anota por mes aparte
   -- (encomienda_ingresos_reales, 0029) y se contrasta contra esto.
-  v_ingresos := round(v_entregados::numeric * v_regla.valor_pedido)::int;
+  v_ingresos := round(v_entregados::numeric * v_valor_pedido)::int;
 
   -- Con 'porcentaje' el pago sale del ingreso estimado, o sea que valor_pedido
   -- también es parte del sueldo. Por eso los dos viven en la misma regla.
   v_base := case
-              when v_regla.tipo_pago = 'porcentaje'
-                then round(v_ingresos::numeric * v_regla.valor_pago / 100)::int
-              else round(v_entregados::numeric * v_regla.valor_pago)::int
+              when v_tipo_pago = 'porcentaje'
+                then round(v_ingresos::numeric * v_valor_pago / 100)::int
+              else round(v_entregados::numeric * v_valor_pago)::int
             end;
 
   -- El fijo del día se paga sin condición: llegar hasta acá ya significa que
   -- hubo al menos un evento, y eso ES la definición de día trabajado.
-  v_dia := coalesce(v_regla.monto_dia, 0);
+  v_dia := coalesce(v_monto_dia, 0);
 
   -- >= y no >: alcanzar la meta ya paga el bono (la pantalla dice lo mismo).
   v_bono := case
-              when v_regla.meta_entregas_dia is not null
-                   and v_entregados >= v_regla.meta_entregas_dia
-                then coalesce(v_regla.bono_monto, 0)
+              when v_meta is not null and v_entregados >= v_meta
+                then coalesce(v_bono_monto, 0)
               else 0
             end;
 
   -- pago_total no se escribe: es columna generada (0024).
   insert into encomienda_pagos (
     chofer_id, fecha, pedidos_entregados, pedidos_no_entregados,
-    ingresos_totales, pago_base, pago_dia, pago_bono, calculado_en
+    ingresos_totales, pago_base, pago_dia, pago_bono, calculado_en,
+    regla_valor_pedido, regla_tipo_pago, regla_valor_pago,
+    regla_monto_dia, regla_meta_entregas_dia, regla_bono_monto
   ) values (
     p_chofer_id, p_fecha, v_entregados, v_omitidos,
-    v_ingresos, v_base, v_dia, v_bono, now()
+    v_ingresos, v_base, v_dia, v_bono, now(),
+    v_valor_pedido, v_tipo_pago, v_valor_pago, v_monto_dia, v_meta, v_bono_monto
   )
   on conflict (chofer_id, fecha) do update set
-    pedidos_entregados    = excluded.pedidos_entregados,
-    pedidos_no_entregados = excluded.pedidos_no_entregados,
-    ingresos_totales      = excluded.ingresos_totales,
-    pago_base             = excluded.pago_base,
-    pago_dia              = excluded.pago_dia,
-    pago_bono             = excluded.pago_bono,
-    calculado_en          = excluded.calculado_en;
+    pedidos_entregados      = excluded.pedidos_entregados,
+    pedidos_no_entregados   = excluded.pedidos_no_entregados,
+    ingresos_totales        = excluded.ingresos_totales,
+    pago_base               = excluded.pago_base,
+    pago_dia                = excluded.pago_dia,
+    pago_bono               = excluded.pago_bono,
+    calculado_en            = excluded.calculado_en,
+    regla_valor_pedido      = excluded.regla_valor_pedido,
+    regla_tipo_pago         = excluded.regla_tipo_pago,
+    regla_valor_pago        = excluded.regla_valor_pago,
+    regla_monto_dia         = excluded.regla_monto_dia,
+    regla_meta_entregas_dia = excluded.regla_meta_entregas_dia,
+    regla_bono_monto        = excluded.regla_bono_monto;
 end;
 $$;
 
-revoke all on function private.encomienda_congelar_dia(uuid, date) from public;
+revoke all on function private.encomienda_congelar_dia(
+  uuid, date, boolean, integer, text, numeric, integer, integer, integer
+) from public;
+
+-- ----------------------------------------------------------------------------
+-- 3b. Volver a valorar un día a mano
+-- ----------------------------------------------------------------------------
+-- La contracara de que un día conserve su tarifa: si la regla estaba MAL cuando
+-- ese día se registró —un 70 % donde iba 7 %—, corregir la regla no lo arregla.
+-- Esto es la salida, y es a propósito un acto explícito y de a un día: volver a
+-- valorar algo que ya se contó como pagado no puede ser un efecto secundario.
+--
+-- Va en `public` porque la llama la app con la sesión del usuario, así que
+-- comprueba el rol por dentro. Es la única de estas funciones expuesta.
+create or replace function encomienda_repreciar_dia(p_chofer_id uuid, p_fecha date)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if (select private.get_rol()) not in ('admin', 'operador') then
+    raise exception 'No tienes permiso para recalcular pagos.';
+  end if;
+  perform private.encomienda_congelar_dia(p_chofer_id, p_fecha, true);
+end;
+$$;
+
+revoke all on function encomienda_repreciar_dia(uuid, date) from public;
+grant execute on function encomienda_repreciar_dia(uuid, date) to authenticated;
 
 -- ----------------------------------------------------------------------------
 -- 4. Cuándo se dispara
@@ -280,7 +472,7 @@ as $$
 declare
   d record;
 begin
-  for d in select distinct chofer_id, fecha from nuevos loop
+  for d in select distinct chofer_id, fecha from nuevos order by chofer_id, fecha loop
     perform private.encomienda_congelar_dia(d.chofer_id, d.fecha);
   end loop;
   return null;
@@ -296,7 +488,7 @@ as $$
 declare
   d record;
 begin
-  for d in select distinct chofer_id, fecha from viejos loop
+  for d in select distinct chofer_id, fecha from viejos order by chofer_id, fecha loop
     perform private.encomienda_congelar_dia(d.chofer_id, d.fecha);
   end loop;
   return null;
@@ -325,6 +517,7 @@ begin
       union
       select chofer_id, fecha from nuevos
     ) t
+    order by chofer_id, fecha
   loop
     perform private.encomienda_congelar_dia(d.chofer_id, d.fecha);
   end loop;
@@ -377,6 +570,7 @@ begin
          select 1 from encomienda_pagos p
           where p.chofer_id = a.chofer_id and p.fecha = a.fecha
        )
+     order by a.chofer_id, a.fecha
   loop
     perform private.encomienda_congelar_dia(d.chofer_id, d.fecha);
   end loop;
@@ -416,11 +610,14 @@ create trigger trg_encomienda_regla_congelar_pendientes
 select private.encomienda_congelar_pendientes();
 
 -- ----------------------------------------------------------------------------
--- 6. Verificación: las cuatro tienen que dar true.
+-- 6. Verificación: las tres tienen que dar true.
+--
+-- Ya no se comprueba que no quede actividad anterior al corte: desde que la
+-- sección 1 solo borra en una base pre-0031, los días pasados que la oficina
+-- cargue después SOBREVIVEN a propósito, y esa comprobación los denunciaría
+-- como un problema.
 -- ----------------------------------------------------------------------------
 select
-  (select count(*) from encomienda_actividad where fecha < '2026-08-08') = 0
-    as "dias_de_prueba_borrados",
   (select count(*) from encomienda_reglas_pago) <= 1
     as "una_sola_regla",
   not exists (

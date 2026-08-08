@@ -111,7 +111,17 @@ export type RutaLocal = {
   geometria: [number, number][] | null;
   distanciaM: number | null;
   duracionS: number | null;
+  /** Cuándo se generó la ruta por PRIMERA vez ese día: el comienzo de la
+   *  jornada. Rehacer la ruta —porque entraron pedidos nuevos— no lo mueve, o
+   *  el inicio del día iría corriéndose cada vez que el chofer agrega algo. */
   generadaEn: string;
+  /** Cuándo se cerró la última parada. null = la ruta sigue en curso.
+   *
+   *  Es lo que hace que el servidor valore el día (ver 0032): mientras sea null
+   *  la jornada está abierta y no se calcula plata. Se guarda acá y no solo en
+   *  el servidor porque el cierre puede ocurrir sin señal, igual que todo lo
+   *  demás en esta app. */
+  cerradaEn: string | null;
 };
 
 /** Evento esperando salir a encomienda_actividad. Los nombres son los del
@@ -296,12 +306,42 @@ export function guardarRuta(entrada: EntradaRuta): Promise<RutaLocal> {
       geometria: entrada.geometria ?? anterior?.geometria ?? null,
       distanciaM: entrada.distanciaM ?? anterior?.distanciaM ?? null,
       duracionS: entrada.duracionS ?? anterior?.duracionS ?? null,
-      generadaEn: new Date().toISOString(),
+      // La primera generación del día manda: es el comienzo de la jornada. Si
+      // se pisara en cada rehacer, agregar un pedido a media tarde diría que el
+      // conductor empezó a esa hora.
+      generadaEn: anterior?.generadaEn ?? new Date().toISOString(),
+      // Rehacer la ruta REABRE el día: si entraron paradas nuevas, la jornada
+      // no estaba terminada. El servidor la vuelve a valorar cuando se cierre
+      // otra vez (0032).
+      cerradaEn: null,
     };
 
     await escribir([STORES.rutas], ({ guardar }) => guardar(STORES.rutas, ruta));
     return ruta;
   });
+}
+
+/** Marca la ruta del día como terminada. Es lo que le dice al servidor que ya
+ *  puede valorar la jornada (0032).
+ *
+ *  Idempotente: si ya estaba cerrada no mueve la hora. Volver a cerrar por un
+ *  reintento no puede correr el fin de la jornada. */
+export function cerrarRuta(fecha: string): Promise<RutaLocal | null> {
+  return enFila(async () => {
+    const ruta = await leerRuta(fecha);
+    if (!ruta || ruta.cerradaEn) return ruta;
+
+    const cerrada: RutaLocal = { ...ruta, cerradaEn: new Date().toISOString() };
+    await escribir([STORES.rutas], ({ guardar }) => guardar(STORES.rutas, cerrada));
+    return cerrada;
+  });
+}
+
+/** Si no queda ninguna parada por cerrar. Con cero paradas da false: una ruta
+ *  vacía no es una ruta terminada. */
+export function rutaTerminada(ruta: RutaLocal | null): boolean {
+  if (!ruta || ruta.paradas.length === 0) return false;
+  return ruta.paradas.every((p) => p.entrega !== "pendiente");
 }
 
 // ----------------------------------------------------------------------------

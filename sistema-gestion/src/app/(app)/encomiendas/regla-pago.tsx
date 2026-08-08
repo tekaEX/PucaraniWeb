@@ -12,19 +12,19 @@
 // día guarda sus propias cifras al registrarse, así que lo que se toque acá
 // solo afecta a los días que vengan. El texto del diálogo lo dice, porque es
 // justo lo que uno duda antes de apretar Guardar.
+//
+// Y al revés: un día suelto que se pagaba distinto NO se arregla desde acá. Se
+// carga con su propia tarifa desde "Agregar día", o se recalcula desde la vista
+// del día (0033). Esta regla es la que rige de ahora en adelante.
 
 import { useActionState, useState } from "react";
 import { Save, Settings } from "lucide-react";
 import { Dialogo } from "@/components/ui/dialogo";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { MoneyInput } from "@/components/ui/money-input";
-import { Select } from "@/components/ui/select";
-import { Field } from "@/components/ui/label";
 import { formatCLP, formatDate } from "@/lib/format";
 import { valorPedido } from "@/lib/encomiendas/pago";
-import { ENCOMIENDA_TIPO_PAGO, type EncomiendaTipoPago } from "@/types/db";
 import type { EncomiendaReglaPago } from "@/types/db";
+import { CamposTarifa, valoresDeTarifa, type ValoresTarifa } from "./campos-tarifa";
 import { guardarReglaPago, type FormState } from "./actions";
 
 export function ReglaPago({ regla }: { regla: EncomiendaReglaPago | null }) {
@@ -69,18 +69,15 @@ function Formulario({
     {},
   );
 
-  const [tipoPago, setTipoPago] = useState<EncomiendaTipoPago>(regla?.tipo_pago ?? "porcentaje");
   // Los campos arrancan con lo que rige: casi siempre se cambia UNA cosa (el
   // valor por entrega, el fijo diario) y volver a teclear todo lo demás es la
-  // forma más fácil de guardar una regla distinta a la que se quería.
-  const [valorPedidoTexto, setValorPedidoTexto] = useState(String(valorPedido(regla)));
-  const [valorPago, setValorPago] = useState(
-    regla && regla.tipo_pago === "monto_fijo" ? String(regla.valor_pago) : "",
-  );
-  const [montoDia, setMontoDia] = useState(regla ? String(regla.monto_dia) : "");
-  const [bonoMonto, setBonoMonto] = useState(
-    regla?.bono_monto != null ? String(regla.bono_monto) : "",
-  );
+  // forma más fácil de guardar una regla distinta a la que se quería. Sin regla
+  // todavía, el valor por entrega arranca en el aproximado del código, que es
+  // mejor punto de partida que un campo vacío.
+  const [valores, setValores] = useState<ValoresTarifa>(() => ({
+    ...valoresDeTarifa(regla),
+    valor_pedido: String(valorPedido(regla)),
+  }));
 
   return (
     <form action={formAction} className="grid gap-4 sm:grid-cols-2">
@@ -89,7 +86,8 @@ function Formulario({
           <>
             Rige desde el {formatDate(regla.updated_at)}. Al guardar, el cambio se aplica a los
             días que se registren <strong>de acá en adelante</strong>: los que ya están cargados
-            conservan las cifras con las que se calcularon.
+            conservan las cifras con las que se calcularon. Para un día suelto que se pagaba
+            distinto, elige “Otra tarifa para este día” al cargarlo.
           </>
         ) : (
           <>
@@ -99,96 +97,7 @@ function Formulario({
         )}
       </p>
 
-      <Field
-        label="Ingreso aproximado por entrega"
-        htmlFor="valor_pedido"
-        hint="Lo que se estima que entra por cada paquete entregado"
-      >
-        <MoneyInput
-          id="valor_pedido"
-          name="valor_pedido"
-          value={valorPedidoTexto}
-          onChange={setValorPedidoTexto}
-          placeholder="950"
-        />
-      </Field>
-      <Field
-        label="Fijo por día trabajado"
-        htmlFor="monto_dia"
-        hint="Se paga cada día que salió a repartir, aunque no logre entregas"
-      >
-        <MoneyInput
-          id="monto_dia"
-          name="monto_dia"
-          value={montoDia}
-          onChange={setMontoDia}
-          placeholder="0"
-        />
-      </Field>
-
-      <Field label="Tipo de pago" htmlFor="tipo_pago">
-        <Select
-          id="tipo_pago"
-          name="tipo_pago"
-          value={tipoPago}
-          onChange={(e) => setTipoPago(e.target.value as EncomiendaTipoPago)}
-        >
-          {Object.entries(ENCOMIENDA_TIPO_PAGO).map(([value, label]) => (
-            <option key={value} value={value}>
-              {label}
-            </option>
-          ))}
-        </Select>
-      </Field>
-      <Field
-        label={tipoPago === "porcentaje" ? "Porcentaje (%)" : "Monto fijo por pedido"}
-        htmlFor="valor_pago"
-        hint={
-          tipoPago === "porcentaje"
-            ? "Del ingreso estimado, o sea del valor por entrega de arriba"
-            : undefined
-        }
-      >
-        {tipoPago === "porcentaje" ? (
-          <Input
-            id="valor_pago"
-            name="valor_pago"
-            type="number"
-            min={0}
-            max={100}
-            step="0.1"
-            defaultValue={regla?.tipo_pago === "porcentaje" ? regla.valor_pago : undefined}
-            required
-          />
-        ) : (
-          <MoneyInput
-            id="valor_pago"
-            name="valor_pago"
-            value={valorPago}
-            onChange={setValorPago}
-            placeholder="0"
-          />
-        )}
-      </Field>
-
-      <Field label="Meta de entregas/día para el bono" htmlFor="meta_entregas_dia" hint="Opcional">
-        <Input
-          id="meta_entregas_dia"
-          name="meta_entregas_dia"
-          type="number"
-          min={1}
-          defaultValue={regla?.meta_entregas_dia ?? undefined}
-        />
-      </Field>
-      <Field label="Monto del bono" htmlFor="bono_monto" hint="Opcional">
-        <MoneyInput
-          id="bono_monto"
-          name="bono_monto"
-          value={bonoMonto}
-          onChange={setBonoMonto}
-          placeholder="0"
-        />
-      </Field>
+      <CamposTarifa valores={valores} onChange={setValores} />
 
       {regla ? (
         <p className="text-xs text-muted sm:col-span-2">

@@ -13,10 +13,11 @@
 // actividad directo contra Postgres (ver 0026) y no pasa por el servidor de la
 // app: en ese momento no hay TypeScript que pueda correr.
 //
-// calcularPagoDia e ingresoEstimado sobreviven acá para UNA cosa: la vista
-// previa del diálogo "Agregar día", que muestra cuánto va a quedar el día
-// ANTES de guardarlo, mientras se teclean los números. Eso no puede salir de la
-// base sin una consulta por tecla.
+// calcularPagoDia e ingresoEstimado sobreviven acá para UNA cosa: las vistas
+// previas —"Agregar día" y "Recalcular"—, que muestran cuánto va a quedar el
+// día ANTES de escribirlo, mientras se teclean los números. Eso no puede salir
+// de la base sin una consulta por tecla, y desde que la tarifa se puede editar
+// a mano (0033) lo que se teclea es también la tarifa.
 //
 // O sea que son dos copias de la misma aritmética. Si cambia una, hay que
 // cambiar la otra — está anotado también en la 0031.
@@ -25,7 +26,8 @@ import { VALOR_APROXIMADO_PEDIDO } from "./config";
 import type {
   EncomiendaActividadOrigen,
   EncomiendaActividadTipo,
-  EncomiendaReglaPago,
+  EncomiendaPago,
+  EncomiendaTipoPago,
 } from "@/types/db";
 
 /** Cómo cerró el día un conductor. Sale de contar los eventos que el teléfono
@@ -40,14 +42,43 @@ export type ConteoDia = {
   omitidos: number;
 };
 
-/** Cuánto se estima que entra por cada entrega, según la regla configurada
- *  (0029). Sin regla no hay valor y se cae al respaldo, para que la vista
- *  previa muestre algo en vez de un hueco.
+/** Los números que definen cuánto vale un día.
+ *
+ *  Los tiene la regla de pago, pero también —congelados— cada día ya calculado
+ *  (0031). Y esa es la razón de que este tipo exista aparte: agregarle
+ *  actividad a un día que YA existe lo recalcula con la tarifa de ese día, no
+ *  con la regla de ahora. Una vista previa que use la regla mostraría una cifra
+ *  distinta de la que la base va a escribir. */
+export type TarifaPago = {
+  tipo_pago: EncomiendaTipoPago;
+  valor_pago: number;
+  valor_pedido: number;
+  monto_dia: number;
+  meta_entregas_dia: number | null;
+  bono_monto: number | null;
+};
+
+/** La tarifa con la que está calculado un día, si la tiene. */
+export function tarifaDelDia(pago: EncomiendaPago | null | undefined): TarifaPago | null {
+  if (!pago || pago.regla_valor_pedido == null || pago.regla_tipo_pago == null) return null;
+  return {
+    tipo_pago: pago.regla_tipo_pago,
+    valor_pago: Number(pago.regla_valor_pago ?? 0),
+    valor_pedido: pago.regla_valor_pedido,
+    monto_dia: pago.regla_monto_dia ?? 0,
+    meta_entregas_dia: pago.regla_meta_entregas_dia,
+    bono_monto: pago.regla_bono_monto,
+  };
+}
+
+/** Cuánto se estima que entra por cada entrega (0029). Sin tarifa no hay valor
+ *  y se cae al respaldo, para que la vista previa muestre algo en vez de un
+ *  hueco.
  *
  *  numeric/integer de PostgREST puede llegar como string: sin este Number() y
  *  su comprobación, un NaN se pasearía por la pantalla. */
-export function valorPedido(regla: EncomiendaReglaPago | null | undefined): number {
-  const valor = Number(regla?.valor_pedido);
+export function valorPedido(tarifa: TarifaPago | null | undefined): number {
+  const valor = Number(tarifa?.valor_pedido);
   return Number.isFinite(valor) && valor > 0 ? valor : VALOR_APROXIMADO_PEDIDO;
 }
 
@@ -99,27 +130,27 @@ export const PAGO_CERO: PagoDesglose = { base: 0, dia: 0, bono: 0, total: 0 };
  *  tiene (o va a tener) actividad, y eso ES la definición de día trabajado. */
 export function calcularPagoDia(
   conteo: ConteoDia,
-  regla: EncomiendaReglaPago | null,
+  tarifa: TarifaPago | null,
 ): PagoDesglose {
-  if (!regla) return PAGO_CERO;
+  if (!tarifa) return PAGO_CERO;
 
   // valor_pago es numeric: PostgREST lo devuelve como string ("15.00").
-  const valor = Number(regla.valor_pago);
+  const valor = Number(tarifa.valor_pago);
   const base =
-    regla.tipo_pago === "porcentaje"
+    tarifa.tipo_pago === "porcentaje"
       ? // El porcentaje se calcula sobre el ingreso estimado con el valor por
-        // entrega DE ESTA MISMA REGLA. Por eso valor_pedido vive en la regla y
-        // no en una configuración aparte: es parte de la fórmula del sueldo.
-        Math.round((ingresoEstimado(conteo.entregados, valorPedido(regla)) * valor) / 100)
+        // entrega DE ESTA MISMA TARIFA. Por eso valor_pedido va junto y no en
+        // una configuración aparte: es parte de la fórmula del sueldo.
+        Math.round((ingresoEstimado(conteo.entregados, valorPedido(tarifa)) * valor) / 100)
       : Math.round(conteo.entregados * valor);
 
-  const dia = Number(regla.monto_dia ?? 0);
+  const dia = Number(tarifa.monto_dia ?? 0);
 
   // >= y no >: alcanzar la meta ya paga el bono (el texto de la pantalla de
   // reglas dice lo mismo).
   const bono =
-    regla.meta_entregas_dia != null && conteo.entregados >= regla.meta_entregas_dia
-      ? Number(regla.bono_monto ?? 0)
+    tarifa.meta_entregas_dia != null && conteo.entregados >= tarifa.meta_entregas_dia
+      ? Number(tarifa.bono_monto ?? 0)
       : 0;
 
   return { base, dia, bono, total: base + dia + bono };

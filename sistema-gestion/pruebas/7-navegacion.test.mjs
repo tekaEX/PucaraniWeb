@@ -13,7 +13,12 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { distanciaAPolilinea, distanciaMetros, metrosRestantes } from "@/lib/rutas";
+import {
+  ajustarATrazado,
+  distanciaAPolilinea,
+  distanciaMetros,
+  metrosRestantes,
+} from "@/lib/rutas";
 
 const tramo = JSON.parse(
   readFileSync(new URL("./fixtures/tramo-arica.json", import.meta.url), "utf8"),
@@ -169,6 +174,92 @@ test("distanciaAPolilinea: casos degenerados", () => {
     [-70.3, -18.48],
   ]);
   assert.ok(Number.isFinite(d) && d > 0);
+});
+
+// ------------------------------------------------- pegar el punto al camino
+// En ciudad el GPS de un teléfono se equivoca por decenas de metros, así que el
+// punto crudo cae adentro de las manzanas. Se comprueba sobre el tramo real que
+// pegarlo lo devuelve a la calle y que las dos reglas de arriba —que siguen
+// mirando la posición CRUDA— no cambian de resultado por eso.
+
+/** El mismo recorrido, con el error lateral que tendría el GPS de verdad.
+ *  Determinista para que un fallo se pueda reproducir. */
+function conRuido(puntos, semilla = 7) {
+  let s = semilla;
+  const rnd = () => ((s = (s * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff);
+  // ±0,00015° ≈ ±16 m en latitud y ±15 m en longitud a la latitud de Arica:
+  // error urbano normal, por debajo del umbral de "se salió" (60 m).
+  return puntos.map((p) => ({
+    lat: p.lat + (rnd() - 0.5) * 0.0003,
+    lng: p.lng + (rnd() - 0.5) * 0.0003,
+  }));
+}
+
+test("con ruido de GPS, el punto pegado queda SOBRE la calle", () => {
+  const crudas = conRuido(recorrer(tramo.geometria, 15));
+
+  let pegadas = 0;
+  let peorCrudo = 0;
+  for (const cruda of crudas) {
+    peorCrudo = Math.max(peorCrudo, distanciaAPolilinea(cruda, tramo.geometria));
+    const pegada = ajustarATrazado(cruda, tramo.geometria);
+    if (!pegada) continue;
+    pegadas++;
+    assert.ok(
+      distanciaAPolilinea(pegada, tramo.geometria) < 1,
+      "el punto pegado tiene que quedar sobre el trazado",
+    );
+  }
+
+  // El ruido es de verdad: sin pegar, el punto se va del ancho de la calle.
+  assert.ok(peorCrudo > 10, `el ruido de prueba quedó chico: ${Math.round(peorCrudo)} m`);
+  assert.ok(
+    pegadas / crudas.length > 0.95,
+    `solo se pegó el ${Math.round((pegadas / crudas.length) * 100)}% de las lecturas`,
+  );
+});
+
+test("emparejando con ventana, el punto nunca retrocede sobre el trazado", () => {
+  // Es lo que hace usePuntoEnRuta: arrastra el índice de una lectura a la otra
+  // y busca alrededor de él. Sobre el tramo real y con ruido, el punto tiene
+  // que avanzar siempre — un índice que retrocede se ve como el auto pegando un
+  // salto hacia atrás en la mitad de una cuadra.
+  const crudas = conRuido(recorrer(tramo.geometria, 15), 11);
+
+  let indice = 0;
+  let pegadas = 0;
+  for (const cruda of crudas) {
+    const pegada = ajustarATrazado(cruda, tramo.geometria, { desdeIndice: indice });
+    if (!pegada) continue;
+    pegadas++;
+    assert.ok(
+      pegada.indice >= indice,
+      `el índice retrocedió de ${indice} a ${pegada.indice}`,
+    );
+    indice = pegada.indice;
+  }
+
+  assert.ok(pegadas > crudas.length * 0.95, "casi todas las lecturas tienen que pegarse");
+  assert.ok(
+    indice >= tramo.geometria.length - 3,
+    `el recorrido terminó en el índice ${indice} de ${tramo.geometria.length}`,
+  );
+});
+
+test("el ruido de GPS no dispara recálculos ni frena el avance de maniobra", () => {
+  const crudas = conRuido(recorrer(tramo.geometria, 15));
+
+  let indice = 0;
+  let peor = 0;
+  for (const cruda of crudas) {
+    // Las dos reglas siguen leyendo la posición CRUDA, no la pegada: un punto
+    // pegado está sobre la ruta por definición y nunca acusaría un desvío.
+    peor = Math.max(peor, distanciaAPolilinea(cruda, tramo.geometria));
+    indice = avanzar(indice, cruda);
+  }
+
+  assert.ok(peor < UMBRAL_FUERA_DE_RUTA_M, `con ruido normal se declaró desvío (${peor} m)`);
+  assert.equal(indice, tramo.pasos.length - 1, "con ruido se perdió el avance de maniobras");
 });
 
 // ---------------------------------------------- cuánto se ahorra de verdad
