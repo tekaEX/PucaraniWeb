@@ -104,7 +104,13 @@ const CENTRO_ARICA: [number, number] = [-70.3126, -18.4783];
 // inclinada, como Google Maps/Waze al arrancar un viaje. La inclinación es lo
 // que hace que se vea "hacia adelante" y no desde arriba. Después de eso el
 // zoom queda en manos del chofer.
-const ZOOM_NAVEGACION = 17;
+//
+// 18.4 es el acercamiento de la foto: la calle se ve del ancho que tiene —unos
+// 12 m— y por delante entran unos 150 m, o sea el cruce que viene y el que le
+// sigue. En 17 la misma pantalla abarcaba cuatro veces más: la calle quedaba
+// como una línea fina entre manzanas y el chofer tenía que buscar dónde estaba
+// el punto en vez de mirar la maniobra.
+const ZOOM_NAVEGACION = 18.4;
 const PITCH_NAVEGACION = 55;
 
 // El GPS avisa cada uno o dos segundos, así que animar cerca de un segundo hace
@@ -114,23 +120,28 @@ const MS_DESPLAZAMIENTO = 1000;
 // ----------------------------------------------------------------------------
 // Dónde queda el punto del chofer en la pantalla
 // ----------------------------------------------------------------------------
-// Centrado, la mitad de arriba muestra la calle que ya se pasó y lo que viene
-// —lo único que sirve manejando— queda apretado contra la hoja deslizable.
-// Ningún navegador lo hace así: el punto va abajo y la pantalla mira adelante.
+// En el centro del contenedor, sin relleno. Con el mapa girado al rumbo, lo que
+// viene queda ARRIBA del punto, y a 55° de inclinación esa mitad de arriba
+// abarca varias cuadras mientras la de abajo apenas llega a media: la pantalla
+// mira adelante sola, por la perspectiva. Sumado a que la hoja colapsada tapa
+// los últimos 84 px, sobre el mapa que se ve el punto queda como a un 60%, que
+// es exactamente el encuadre de la foto.
 //
-// Se consigue con `padding`, no moviendo el centro: el padding corre el centro
-// de la CÁMARA, así que además el punto pasa a ser el PIVOTE del giro. Con el
-// centro movido a mano, al doblar el mapa gira alrededor del medio de la
-// pantalla y el punto describe un arco — se ve como si el auto derrapara.
+// Acá hubo un relleno de 45% abajo, puesto para "bajar el punto". Hace lo
+// contrario: `padding` corre el centro de la cámara hacia el lado que queda
+// libre, así que un relleno abajo SUBE el punto y deja media pantalla mostrando
+// la calle que ya se pasó.
 //
-// Es una propiedad que queda pegada al mapa, así que toda llamada de cámara
-// tiene que pasar la suya (los fitBounds de acá abajo ya lo hacen).
-const PROPORCION_PADDING_ABAJO = 0.45;
-
-function paddingNavegacion(mapa: mapboxgl.Map): mapboxgl.PaddingOptions {
-  const alto = mapa.getContainer().clientHeight;
-  return { top: 0, left: 0, right: 0, bottom: Math.round(alto * PROPORCION_PADDING_ABAJO) };
-}
+// Sin relleno el centro de la cámara cae justo sobre el punto, que es lo que lo
+// vuelve el PIVOTE del giro: al doblar, el mapa gira alrededor del chofer. Con
+// el centro corrido, el punto describe un arco — se ve como si el auto
+// derrapara.
+//
+// Igual hay que pasarlo en CADA movimiento: el relleno queda pegado al mapa y
+// los fitBounds de más abajo dejan el suyo puesto. Sin esto, al descartar una
+// ruta propuesta (que encuadra con 48% abajo) el punto arrancaría el viaje
+// pegado al borde de arriba.
+const SIN_RELLENO: mapboxgl.PaddingOptions = { top: 0, right: 0, bottom: 0, left: 0 };
 
 // Por debajo de esto no se gira. El rumbo casi siempre viene estimado (en
 // iPhone el GPS no entrega heading), así que oscila uno o dos grados entre
@@ -172,6 +183,38 @@ function soportaWebGL(): boolean {
 // inclinación la perspectiva se come casi la mitad del alto, así que necesita
 // bastante más lienzo del que termina ocupando en pantalla.
 const TAMANO_MARCADOR = 128;
+
+// ----------------------------------------------------------------------------
+// El tamaño del punto según el zoom
+// ----------------------------------------------------------------------------
+// El marcador es un elemento del DOM: sin tocarlo mide siempre lo mismo en
+// PANTALLA, así que al alejar el mapa las cuadras se achican y él no. Se ve
+// como si creciera solo, hasta quedar un manchón que tapa el barrio.
+//
+// Así que se pega al TERRENO: conserva el tamaño REAL que tiene manejando —unos
+// 9 m de disco al zoom de navegación— y se achica a la par del mapa. Cada nivel
+// de zoom es el doble de escala, de ahí la potencia de dos.
+//
+// Con dos topes:
+//
+//   · no pasa de 1: acercando más allá del zoom de navegación el punto no se
+//     agranda. El de manejar es el más grande que existe;
+//   · no baja de 0.45, unos 18 px de disco —el tamaño del punto de Mapas—. En
+//     la vista de la ruta entera, el tamaño real serían dos píxeles: un punto
+//     que no se encuentra, y un haz que directamente no se ve.
+const ESCALA_MINIMA_MARCADOR = 0.45;
+
+function escalaMarcador(zoom: number): number {
+  return Math.min(1, Math.max(ESCALA_MINIMA_MARCADOR, 2 ** (zoom - ZOOM_NAVEGACION)));
+}
+
+// Se escala el SVG y no el elemento del marcador: ese transform lo escribe
+// Mapbox —posición, giro e inclinación— y pisarlo deja el punto clavado en una
+// esquina de la pantalla.
+function ajustarEscalaMarcador(marcador: mapboxgl.Marker, zoom: number): void {
+  const svg = marcador.getElement().querySelector("svg");
+  if (svg) svg.style.transform = `scale(${escalaMarcador(zoom).toFixed(3)})`;
+}
 
 function colorPunto(p: PuntoMapa, previa: boolean): string {
   // En una ruta propuesta ninguna parada es "la que sigue" todavía: van todas
@@ -216,15 +259,26 @@ function elementoParada(p: PuntoMapa, previa = false): HTMLElement {
 // elemento derecho mientras el mapa se inclina se despega de la calle y flota:
 // deja de ser "el chofer está acá" y pasa a ser una calcomanía en la ventana.
 //
-// La figura es UNA sola —el disco— y adentro lleva una flecha blanca con el
-// sentido del auto, como el marcador de Mapas. Antes eran dos figuras
-// distintas según hubiera rumbo o no, y el cambio de una a otra se veía como
-// un parpadeo: ahora lo único que aparece y desaparece es la flecha de adentro.
+// La figura es UNA sola —el disco, siempre del mismo tamaño— y lo que cambia es
+// lo que lleva adentro o alrededor, según el modo. Igual que en Mapas:
 //
-//   · con rumbo    disco + flecha blanca + haz de visión;
-//   · sin rumbo    el disco solo. Una flecha apuntando a cualquier lado es peor
-//                  que no tener flecha, y un haz que no significa nada es una
-//                  afirmación falsa sobre hacia dónde mira el auto.
+//   · siguiendo (manejando)   disco + flecha blanca con el sentido del auto. El
+//                             haz no va: hacia dónde apunta el teléfono no le
+//                             importa a nadie que va manejando, y el mapa ya
+//                             está girado hacia adelante;
+//   · mapa suelto             disco + haz. Acá el punto deja de querer decir
+//                             "voy para allá" y pasa a decir "estás acá, y
+//                             estás mirando para allá", que es lo que ubica a
+//                             alguien que está paseando el mapa. El haz apunta
+//                             a donde apunta el TELÉFONO cuando hay brújula
+//                             (ver use-brujula) y, si no la hay, al último
+//                             rumbo conocido — el haz tiene que estar igual: es
+//                             lo que distingue este modo del de manejo, y sin
+//                             él los dos se ven idénticos;
+//   · sin rumbo de ninguno    el disco solo. Una flecha (o un haz) apuntando a
+//                             cualquier lado es peor que no tener ninguna.
+//
+// El tamaño lo maneja escalaMarcador: va pegado al terreno, no a la pantalla.
 //
 // La sombra de contacto va siempre: es lo que apoya la figura en la calle.
 
@@ -233,7 +287,7 @@ function elementoUbicacion(): HTMLElement {
   const el = document.createElement("div");
   el.style.cssText = `position:absolute;width:${TAMANO_MARCADOR}px;height:${TAMANO_MARCADOR}px;pointer-events:none;will-change:transform`;
   el.innerHTML = `
-<svg width="${TAMANO_MARCADOR}" height="${TAMANO_MARCADOR}" viewBox="0 0 128 128" style="display:block">
+<svg width="${TAMANO_MARCADOR}" height="${TAMANO_MARCADOR}" viewBox="0 0 128 128" style="display:block;transform-origin:center">
   <defs>
     <!-- El haz se desvanece hacia adelante en vez de cortarse: un borde duro
          parecía el alcance de un sensor y no "por acá voy". -->
@@ -257,7 +311,10 @@ function elementoUbicacion(): HTMLElement {
     </radialGradient>
   </defs>
 
-  <!-- Haz de 60° saliendo del punto, como el de Mapas. Solo con rumbo. -->
+  <!-- Haz de 60° saliendo del punto, como el de Mapas. Solo con el mapa suelto,
+       que es casi siempre con el mapa alejado: ahí el marcador está en su
+       tamaño mínimo y este radio de 62 queda en unos 28 px, que es lo que hace
+       falta para que se vea de qué lado mira el punto. -->
   <g data-cono style="opacity:0;transition:opacity .35s ease-out">
     <path d="M64 64 L33 10.3 A62 62 0 0 1 95 10.3 Z" fill="url(#pucarani-cono)"/>
   </g>
@@ -296,6 +353,7 @@ export function RutaMapa({
   puntos,
   miUbicacion,
   rumbo,
+  rumboBrujula,
   claveDestino,
   geometria,
   geometriaNavegacion,
@@ -310,9 +368,13 @@ export function RutaMapa({
   miUbicacion?: Ubicacion | null;
   /** Hacia dónde va el chofer, en grados horarios desde el norte: con esto se
    *  GIRA el mapa para que esa dirección quede siempre "arriba", y se orienta
-   *  el cono de visión. Sale del camino que viene por delante en la ruta (ver
+   *  la flecha del punto. Sale del camino que viene por delante en la ruta (ver
    *  rumboDelCamino) y, si no hay ruta, del rumbo del GPS. */
   rumbo?: number | null;
+  /** Hacia dónde APUNTA el teléfono (ver useBrujula). Solo orienta el haz del
+   *  punto con el mapa suelto; nunca gira el mapa —la brújula se mueve con la
+   *  mano y giraría la vista con el teléfono, no con el auto. */
+  rumboBrujula?: number | null;
   /** Identifica la parada a la que se está yendo. Cuando cambia —se terminó una
    *  entrega y arrancó el tramo siguiente— el mapa vuelve a acomodarse al
    *  camino nuevo: centro, zoom, inclinación y orientación. */
@@ -353,6 +415,11 @@ export function RutaMapa({
    *  ninguna, así que en cuanto se conozca el rumbo hay que acomodarse. */
   const claveOrientadaRef = useRef<string | null>(null);
   const encuadreInicialRef = useRef(false);
+  /** Ya se centró en la ubicación del chofer por no haber nada más que mostrar.
+   *  Es un ref aparte del de arriba a propósito: centrarse en el punto NO gasta
+   *  el encuadre de la ruta, así que cuando aparezcan las paradas el mapa las
+   *  encuadra igual. */
+  const centradoEnMiRef = useRef(false);
   const usuarioMovioRef = useRef(false);
   // El chofer tiene el dedo en el mapa: el código no toca la vista hasta que
   // suelte, o el movimiento por GPS pelea con el gesto.
@@ -534,10 +601,14 @@ export function RutaMapa({
   }, [previa, mapaListo]);
 
   // Al aparecer una ruta propuesta se encuadra COMPLETA, de norte y sin
-  // inclinación: es el momento de mirarla entera, no de manejar. El panel de la
-  // propuesta ocupa la mitad de abajo de la pantalla (ver vista-previa-ruta.tsx),
-  // así que ese espacio se reserva con relleno para que la ruta quede arriba y
-  // no debajo del panel.
+  // inclinación: es el momento de mirarla entera, no de manejar.
+  //
+  // El relleno es parejo y chico. Antes se reservaba el 48% de abajo porque el
+  // mapa iba a pantalla completa y el panel de la propuesta le tapaba la mitad;
+  // ahora la propuesta se mira en la jornada, donde el mapa es una tarjeta de
+  // 224 px y el panel está fuera de él (ver pantalla.tsx). Con aquel relleno, en
+  // una tarjeta de ese alto quedaban 70 px para dibujar y la ruta salía
+  // ilegible de lo alejada.
   useEffect(() => {
     const mapa = mapaRef.current;
     if (!mapa || !mapaListo || !previa) return;
@@ -551,13 +622,8 @@ export function RutaMapa({
     // de más abajo no tiene que volver a moverlo al aceptar la ruta.
     encuadreInicialRef.current = true;
 
-    const alto = mapa.getContainer().clientHeight;
-    // Mapbox no puede encuadrar si el relleno se come el alto entero: siempre
-    // hay que dejarle una franja donde dibujar.
-    const abajo = Math.max(0, Math.min(Math.round(alto * 0.48), alto - 140));
-
     mapa.fitBounds(limites, {
-      padding: { top: 70, bottom: abajo, left: 36, right: 36 },
+      padding: 28,
       bearing: 0,
       pitch: 0,
       duration: 700,
@@ -585,6 +651,25 @@ export function RutaMapa({
     for (const p of puntos) limites.extend([p.lng, p.lat]);
     mapa.fitBounds(limites, { padding: 40, duration: 0 });
   }, [puntos, mapaListo]);
+
+  // Sin paradas y sin propuesta no hay nada que encuadrar, y el mapa se queda en
+  // el centro de respaldo mostrando Arica entera: al chofer que todavía no armó
+  // la ruta —a primera hora no hay ninguna— eso no le dice nada. Con la primera
+  // lectura del GPS se centra UNA vez donde está, a zoom de barrio.
+  //
+  // No sirve el encuadre de arriba: ese necesita paradas. Y tampoco el modo
+  // navegación, que además inclinaría y giraría el mapa — esto es una vista
+  // para mirar, no para manejar.
+  useEffect(() => {
+    const mapa = mapaRef.current;
+    if (!mapa || !mapaListo || !miUbicacion) return;
+    if (puntos.length > 0 || previa) return;
+    if (centradoEnMiRef.current || usuarioMovioRef.current || entroModoNavegacionRef.current) {
+      return;
+    }
+    centradoEnMiRef.current = true;
+    mapa.jumpTo({ center: [miUbicacion.lng, miUbicacion.lat], zoom: 15 });
+  }, [miUbicacion, puntos, previa, mapaListo]);
 
   // Modo navegación. Todo el movimiento pasa por easeTo, que desplaza, GIRA e
   // inclina en una sola animación — es exactamente lo que Leaflet no podía
@@ -637,8 +722,7 @@ export function RutaMapa({
         zoom: ZOOM_NAVEGACION,
         pitch: PITCH_NAVEGACION,
         bearing: rumbo ?? mapa.getBearing(),
-        // El punto baja al tercio inferior en la misma animación.
-        padding: paddingNavegacion(mapa),
+        padding: SIN_RELLENO,
         // Entrar es un movimiento anunciado; acomodarse a un camino nuevo tiene
         // que sentirse como un ajuste y no como si el mapa volviera a empezar.
         duration: entrando ? 1200 : 800,
@@ -657,10 +741,7 @@ export function RutaMapa({
     mapa.easeTo({
       center: centro,
       bearing: girar ? rumbo : actual,
-      // Se repite en cada movimiento: el alto del contenedor cambia al girar el
-      // teléfono o al aparecer la barra del navegador, y un padding calculado
-      // con el alto viejo deja el punto corrido.
-      padding: paddingNavegacion(mapa),
+      padding: SIN_RELLENO,
       duration: MS_DESPLAZAMIENTO,
       easing: (t) => t, // lineal: el GPS entrega posiciones a ritmo constante
       essential: true,
@@ -686,25 +767,52 @@ export function RutaMapa({
       })
         .setLngLat(centro)
         .addTo(mapa);
+      // Recién creado puede caer en un mapa alejado —la ruta del día encuadrada
+      // entera, antes de la primera lectura de GPS—: sin esto aparece enorme
+      // hasta que alguien toque el zoom.
+      ajustarEscalaMarcador(marcadorUbicacionRef.current, mapa.getZoom());
     } else {
       marcadorUbicacionRef.current.setLngLat(centro);
     }
 
-    // Sin rumbo se deja en 0: da igual hacia dónde apunte un disco, y de todas
-    // formas ni la flecha ni el haz se están dibujando.
-    marcadorUbicacionRef.current.setRotation(rumbo ?? 0);
+    // Con el mapa suelto va el haz, y lo orienta la brújula si la hay o el
+    // último rumbo conocido si no. Manejando va la flecha, que sigue al camino.
+    // Es UNA sola rotación —la del marcador entero— porque las dos figuras nunca
+    // se muestran juntas: dos direcciones sobre el mismo punto no se leen.
+    const rumboDelHaz = rumboBrujula ?? rumbo;
+    const conHaz = !siguiendo && rumboDelHaz != null;
+    const conFlecha = siguiendo && rumbo != null;
 
-    // El disco está siempre; lo que aparece con el rumbo es la flecha de
-    // adentro y el haz.
+    // Sin ninguna de las dos se deja en 0: da igual hacia dónde apunte un disco.
+    marcadorUbicacionRef.current.setRotation((conHaz ? rumboDelHaz : rumbo) ?? 0);
+
     const el = marcadorUbicacionRef.current.getElement();
     const mostrar = (selector: string, visible: boolean) => {
       const g = el.querySelector<SVGGElement>(selector);
       if (g) g.style.opacity = visible ? "1" : "0";
     };
-    const conRumbo = rumbo != null;
-    mostrar("[data-cono]", conRumbo);
-    mostrar("[data-flecha]", conRumbo);
-  }, [miUbicacion, rumbo, mapaListo]);
+    mostrar("[data-cono]", conHaz);
+    mostrar("[data-flecha]", conFlecha);
+  }, [miUbicacion, rumbo, rumboBrujula, siguiendo, mapaListo]);
+
+  // El zoom lo cambian los dedos del chofer y las animaciones de cámara, sin
+  // pasar nunca por React: el tamaño del punto hay que ajustarlo escuchando al
+  // mapa. "zoom" se dispara en cada cuadro del pellizco, así que el punto
+  // acompaña el gesto en vez de saltar al soltar.
+  useEffect(() => {
+    const mapa = mapaRef.current;
+    if (!mapa || !mapaListo) return;
+
+    const alCambiarZoom = () => {
+      const marcador = marcadorUbicacionRef.current;
+      if (marcador) ajustarEscalaMarcador(marcador, mapa.getZoom());
+    };
+
+    mapa.on("zoom", alCambiarZoom);
+    return () => {
+      mapa.off("zoom", alCambiarZoom);
+    };
+  }, [mapaListo]);
 
   const mensajeError = !TOKEN
     ? "Falta configurar el token de Mapbox. Avisa al administrador."

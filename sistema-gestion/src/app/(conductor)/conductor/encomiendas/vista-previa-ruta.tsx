@@ -66,7 +66,12 @@ export function VistaPreviaRuta({
     // avisos podía empujar los botones fuera de la pantalla. Lo único que cede
     // espacio es la lista de paradas (min-h-0 flex-1); el resumen y los botones
     // están siempre a la vista.
-    <div className="flex max-h-[85vh] flex-col rounded-t-2xl bg-white px-4 pb-5 pt-4 shadow-[0_-4px_20px_rgba(0,0,0,0.18)]">
+    //
+    // La mitad de la pantalla, no el 85%: este panel se abre sobre la jornada,
+    // donde el mapa que dibuja la ruta propuesta es una tarjeta que queda ARRIBA
+    // (ver pantalla.tsx). Con el tope viejo el panel la tapaba entera, así que
+    // se veían los kilómetros y el tiempo de una ruta que no se podía mirar.
+    <div className="flex max-h-[52vh] flex-col rounded-t-2xl bg-white px-4 pb-5 pt-4 shadow-[0_-4px_20px_rgba(0,0,0,0.18)]">
       <div className="flex shrink-0 items-center gap-2">
         <Route className="h-4 w-4 shrink-0 text-brand" />
         <p className="flex-1 text-sm font-semibold">Ruta propuesta</p>
@@ -91,7 +96,7 @@ export function VistaPreviaRuta({
 
       {/* El orden es lo que el chofer viene a revisar: se puede desplazar, pero
           sin comerse la pantalla — el mapa de atrás también es parte de esto. */}
-      <ol className="mt-3 min-h-0 max-h-[26vh] flex-1 overflow-y-auto rounded-2xl bg-background">
+      <ol className="mt-3 min-h-0 max-h-[17vh] flex-1 overflow-y-auto rounded-2xl bg-background">
         {paradas.map((p, i) => (
           <li
             key={p.id}

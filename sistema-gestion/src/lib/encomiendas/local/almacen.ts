@@ -135,6 +135,16 @@ export type EventoCola = {
   /** ISO. Cuándo ocurrió de verdad, que puede ser mucho antes de poder
    *  enviarlo. */
   hora: string;
+  /** ISO. Hasta esa hora el evento NO sale, aunque haya señal: es la ventana en
+   *  la que el chofer puede deshacer lo que acaba de marcar (ver
+   *  deshacerEntrega).
+   *
+   *  Se retiene en la cola y no en la pantalla porque un evento que solo existe
+   *  en memoria se pierde si el teléfono se bloquea o se cierra la app en esos
+   *  segundos: la parada quedaría cerrada en el teléfono y el servidor no se
+   *  enteraría nunca. Acá, en cambio, la próxima apertura lo encuentra vencido y
+   *  lo manda. */
+  retenidoHasta?: string;
 };
 
 // ----------------------------------------------------------------------------
@@ -407,7 +417,11 @@ export function marcarLlamada(
 export function marcarEntrega(
   { fecha, pedidoId, choferId }: Marca,
   resultado: Exclude<EstadoEntregaLocal, "pendiente">,
-): Promise<void> {
+  /** Milisegundos que el evento queda retenido en la cola antes de poder
+   *  salir: la ventana en la que el chofer puede deshacer (ver leerCola). 0 lo
+   *  deja listo para el próximo envío. */
+  retenerMs = 0,
+): Promise<string | null> {
   return enFila(async () => {
     const [ruta, pedido] = await Promise.all([
       leerRuta(fecha),
@@ -425,7 +439,7 @@ export function marcarEntrega(
     // corren sin que se meta otra marca en el medio; eso lo garantiza enFila
     // (ver su comentario). Sin la fila, dos toques simultáneos leían los dos
     // "pendiente" y pasaban los dos.
-    if (parada.entrega !== "pendiente") return;
+    if (parada.entrega !== "pendiente") return null;
 
     const hora = new Date().toISOString();
     const actualizada: RutaLocal = {
@@ -437,14 +451,89 @@ export function marcarEntrega(
     const pedidoActualizado: PedidoLocal =
       resultado === "entregado" ? { ...pedido, estado: "entregado" } : pedido;
 
+    const registro: EventoCola = {
+      ...evento(choferId, fecha, resultado === "entregado" ? "entrega" : "omision", hora),
+      ...(retenerMs > 0
+        ? { retenidoHasta: new Date(Date.now() + retenerMs).toISOString() }
+        : {}),
+    };
+
     await escribir([STORES.rutas, STORES.pedidos, STORES.cola], ({ guardar }) => {
       guardar(STORES.rutas, actualizada);
       guardar(STORES.pedidos, pedidoActualizado);
-      guardar(
-        STORES.cola,
-        evento(choferId, fecha, resultado === "entregado" ? "entrega" : "omision", hora),
-      );
+      guardar(STORES.cola, registro);
     });
+
+    return registro.id;
+  });
+}
+
+/** Reabre una parada que se acaba de cerrar: la devuelve a pendiente, borra su
+ *  evento de la cola y reabre la jornada si ese cierre había sido el último.
+ *
+ *  Solo tiene sentido dentro de la ventana de retención (ver marcarEntrega):
+ *  pasada esa ventana el evento ya salió al servidor, y ahí borrarlo del
+ *  teléfono dejaría las dos partes contando cosas distintas. Por eso se comprueba
+ *  que el evento SIGA en la cola; si no está, no se toca nada. */
+export function deshacerEntrega(
+  { fecha, pedidoId }: { fecha: string; pedidoId: string },
+  eventoId: string,
+): Promise<boolean> {
+  return enFila(async () => {
+    const [ruta, pedido, enCola] = await Promise.all([
+      leerRuta(fecha),
+      leerUno<PedidoLocal>(STORES.pedidos, pedidoId),
+      leerUno<EventoCola>(STORES.cola, eventoId),
+    ]);
+    if (!ruta || !pedido || !enCola) return false;
+
+    const reabierta: RutaLocal = {
+      ...ruta,
+      paradas: ruta.paradas.map((p) =>
+        p.pedidoId === pedidoId ? { ...p, entrega: "pendiente", horaEntrega: null } : p,
+      ),
+      // Si esta era la última parada, marcarla cerró la jornada (ver la pantalla
+      // del chofer). Al reabrirla, el día vuelve a estar en curso: sin esto el
+      // servidor valoraría una jornada que todavía tiene una entrega por hacer.
+      cerradaEn: null,
+    };
+
+    await escribir([STORES.rutas, STORES.pedidos, STORES.cola], ({ guardar, borrar }) => {
+      guardar(STORES.rutas, reabierta);
+      guardar(STORES.pedidos, { ...pedido, estado: "pendiente" });
+      borrar(STORES.cola, eventoId);
+    });
+
+    return true;
+  });
+}
+
+/** Manda una parada al final del recorrido, sin cerrarla. Es lo que pasa cuando
+ *  el destinatario no contesta y el chofer decide reintentar al terminar: la
+ *  parada sigue pendiente, solo cambia de lugar en la fila.
+ *
+ *  No toca el trazado: la línea gris del día queda dibujada en el orden viejo
+ *  hasta que se rehaga la ruta. La que importa manejando —la azul, hasta la
+ *  parada activa— se recalcula sola contra la posición del chofer. */
+export function moverAlFinal({
+  fecha,
+  pedidoId,
+}: {
+  fecha: string;
+  pedidoId: string;
+}): Promise<void> {
+  return enFila(async () => {
+    const ruta = await leerRuta(fecha);
+    if (!ruta) throw new Error("No hay una ruta para ese día.");
+    const parada = ruta.paradas.find((p) => p.pedidoId === pedidoId);
+    if (!parada) throw new Error("Ese pedido no está en la ruta del día.");
+
+    const actualizada: RutaLocal = {
+      ...ruta,
+      paradas: [...ruta.paradas.filter((p) => p.pedidoId !== pedidoId), parada],
+    };
+
+    await escribir([STORES.rutas], ({ guardar }) => guardar(STORES.rutas, actualizada));
   });
 }
 
@@ -454,9 +543,18 @@ export function marcarEntrega(
 
 export async function leerCola(): Promise<EventoCola[]> {
   const eventos = await leerTodos<EventoCola>(STORES.cola);
-  // Más viejos primero: si algo se cae a mitad de un envío grande, lo que se
-  // fue es lo más antiguo y la cola queda coherente.
-  return eventos.sort((a, b) => a.hora.localeCompare(b.hora));
+  const ahora = new Date().toISOString();
+  return (
+    eventos
+      // Lo retenido no está listo para salir: es lo que el chofer todavía puede
+      // deshacer. Se filtra acá, en la única puerta de la cola, para que ni el
+      // envío ni el contador de "sin enviar" tengan que saber que existe una
+      // ventana de arrepentimiento.
+      .filter((e) => !e.retenidoHasta || e.retenidoHasta <= ahora)
+      // Más viejos primero: si algo se cae a mitad de un envío grande, lo que se
+      // fue es lo más antiguo y la cola queda coherente.
+      .sort((a, b) => a.hora.localeCompare(b.hora))
+  );
 }
 
 /** Se llama SOLO después de que el servidor confirmó el insert. */

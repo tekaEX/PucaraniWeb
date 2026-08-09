@@ -10,7 +10,7 @@
 // la pantalla la muestra dibujada en el mapa para que el chofer la acepte. Antes
 // se guardaba de una y la ruta le cambiaba abajo de los pies.
 
-import { useEffect, useRef, useState } from "react";
+import { useState } from "react";
 import { RefreshCw, ChevronDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { DireccionInput } from "@/components/ui/direccion-input";
@@ -27,16 +27,15 @@ type Opcion = "empresa" | "gps" | "direccion";
 // por eso queda plegado detrás de una línea discreta y lo que se ve siempre es
 // una sola acción clara.
 const OPCIONES: { valor: Opcion; corto: string; largo: string }[] = [
-  { valor: "empresa", corto: "Empresa", largo: "Dirección de la empresa" },
-  { valor: "gps", corto: "Mi ubicación", largo: "Mi ubicación actual" },
-  { valor: "direccion", corto: "Otra", largo: "Otra dirección" },
+  { valor: "gps", corto: "Mi ubicación", largo: "mi ubicación" },
+  { valor: "empresa", corto: "Empresa", largo: "la dirección de la empresa" },
+  { valor: "direccion", corto: "Otra", largo: "otra dirección" },
 ];
 
 export function GenerarRutaLocal({
   fecha,
   direccionEmpresa,
   regenerar = false,
-  autoGenerar = false,
   onPropuesta,
 }: {
   fecha: string;
@@ -44,14 +43,14 @@ export function GenerarRutaLocal({
    *  página desde la base y lo pasa acá. */
   direccionEmpresa: string | null;
   regenerar?: boolean;
-  /** Calcula la ruta sola, una vez, al abrir la vista. Solo se pasa cuando NO
-   *  hay ruta todavía y hay pedidos pendientes: así el chofer se la encuentra
-   *  propuesta sin apretar nada, pero nunca se le reordenan las paradas de una
-   *  ruta que ya empezó. */
-  autoGenerar?: boolean;
   onPropuesta: (propuesta: PropuestaRuta) => void;
 }) {
-  const [opcion, setOpcion] = useState<Opcion>("empresa");
+  // Desde DONDE arranca la ruta. Por defecto, desde donde está parado el chofer:
+  // la ruta se arma en el momento de salir, y salvo que se esté en el galpón, la
+  // dirección de la empresa manda la primera parada al otro lado de la ciudad.
+  // Antes el valor de arranque era "empresa" y había que acordarse de abrir el
+  // desplegable para corregirlo en cada jornada.
+  const [opcion, setOpcion] = useState<Opcion>("gps");
   const [mostrarOpciones, setMostrarOpciones] = useState(false);
   const [direccion, setDireccion] = useState("");
   // Coordenadas de la dirección elegida de la lista de sugerencias: con esto la
@@ -64,8 +63,6 @@ export function GenerarRutaLocal({
   const [armando, setArmando] = useState(false);
   const [obteniendoUbicacion, setObteniendoUbicacion] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const autoDisparadoRef = useRef(false);
-
   async function disparar(puntoInicio: PuntoInicio) {
     setError(null);
     setArmando(true);
@@ -78,21 +75,11 @@ export function GenerarRutaLocal({
     }
   }
 
-  // El ref hace dos cosas: evita reintentar en bucle si la generación
-  // automática falla (se muestra el error y queda en manos del chofer), y
-  // permite que "onPropuesta" esté en las dependencias sin que un re-render de
-  // la pantalla contenedora vuelva a armar la ruta.
-  useEffect(() => {
-    if (!autoGenerar || autoDisparadoRef.current) return;
-    autoDisparadoRef.current = true;
-    setArmando(true);
-    calcularRutaLocal(fecha, { tipo: "empresa", direccion: direccionEmpresa })
-      .then((res) => onPropuesta(res))
-      .catch((e: unknown) =>
-        setError(e instanceof Error ? e.message : "No se pudo armar la ruta."),
-      )
-      .finally(() => setArmando(false));
-  }, [autoGenerar, fecha, direccionEmpresa, onPropuesta]);
+  // Acá había una generación automática al abrir la pantalla sin ruta, que
+  // armaba siempre desde la dirección de la empresa. Se fue: ahora el punto de
+  // partida por defecto es la ubicación del chofer, y una ruta que se calcula
+  // sola no puede pedir permiso de GPS sin que nadie lo haya pedido. El botón de
+  // armar está a la vista en la cabecera de la hoja, que es un toque.
 
   function onClick() {
     setError(null);
