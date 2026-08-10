@@ -549,9 +549,13 @@ export async function guardarReglaPago(
   return { ok: true };
 }
 
-/** Anota lo que Starken liquidó de verdad en un mes (0029).
+/** Anota lo que Starken liquidó de verdad en un PERIODO de facturación (0035).
  *
- *  Reemplaza si ese mes ya estaba cargado: la liquidación puede llegar
+ *  Va por periodo y no por mes porque la liquidación llega por corte, y un corte
+ *  puede cruzar dos meses: imputarla a uno obligaba a repartirla a ojo, y era
+ *  justo esa cifra la que se usa para calibrar el valor por entrega.
+ *
+ *  Reemplaza si ese periodo ya estaba cargado: la liquidación puede llegar
  *  corregida, o cargarse primero un adelanto y después el total. */
 export async function guardarIngresoReal(
   _prev: FormState,
@@ -561,21 +565,135 @@ export async function guardarIngresoReal(
     return { error: "No tienes permiso para cargar ingresos." };
   }
 
-  const anio = intNull(formData.get("anio"));
-  const mes = intNull(formData.get("mes"));
-  if (anio == null || anio < 2000 || anio > 2100) return { error: "El año no es válido." };
-  if (mes == null || mes < 1 || mes > 12) return { error: "El mes no es válido." };
+  const periodo_id = s(formData.get("periodo_id"));
+  if (!periodo_id) {
+    return { error: "Elige a qué periodo de facturación corresponde lo que entró." };
+  }
 
   const monto = intNull(formData.get("monto"));
   if (monto == null || monto < 0) {
-    return { error: "Pon cuánto entró de verdad ese mes." };
+    return { error: "Pon cuánto entró de verdad en ese periodo." };
   }
 
   const supabase = await createClient();
   const { error } = await supabase
     .from("encomienda_ingresos_reales")
-    .upsert({ anio, mes, monto, nota: s(formData.get("nota")) }, { onConflict: "anio,mes" });
+    .upsert(
+      { periodo_id, monto, nota: s(formData.get("nota")), anio: null, mes: null },
+      { onConflict: "periodo_id" },
+    );
   if (error) return { error: `No se pudo guardar: ${error.message}` };
+
+  revalidatePath("/encomiendas");
+  return { ok: true };
+}
+
+/** Borra la liquidación cargada de un periodo. Es la salida para dos casos: se
+ *  cargó en el periodo equivocado, o hay que borrar el periodo y la base no deja
+ *  mientras tenga una liquidación colgando (0035). */
+export async function eliminarIngresoReal(periodoId: string): Promise<FormState> {
+  if (!(await esAdminUOperador())) {
+    return { error: "No tienes permiso para borrar ingresos." };
+  }
+
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("encomienda_ingresos_reales")
+    .delete()
+    .eq("periodo_id", periodoId);
+  if (error) return { error: `No se pudo borrar el ingreso: ${error.message}` };
+
+  revalidatePath("/encomiendas");
+  return { ok: true };
+}
+
+// ----------------------------------------------------------------------------
+// Periodos de facturación (0034)
+//
+// De qué fecha a qué fecha va cada corte. No llevan nombre: se llaman por sus
+// fechas, y por eso acá no hay ningún campo de texto que validar.
+//
+// Una sola acción para crear y para editar, decidida por si viene `id`. Es el
+// mismo formulario en la pantalla —se elige un periodo del desplegable o se
+// deja en "Nuevo"— y partirlas en dos duplicaría la validación de fechas, que
+// es todo lo que hacen.
+// ----------------------------------------------------------------------------
+
+const FECHA = /^\d{4}-\d{2}-\d{2}$/;
+
+/** Crea un periodo, o mueve las fechas de uno que ya existe.
+ *
+ *  Que dos periodos no se pisen NO se comprueba acá: lo rechaza la base con la
+ *  restricción de exclusión de la 0034. Comprobarlo en este código sería una
+ *  segunda opinión que puede quedar desactualizada, y además no cubre dos
+ *  pestañas guardando a la vez. Lo que sí hace esta función es traducir ese
+ *  rechazo a una frase que se entienda. */
+export async function guardarPeriodoFacturacion(
+  _prev: FormState,
+  formData: FormData,
+): Promise<FormState> {
+  if (!(await esAdminUOperador())) {
+    return { error: "No tienes permiso para definir periodos de facturación." };
+  }
+
+  const id = s(formData.get("id"));
+  const fecha_inicio = sReq(formData.get("fecha_inicio"));
+  const fecha_fin = sReq(formData.get("fecha_fin"));
+
+  if (!FECHA.test(fecha_inicio)) return { error: "Pon la fecha de inicio del periodo." };
+  if (!FECHA.test(fecha_fin)) return { error: "Pon la fecha de término del periodo." };
+  // Comparar strings YYYY-MM-DD es comparar fechas, y no arrastra la zona
+  // horaria del servidor a una decisión que es de calendario.
+  if (fecha_fin < fecha_inicio) {
+    return { error: "El periodo termina antes de empezar: revisa las fechas." };
+  }
+
+  const supabase = await createClient();
+  const campos = { fecha_inicio, fecha_fin };
+  const { error } = id
+    ? await supabase.from("encomienda_periodos_facturacion").update(campos).eq("id", id)
+    : await supabase.from("encomienda_periodos_facturacion").insert(campos);
+
+  if (error) {
+    // 23P01 = exclusion_violation: el rango pisa a otro periodo ya cargado. El
+    // mensaje de Postgres nombra la restricción y no dice nada de fechas.
+    if (error.code === "23P01") {
+      return {
+        error:
+          "Esas fechas se cruzan con otro periodo ya definido. Los periodos no se pueden solapar: un día pertenece a un corte o a ninguno.",
+      };
+    }
+    return { error: `No se pudo guardar el periodo: ${error.message}` };
+  }
+
+  revalidatePath("/encomiendas");
+  return { ok: true };
+}
+
+/** Borra un periodo. No toca ningún día ni ninguna cifra: un periodo es solo el
+ *  corte con el que se leen: sacarlo deja esos días sin agrupar, nada más. */
+export async function eliminarPeriodoFacturacion(id: string): Promise<FormState> {
+  if (!(await esAdminUOperador())) {
+    return { error: "No tienes permiso para borrar periodos de facturación." };
+  }
+
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("encomienda_periodos_facturacion")
+    .delete()
+    .eq("id", id);
+  if (error) {
+    // 23503 = foreign_key_violation: el periodo tiene cargado lo que se facturó
+    // de verdad, y eso vino de una liquidación que la app no puede reconstruir.
+    // La base lo frena (0035, on delete restrict); acá se dice por dónde salir.
+    if (error.code === "23503") {
+      return {
+        error:
+          "Este periodo tiene cargado un ingreso real. Bórralo primero en “Comparar ingresos” y después el periodo.",
+      };
+    }
+    return { error: `No se pudo borrar el periodo: ${error.message}` };
+  }
 
   revalidatePath("/encomiendas");
   return { ok: true };

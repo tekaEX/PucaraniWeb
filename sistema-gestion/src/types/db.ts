@@ -576,13 +576,24 @@ export interface EncomiendaReglaPago {
   updated_at: string;
 }
 
-/** Lo que Starken liquidó DE VERDAD en un mes (0029). Se contrasta contra el
- *  ingreso estimado para saber si valor_pedido está bien calibrado. */
+/** Lo que Starken liquidó DE VERDAD (0029). Se contrasta contra el ingreso
+ *  estimado del mismo rango para saber si valor_pedido está bien calibrado.
+ *
+ *  Una fila se imputa a un PERIODO de facturación o a un mes, nunca a los dos
+ *  (0035): lo que se carga hoy va por periodo —así es como llega la liquidación—
+ *  y las filas anteriores a la 0035 quedaron por (anio, mes) y se conservan como
+ *  historial de solo lectura. La base garantiza que sea exactamente una de las
+ *  dos cosas. */
 export interface EncomiendaIngresoReal {
   id: string;
   empresa_id: string;
-  anio: number;
-  mes: number;
+  /** El corte al que pertenece esta liquidación. null solo en las filas viejas,
+   *  cargadas por mes antes de que existieran los periodos. */
+  periodo_id: string | null;
+  /** null cuando la fila va por periodo. */
+  anio: number | null;
+  /** null cuando la fila va por periodo. */
+  mes: number | null;
   monto: number;
   /** De dónde salió el número: nº de liquidación, si es parcial, etc. */
   nota: string | null;
@@ -646,4 +657,25 @@ export interface EncomiendaPago {
   regla_monto_dia: number | null;
   regla_meta_entregas_dia: number | null;
   regla_bono_monto: number | null;
+}
+
+/** Un corte de facturación: de qué fecha a qué fecha (0034).
+ *
+ *  Es distinto del periodo global de la app (lib/periodo.ts), que es un mes del
+ *  calendario y vive en una cookie. Este lo dicta quien factura y puede empezar
+ *  y terminar cualquier día.
+ *
+ *  No tiene nombre —se llama por sus fechas— ni color guardado: el color con el
+ *  que se pinta sale de su posición en la lista, ver lib/encomiendas/periodos.ts.
+ *  Dentro de una misma empresa dos periodos no pueden solaparse, y eso lo
+ *  garantiza una restricción de exclusión en la base. */
+export interface EncomiendaPeriodoFacturacion {
+  id: string;
+  empresa_id: string;
+  /** Inclusive: el día `fecha_inicio` es parte del periodo. */
+  fecha_inicio: string;
+  /** Inclusive también: el día `fecha_fin` es el último del periodo. */
+  fecha_fin: string;
+  created_at: string;
+  updated_at: string;
 }

@@ -16,7 +16,9 @@ export const metadata: Metadata = {
     statusBarStyle: "black-translucent",
   },
   icons: {
-    apple: "/logo.png",
+    // Cuadrado de 180×180 con el isotipo sobre azul de marca (iOS le pone las
+    // esquinas redondeadas solo). Se genera con scripts/generar-iconos.mjs.
+    apple: "/apple-icon.png",
   },
 };
 
@@ -25,6 +27,7 @@ export const viewport: Viewport = {
   initialScale: 1,
   maximumScale: 1,
   userScalable: false,
+  themeColor: "#0c3f9b",
 };
 
 export default async function ConductorLayout({ children }: { children: React.ReactNode }) {

@@ -7,8 +7,8 @@ import { Kpi } from "@/components/ui/kpi";
 import { Vacio } from "@/components/ui/vacio";
 import { ErrorDatos } from "@/components/ui/error-datos";
 import { buttonClass } from "@/components/ui/button";
-import { Package, CalendarRange, Truck, Wallet, CircleDollarSign } from "lucide-react";
-import { formatCLP, formatDate, formatNumber, formatTime, hoyChile } from "@/lib/format";
+import { Package, CalendarRange, Truck, Wallet, CircleDollarSign, Pencil } from "lucide-react";
+import { formatCLP, formatDate, formatNumber, formatTime, hoyChile, sumarDias } from "@/lib/format";
 import { getPeriodo, rangoPeriodo, etiquetaPeriodo } from "@/lib/periodo";
 import {
   agruparPorDia,
@@ -17,15 +17,24 @@ import {
   type ConteoDia,
   type EventoActividad,
 } from "@/lib/encomiendas/pago";
+import {
+  aPeriodo,
+  colorPeriodo,
+  indicePeriodoDe,
+  periodosEnRango,
+  type ResumenPeriodo,
+} from "@/lib/encomiendas/periodos";
 import type {
   EncomiendaIngresoReal,
   EncomiendaJornada,
   EncomiendaPago,
+  EncomiendaPeriodoFacturacion,
   EncomiendaReglaPago,
 } from "@/types/db";
 import { AgregarDia, type ChoferOpcion } from "./agregar-dia";
 import { ReglaPago } from "./regla-pago";
 import { CompararIngresos } from "./comparar-ingresos";
+import { GraficoDias } from "./grafico-dias";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Encomiendas" };
@@ -76,6 +85,33 @@ export default async function EncomiendasPage() {
 
   const supabase = await createClient();
 
+  // Los cortes de facturación (0034). Van primero y solos porque de ellos sale
+  // el rango de la consulta de abajo: un periodo puede empezar en abril y
+  // terminar en mayo, y para decir cuánto facturó hay que mirar sus días, no
+  // los del mes que se está viendo.
+  //
+  // Se piden TODOS: la tabla es de unas pocas filas al año y el orden completo
+  // es lo que fija el color de cada periodo. Filtrar por el mes en pantalla
+  // haría que un mismo corte cambiara de color según desde dónde se lo mira.
+  const { data: periodosData, error: errorPeriodos } = await supabase
+    .from("encomienda_periodos_facturacion")
+    .select("*")
+    .order("fecha_inicio")
+    .returns<EncomiendaPeriodoFacturacion[]>();
+
+  const periodos = (periodosData ?? []).map(aPeriodo);
+  // El rango que cubren TODOS los cortes. De ahí sale la consulta de sus cifras:
+  // el diálogo de comparar ingresos ofrece cualquier periodo, no solo los del
+  // mes en pantalla —una liquidación puede llegar con dos cortes de atraso— y
+  // cada uno tiene que traer su estimado ya calculado. Van ordenados por fecha,
+  // así que los extremos son el primero y el último.
+  const spanPeriodos = periodos.length
+    ? {
+        desde: periodos[0].fecha_inicio,
+        hasta: periodos.reduce((a, p) => (p.fecha_fin > a ? p.fecha_fin : a), periodos[0].fecha_fin),
+      }
+    : null;
+
   // Una fila por acción en terreno (ver 0026). Se agrupan por (conductor, día)
   // acá abajo: cada grupo que existe es, por definición, un día trabajado — un
   // día en que nadie salió no tiene filas y simplemente no aparece.
@@ -86,6 +122,7 @@ export default async function EncomiendasPage() {
     { data: jornadasData, error: errorJornadas },
     { data: choferesData, error: errorChoferes },
     { data: ingresosRealesData, error: errorIngresosReales },
+    { data: pagosPeriodosData },
   ] = await Promise.all([
     supabase
       .from("encomienda_actividad")
@@ -115,16 +152,33 @@ export default async function EncomiendasPage() {
       .select("chofer:choferes(id, nombre, activo)")
       .eq("categoria", "encomiendas")
       .returns<{ chofer: { id: string; nombre: string; activo: boolean } | null }[]>(),
-    // Lo que Starken liquidó de verdad (0029). Va por mes, no por fecha, así
-    // que se filtra por año y —en vista de mes— por ese mes.
-    (periodo.mes === null
-      ? supabase.from("encomienda_ingresos_reales").select("*").eq("anio", periodo.anio)
-      : supabase
-          .from("encomienda_ingresos_reales")
-          .select("*")
-          .eq("anio", periodo.anio)
-          .eq("mes", periodo.mes)
-    ).returns<EncomiendaIngresoReal[]>(),
+    // Lo que Starken liquidó de verdad. Se piden TODAS las filas y no las del
+    // mes: desde la 0035 se imputan a un periodo de facturación, no a un mes, así
+    // que no hay por dónde filtrarlas por el periodo global — y son unas pocas
+    // por año. Las anteriores a la 0035 vienen en el mismo lote con su (año, mes)
+    // y se muestran aparte, como historial.
+    supabase
+      .from("encomienda_ingresos_reales")
+      .select("*")
+      .order("created_at")
+      .returns<EncomiendaIngresoReal[]>(),
+    // Las cifras de los días que cubren los periodos, que NO son las del mes en
+    // pantalla: un corte del 25 de abril al 10 de mayo se factura entero, y
+    // sumarle solo los días de mayo diría poco menos de la mitad. Sin periodos
+    // definidos no hay nada que sumar y no se consulta.
+    spanPeriodos
+      ? supabase
+          .from("encomienda_pagos")
+          .select("fecha, ingresos_totales, pedidos_entregados, pago_total")
+          .gte("fecha", spanPeriodos.desde)
+          .lte("fecha", spanPeriodos.hasta)
+          .returns<
+            Pick<
+              EncomiendaPago,
+              "fecha" | "ingresos_totales" | "pedidos_entregados" | "pago_total"
+            >[]
+          >()
+      : Promise.resolve({ data: [], error: null }),
   ]);
 
   // Las tres primeras consultas son la plata: la actividad son los días
@@ -196,24 +250,29 @@ export default async function EncomiendasPage() {
   const diasSinCifras = dias.filter((d) => d.cifras == null && !enCurso(d)).length;
   const diasEnCurso = dias.filter(enCurso).length;
 
-  // Ingreso real del periodo: null si todavía no se cargó ninguno (distinto de
-  // cero, que sería "no entró nada").
-  const totalReal = ingresosReales.length > 0
-    ? ingresosReales.reduce((a, r) => a + r.monto, 0)
-    : null;
-  const difReal = (totalReal ?? 0) - totalIngresos;
   const valorVigente = valorPedido(regla);
 
   // Serie del gráfico, atada al mismo periodo: en vista de MES un palo por
   // cada día del mes (los días sin actividad quedan como huecos, que es justo
   // lo que conviene ver); en vista de AÑO, uno por mes.
+  //
+  // `periodoIdx` es el corte de facturación al que pertenece esa columna, o -1
+  // si no cae en ninguno: de ahí sale el color de la barra. En la vista de AÑO
+  // una columna es un mes entero, así que solo se tiñe cuando el mes completo
+  // cae dentro de un mismo corte — un mes partido entre dos periodos no tiene
+  // un color, y pintarlo de uno de los dos sería mentir.
   const serie =
     periodo.mes === null
       ? Array.from({ length: 12 }, (_, i) => {
-          const pref = `${periodo.anio}-${String(i + 1).padStart(2, "0")}`;
+          const mm = String(i + 1).padStart(2, "0");
+          const pref = `${periodo.anio}-${mm}`;
+          const ultimo = new Date(periodo.anio, i + 1, 0).getDate();
+          const idxPrimero = indicePeriodoDe(`${pref}-01`, periodos);
+          const idxUltimo = indicePeriodoDe(`${pref}-${ultimo}`, periodos);
           return {
             clave: pref,
             etiqueta: MES_CORTO[i],
+            periodoIdx: idxPrimero >= 0 && idxPrimero === idxUltimo ? idxPrimero : -1,
             pedidos: dias
               .filter((d) => d.fecha.startsWith(pref))
               .reduce((a, d) => a + d.conteo.entregados, 0),
@@ -225,12 +284,64 @@ export default async function EncomiendasPage() {
           return {
             clave: fecha,
             etiqueta: String(i + 1),
+            periodoIdx: indicePeriodoDe(fecha, periodos),
             pedidos: dias
               .filter((d) => d.fecha === fecha)
               .reduce((a, d) => a + d.conteo.entregados, 0),
           };
         });
-  const maxSerie = Math.max(1, ...serie.map((s) => s.pedidos));
+
+  // Lo que facturó cada corte. Sale de encomienda_pagos y no de `dias` porque un
+  // periodo puede desbordar el mes en pantalla por los dos lados: son las cifras
+  // congeladas de TODOS sus días, que es justo el número por el que existe la
+  // función. Se calcula para todos los periodos y no solo los visibles: el
+  // diálogo de comparar ingresos los ofrece todos, con su estimado.
+  const pagosPeriodos = pagosPeriodosData ?? [];
+  const resumenPeriodos: ResumenPeriodo[] = periodos.map((p, i) => {
+    const suyos = pagosPeriodos.filter((x) => x.fecha >= p.fecha_inicio && x.fecha <= p.fecha_fin);
+    const real = ingresosReales.find((r) => r.periodo_id === p.id) ?? null;
+    return {
+      ...p,
+      color: colorPeriodo(i),
+      dias: new Set(suyos.map((x) => x.fecha)).size,
+      entregados: suyos.reduce((a, x) => a + x.pedidos_entregados, 0),
+      ingresos: suyos.reduce((a, x) => a + x.ingresos_totales, 0),
+      pago: suyos.reduce((a, x) => a + x.pago_total, 0),
+      real: real?.monto ?? null,
+      notaReal: real?.nota ?? null,
+    };
+  });
+
+  // Los cortes que tocan el mes/año en pantalla: son los únicos que se pintan y
+  // se listan en el gráfico — uno de marzo no tiene nada que hacer en la vista de
+  // mayo. El diálogo de comparar ingresos sí ve todos.
+  const resumenVisibles = periodosEnRango(resumenPeriodos, desde, hasta);
+
+  // La comparación estimado/real ahora se hace por periodo (0035), así que el
+  // KPI no puede contrastar el mes contra "lo real del mes": ya no existe tal
+  // cosa. Contrasta los cortes que tocan el mes y tienen liquidación cargada
+  // contra el estimado DE ESOS MISMOS cortes — las dos cifras del mismo rango de
+  // días, aunque el rango se salga del mes.
+  const cerrados = resumenVisibles.filter((p) => p.real != null);
+  const realCerrados = cerrados.reduce((a, p) => a + (p.real ?? 0), 0);
+  const estimadoCerrados = cerrados.reduce((a, p) => a + p.ingresos, 0);
+  const difCerrados = realCerrados - estimadoCerrados;
+
+  // Las liquidaciones viejas, imputadas a un mes antes de que existieran los
+  // periodos. Van al diálogo como historial de solo lectura: siguen siendo plata
+  // que entró y esconderlas haría parecer que se perdieron.
+  const ingresosPorMes = ingresosReales.flatMap((r) =>
+    r.periodo_id == null && r.anio != null && r.mes != null
+      ? [{ id: r.id, anio: r.anio, mes: r.mes, monto: r.monto, nota: r.nota }]
+      : [],
+  );
+
+  // Con qué fecha arranca un corte nuevo: el día siguiente al último definido,
+  // para no dejar huecos sin querer. Sin ninguno todavía, el primer día del mes
+  // que se está mirando.
+  const sugerenciaInicio = periodos.length
+    ? sumarDias(periodos[periodos.length - 1].fecha_fin, 1)
+    : desde;
 
   // Resumen por conductor: con un solo repartidor es una fila, pero el
   // esquema ya soporta varios y la liquidación se paga por persona.
@@ -271,12 +382,13 @@ export default async function EncomiendasPage() {
             conductor en su teléfono y no pasan por la base (ver 0026). Uno
             cargado acá no le llegaría a nadie. */}
         <CompararIngresos
-          anio={periodo.anio}
-          mes={periodo.mes}
           ingresos={{
-            estimado: totalIngresos,
-            entregas: totalEntregados,
-            reales: ingresosReales,
+            periodos: resumenPeriodos,
+            // Viene elegido el último corte que toca el mes en pantalla: es el
+            // que se acaba de cerrar y del que llega la liquidación. Si el mes no
+            // toca ninguno, el diálogo cae en el último definido.
+            periodoInicial: resumenVisibles.at(-1)?.id ?? "",
+            porMes: ingresosPorMes,
             error: errorIngresosReales?.message ?? null,
           }}
         />
@@ -305,13 +417,19 @@ export default async function EncomiendasPage() {
           valueClass="text-ok"
           // Con lo real cargado, lo que importa deja de ser el estimado y pasa
           // a ser cuánto le erró: es el número con el que se calibra el valor
-          // por entrega.
+          // por entrega. Se compara por periodo cerrado y no contra el mes: es
+          // por corte que llega la liquidación (0035), y se dice cuántos son
+          // para que no se lea como si cubriera el mes completo.
           sub={
-            totalReal != null
-              ? `reales ${formatCLP(totalReal)} · ${difReal >= 0 ? "+" : "−"}${formatCLP(Math.abs(difReal))}`
-              : `a ${formatCLP(valorVigente)} por entrega · carga los reales para comparar`
+            cerrados.length > 0
+              ? `${cerrados.length} periodo${cerrados.length === 1 ? "" : "s"} cerrado${cerrados.length === 1 ? "" : "s"}: real ${formatCLP(realCerrados)} · ${difCerrados >= 0 ? "+" : "−"}${formatCLP(Math.abs(difCerrados))}`
+              : periodos.length === 0
+                ? `a ${formatCLP(valorVigente)} por entrega · define periodos para comparar con lo real`
+                : `a ${formatCLP(valorVigente)} por entrega · carga lo real de un periodo para comparar`
           }
-          subClass={totalReal == null ? "text-muted" : difReal >= 0 ? "text-ok" : "text-danger"}
+          subClass={
+            cerrados.length === 0 ? "text-muted" : difCerrados >= 0 ? "text-ok" : "text-danger"
+          }
           icon={CircleDollarSign}
           tint="bg-ok-bg text-ok"
         />
@@ -353,46 +471,19 @@ export default async function EncomiendasPage() {
       </div>
 
       <div className="mt-4">
-        <Card>
-          <CardHeader>
-            <CardTitle>Pedidos entregados por día</CardTitle>
-            <span className="text-xs text-muted">{etiquetaPeriodo(periodo)}</span>
-          </CardHeader>
-          <CardBody>
-            {totalEntregados === 0 ? (
-              <Vacio
-                titulo="Todavía no hay entregas registradas en este periodo."
-                icono={<Package className="h-7 w-7" />}
-              />
-            ) : (
-              <div className="flex items-end gap-1 sm:gap-1.5">
-                {serie.map((s) => (
-                  <div key={s.clave} className="flex flex-1 flex-col items-center gap-1.5">
-                    <div className="flex h-32 w-full items-end justify-center">
-                      <div
-                        title={`${s.etiqueta}: ${formatNumber(s.pedidos)} entrega(s)`}
-                        className={`w-full rounded-t-[3px] ${s.pedidos > 0 ? "bg-brand" : "bg-border/40"}`}
-                        // Un día con entregas nunca puede verse como uno sin
-                        // salir: con un pico de 60, un día de 1 entrega daba
-                        // 2% — exactamente el mismo hilo que se pinta para el
-                        // domingo. El piso de los días con actividad es 10%.
-                        style={{
-                          height:
-                            s.pedidos > 0
-                              ? `${Math.max(10, Math.round((s.pedidos / maxSerie) * 100))}%`
-                              : "2%",
-                        }}
-                      />
-                    </div>
-                    <span className="text-[9px] leading-none text-muted sm:text-[10px]">
-                      {s.etiqueta}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            )}
-          </CardBody>
-        </Card>
+        <GraficoDias
+          etiqueta={etiquetaPeriodo(periodo)}
+          serie={serie}
+          totalEntregados={totalEntregados}
+          resumen={resumenVisibles}
+          periodos={periodos}
+          sugerenciaInicio={sugerenciaInicio}
+          errorPeriodos={errorPeriodos?.message ?? null}
+          // Arranca en la vista de periodos cuando hay alguno que tocar: es la
+          // que responde la pregunta por la que se definieron. Sin cortes en
+          // este mes, la de periodos pintaría todo gris y no diría nada.
+          modoInicial={resumenVisibles.length > 0 ? "periodos" : "mes"}
+        />
       </div>
 
       <div className="mt-4 grid gap-4 lg:grid-cols-[1fr_20rem]">
@@ -451,19 +542,22 @@ export default async function EncomiendasPage() {
                     <th className="px-4 py-2.5 text-right font-medium">Ingresos</th>
                     <th className="px-4 py-2.5 text-right font-medium">A pagar</th>
                     <th className="px-4 py-2.5 font-medium">Origen</th>
+                    <th className="px-4 py-2.5 font-medium">
+                      <span className="sr-only">Editar</span>
+                    </th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border">
                   {dias.map((d) => {
                     return (
                       <tr key={`${d.fecha}-${d.choferId ?? "sin"}`} className="hover:bg-background">
-                        <td className="whitespace-nowrap px-4 py-3">
-                          <Link
-                            href={`/encomiendas/dia?fecha=${d.fecha}`}
-                            className="font-medium hover:text-brand hover:underline"
-                          >
-                            {formatDate(d.fecha)}
-                          </Link>
+                        {/* La fecha ya no es un enlace: era el único acceso a
+                            la vista del día y no lo parecía —texto negro, sin
+                            ícono— así que la mitad de la tabla se veía como
+                            algo en lo que se puede hacer clic y no lo era.
+                            Ahora hay un botón que lo dice, al final de la fila. */}
+                        <td className="whitespace-nowrap px-4 py-3 font-medium">
+                          {formatDate(d.fecha)}
                         </td>
                         <td className="px-4 py-3 text-muted">{d.choferNombre}</td>
                         {/* De cuándo a cuándo salió la ruta. Reemplaza a la
@@ -525,6 +619,19 @@ export default async function EncomiendasPage() {
                           ) : (
                             <Badge tone="amber">Mixto</Badge>
                           )}
+                        </td>
+                        {/* Va a la misma vista a la que llevaba la fecha, que
+                            es donde se corrige un día: recalcularlo con otra
+                            tarifa o borrarle la carga manual. */}
+                        <td className="px-4 py-3">
+                          <Link
+                            href={`/encomiendas/dia?fecha=${d.fecha}`}
+                            title={`Editar el ${formatDate(d.fecha)}`}
+                            aria-label={`Editar el día ${formatDate(d.fecha)}`}
+                            className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-separator bg-white text-muted transition-colors hover:border-brand/40 hover:bg-brand-soft hover:text-brand"
+                          >
+                            <Pencil className="h-3.5 w-3.5" />
+                          </Link>
                         </td>
                       </tr>
                     );
