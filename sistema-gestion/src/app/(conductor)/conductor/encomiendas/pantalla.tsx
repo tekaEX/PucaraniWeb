@@ -87,8 +87,14 @@ function ayerDe(fecha: string): string {
 // manejando, con el pulgar y sin mirar mucho.
 const BOTON_PRINCIPAL =
   "flex h-12 w-full items-center justify-center gap-2 rounded-full bg-brand text-[15px] font-semibold text-brand-foreground shadow-[0_1px_2px_rgba(11,93,86,0.3)] transition-transform active:scale-[0.97] disabled:pointer-events-none disabled:opacity-50";
+// Los que van de a dos en una grilla. `min-w-0` no es decorativo: un elemento de
+// grilla tiene `min-width: auto`, así que el botón de texto más largo se
+// ensanchaba por encima de su columna y quedaba visiblemente más grande que el
+// de al lado, pisando el hueco. Con el mínimo en cero los dos miden exactamente
+// lo mismo, y sin `whitespace-nowrap` una etiqueta larga parte en dos renglones
+// en vez de desbordar la píldora.
 const BOTON_RESULTADO =
-  "flex h-12 items-center justify-center gap-1.5 whitespace-nowrap rounded-full text-sm font-semibold transition-transform active:scale-[0.97] disabled:pointer-events-none disabled:opacity-50";
+  "flex h-12 min-w-0 items-center justify-center gap-1.5 rounded-full px-2.5 text-center text-sm font-semibold leading-tight transition-transform active:scale-[0.97] disabled:pointer-events-none disabled:opacity-50";
 
 /** Con la última lectura más vieja que esto, el punto que se ve ya no es dónde
  *  está el chofer. */
@@ -548,17 +554,20 @@ export function PantallaEncomiendas({
         <p className="text-sm font-semibold">Hola, {nombreChofer.split(" ")[0]}</p>
         <p className="text-xs text-muted">
           {sinRutear.length === 0
-            ? "Todavía no cargaste pedidos para hoy."
+            ? "No hay pedidos cargados ni ruta generada."
             : sinRutear.length === 1
               ? "1 pedido cargado, sin ruta armada."
               : `${sinRutear.length} pedidos cargados, sin ruta armada.`}
         </p>
       </div>
+      {/* Sin nada cargado la cabecera NO lleva botón: "Agregar pedido" ya está
+          adentro de la hoja, al pie de la lista de pedidos, y tenerlo en los dos
+          lugares hacía dudar de si eran lo mismo. Queda el de abajo, que está
+          donde se ven los pedidos, y acá solo se dice qué falta y cómo llegar. */}
       {sinRutear.length === 0 ? (
-        <button type="button" onClick={() => setFormPedido("nuevo")} className={BOTON_PRINCIPAL}>
-          <Plus className="h-4 w-4" />
-          Agregar pedidos
-        </button>
+        <p className="rounded-2xl bg-background px-3.5 py-3 text-xs text-muted">
+          Desliza esta hoja hacia arriba para cargar los pedidos del día.
+        </p>
       ) : (
         <GenerarRutaLocal
           fecha={fecha}
@@ -646,7 +655,7 @@ export function PantallaEncomiendas({
               onClick={onDejarParaElFinal}
               className={cn(BOTON_RESULTADO, "border border-separator bg-card text-foreground")}
             >
-              Dejar para el final
+              Dejar al final
             </button>
             <button
               disabled={guardando}

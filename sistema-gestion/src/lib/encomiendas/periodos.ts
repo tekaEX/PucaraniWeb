@@ -17,25 +17,20 @@ export type PeriodoFacturacion = {
   fecha_fin: string;
 };
 
-// La paleta. Son siete tonos bien separados en tinte, no siete pasos de un
-// mismo azul: lo que se tiene que poder hacer de un vistazo es decir dónde
-// termina un periodo y empieza el siguiente, y para eso dos azules contiguos no
-// sirven. El azul de marca no está a propósito — es el color de las barras sin
-// periodo, y repetirlo haría que un día suelto pareciera parte de un corte.
-const PALETA = [
-  "#7b4bd8", // violeta
-  "#0f9d8f", // verde azulado
-  "#d9761f", // naranjo
-  "#3f7fd8", // azul claro
-  "#c0362c", // rojo
-  "#6c8f1f", // oliva
-  "#b23a86", // magenta
-] as const;
+// TODOS los periodos van del mismo color. Antes eran siete tonos rotando por la
+// lista, y un gráfico de siete colores se lee como siete categorías distintas
+// —como si un corte fuera de otra naturaleza que el siguiente— cuando son la
+// misma cosa repetida. Dónde termina uno y empieza el otro no lo dice el tinte:
+// lo dice la línea de corte, del mismo color pero más oscuro. Es un dato menos
+// que inventar y se ve más serio.
+//
+// El azul de marca no está a propósito: es el color de las barras en la vista de
+// mes, y repetirlo haría que un día suelto pareciera parte de un corte.
+export const COLOR_PERIODO = "#7b4bd8";
 
-/** El color de un periodo según su lugar en la lista ordenada. */
-export function colorPeriodo(indice: number): string {
-  return PALETA[indice % PALETA.length];
-}
+/** La línea que separa un periodo del siguiente: el mismo violeta bajado de
+ *  luminosidad. Tiene que leerse como "acá corta", no como otro color. */
+export const COLOR_CORTE_PERIODO = "#442977";
 
 /** Un periodo con lo que facturó. Las cifras salen de TODOS los días que cubre,
  *  incluidos los que caen fuera del mes que se esté mirando: un corte del 25 de
@@ -43,10 +38,9 @@ export function colorPeriodo(indice: number): string {
  *  poco menos de la mitad.
  *
  *  Es la forma en que el panel le pasa un periodo a las dos pantallas que lo
- *  muestran —el gráfico y el diálogo de comparar ingresos— y por eso trae ya
- *  resuelto el color: las dos tienen que pintar el mismo corte igual. */
+ *  muestran: el gráfico y el diálogo de comparar ingresos. Ya no trae el color
+ *  —todos los periodos usan COLOR_PERIODO— y quien pinte lo toma de ahí. */
 export type ResumenPeriodo = PeriodoFacturacion & {
-  color: string;
   /** Días con reparto registrado dentro del periodo. */
   dias: number;
   entregados: number;

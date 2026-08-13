@@ -1,0 +1,10 @@
+# Transportes Pucarani — https://transportespucarani.cl
+User-agent: *
+Allow: /
+
+# Herramientas internas: no deben aparecer en Google
+Disallow: /gestion/
+Disallow: /flujocaja/
+Disallow: /sistema-gestion/
+
+Sitemap: https://transportespucarani.cl/sitemap.xml

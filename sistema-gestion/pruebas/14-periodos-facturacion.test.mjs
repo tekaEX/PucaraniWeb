@@ -4,7 +4,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
-  colorPeriodo,
+  COLOR_CORTE_PERIODO,
+  COLOR_PERIODO,
   indicePeriodoDe,
   nombrePeriodo,
   nombrePeriodoCorto,
@@ -68,8 +69,20 @@ test("el nombre corto no se corre de día por la zona horaria", () => {
   );
 });
 
-test("dos periodos vecinos nunca comparten color", () => {
-  for (let i = 0; i < 30; i++) {
-    assert.notEqual(colorPeriodo(i), colorPeriodo(i + 1), `los periodos ${i} y ${i + 1} coinciden`);
-  }
+test("la línea de corte se distingue del color de los periodos", () => {
+  // Todos los periodos van del mismo color: lo que los separa es la línea, así
+  // que si los dos valores se acercaran hasta confundirse el gráfico dejaría de
+  // decir dónde termina un corte, sin que nada avise.
+  assert.notEqual(COLOR_CORTE_PERIODO, COLOR_PERIODO);
+  assert.ok(luminancia(COLOR_CORTE_PERIODO) < luminancia(COLOR_PERIODO) - 0.08, "la línea no es lo bastante más oscura que la barra");
 });
+
+/** Luminancia relativa (WCAG) de un "#rrggbb", para comparar qué tan oscuro es
+ *  un color contra otro sin depender del tinte. */
+function luminancia(hex) {
+  const canal = (i) => {
+    const v = parseInt(hex.slice(1 + i * 2, 3 + i * 2), 16) / 255;
+    return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4;
+  };
+  return 0.2126 * canal(0) + 0.7152 * canal(1) + 0.0722 * canal(2);
+}

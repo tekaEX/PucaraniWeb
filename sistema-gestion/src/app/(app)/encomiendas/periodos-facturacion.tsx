@@ -20,7 +20,7 @@ import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { Field } from "@/components/ui/label";
 import {
-  colorPeriodo,
+  COLOR_PERIODO,
   nombrePeriodo,
   type PeriodoFacturacion,
 } from "@/lib/encomiendas/periodos";
@@ -182,10 +182,9 @@ function Formulario({
       <div className="flex items-center gap-2.5 rounded-xl bg-white px-4 py-3 text-sm sm:col-span-2">
         <span
           className="h-3 w-3 shrink-0 rounded-full"
-          // Un periodo nuevo se va al final de la paleta porque se va a insertar
-          // al final de la lista. Si se está editando uno del medio, conserva su
-          // color: es el mismo que ya tiene pintado en el gráfico detrás.
-          style={{ background: colorPeriodo(editando ? indice : periodos.length) }}
+          // Todos los periodos son de este color, se esté creando uno o editando
+          // el del medio: es el mismo que tiene pintado el gráfico detrás.
+          style={{ background: COLOR_PERIODO }}
           aria-hidden
         />
         {nombre ? (

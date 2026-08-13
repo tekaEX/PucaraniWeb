@@ -11,16 +11,21 @@
       --heading-color  → color de todos los títulos
 
    🖼  CAMBIAR IMÁGENES — editar src="..." en index.html
-      Hero fondo: class="hero-bg"      → assets/img/aricamap.png
-      Hero van:   id="herovan"         → assets/img/pucaranicar.png
-      About:      class="about-photo"  → assets/img/about.jpg
-      Servicios:  dentro de cada <div class="card-img">
+      Hero fondo:  class="hero-bg"      → mapa-arica-parinacota-tacna.jpg
+      Hero van:    class="hero-vehiculo" → van-pucarani-recorte.png
+                   (alternativas con marco, cambiando la clase a "hero-photo":
+                    van-pucarani-portada.jpg / van-pasajeros-carretera-arica.jpg)
+      About:       class="about-photo"  → transporte-ejecutivo-arica.jpg
+      Servicios:   dentro de cada <a class="card-img">
+      Cobertura:   class="coverage-bg"  → arica-vista-panoramica.jpg
 
    📐 TAMAÑOS DE CONTENEDOR DE IMAGEN
-      Hero (alto mínimo)         → .hero           { min-height: 60vh; }
-      Van en el hero             → .van-crop        { width: 510px; }
+      Hero (alto mínimo)         → .hero            { min-height: 60vh; }
+      Van del hero               → .hero-vehiculo   { max-width: 620px; }
       Foto About                 → .about-photo     { height: 500px; }
       Tarjetas de servicio       → .card .card-img  { height: 220px; }
+      Fotos "por qué elegirnos"  → .features-item img { aspect-ratio: 3/2; }
+      Fotos en páginas servicio  → .lp-photo        { aspect-ratio: 16/9; }
 
    📍 CENTRAR O REENCUADRAR IMAGEN (object-position)
       Controla qué área de la foto queda visible al estar recortada.
@@ -69,7 +74,7 @@
   --surface-color:    #ffffff;
 }
 
-/* Fondo oscuro (hero, testimonios, footer, CTA) */
+/* Fondo oscuro (hero, cobertura, footer, CTA) */
 .dark-background {
   --background-color: #0e1d34;
   --default-color:    #ffffff;
@@ -120,17 +125,26 @@ h1, h2, h3, h4, h5, h6 {
 }
 .header .logo img {
   max-height:   50px;
+  width:        auto;    /* ignora los atributos width/height del HTML */
+  height:       auto;
   margin-right: 8px;
 }
-.header .logo h1 {
+.header .logo h1,
+.header .logo .sitename {
   font-size:   30px;
   margin:      0;
   font-weight: 700;
   color:       var(--heading-color);
+  font-family: var(--heading-font);
+  line-height: 1.2;      /* ← sin esto hereda line-height:5 y agranda el header */
+  white-space: nowrap;
 }
 
 
-/* Botón "Cotizar ahora" — verde WhatsApp */
+/* Botón "Cotizar ahora" — verde WhatsApp
+   (la clase usada en el HTML es .btn-cotizar) */
+.header .btn-cotizar,
+.header .btn-cotizar:focus,
 .header .btn-getstarted,
 .header .btn-getstarted:focus {
   color:         var(--contrast-color);
@@ -139,10 +153,13 @@ h1, h2, h3, h4, h5, h6 {
   font-weight:   600;
   padding:       9px 24px;
   margin:        0 0 0 30px;
+  white-space:   nowrap;
   border-radius: 50px;
   box-shadow:    0 4px 14px rgba(37,211,102,0.42);
   transition:    all 0.25s ease;
 }
+.header .btn-cotizar:hover,
+.header .btn-cotizar:focus:hover,
 .header .btn-getstarted:hover,
 .header .btn-getstarted:focus:hover {
   color:      #fff;
@@ -153,6 +170,7 @@ h1, h2, h3, h4, h5, h6 {
 
 @media (max-width: 1200px) {
   .header .logo      { order: 1; }
+  .header .btn-cotizar,
   .header .btn-getstarted {
     order:   2;
     margin:  0 15px 0 0;
@@ -577,8 +595,11 @@ section,
   width:      100%;
   min-height: 60vh;          /* ← ALTO DEL HERO */
   position:   relative;
-  padding:    120px 0 60px 0;
+  padding:    148px 0 72px 0;
   overflow:   hidden;
+}
+@media (max-width: 991px) {
+  .hero { padding: 130px 0 60px 0; }
 }
 
 /*
@@ -621,6 +642,7 @@ section,
   z-index:  4 !important;
 }
 
+.hero h1,
 .hero h2 {
   margin-bottom: 20px;
   font-size:     3rem;
@@ -636,88 +658,97 @@ section,
   margin-bottom: 40px;
 }
 
-/* Tarjetas de estadísticas con efecto cristal */
+/* Cifras de la empresa — sin tarjeta ni adornos, solo número y etiqueta.
+   Se separan entre sí con una línea vertical muy tenue. */
 .hero .stats-item {
-  padding:        20px 10px;
-  width:          100%;
-  background:     rgba(255,255,255,0.09);
-  border:         1px solid rgba(255,255,255,0.18);
-  border-radius:  14px;
-  backdrop-filter:blur(6px);
-  -webkit-backdrop-filter: blur(6px);
-  transition:     background 0.3s ease;
-}
-.hero .stats-item:hover {
-  background: rgba(255,255,255,0.14);
+  width:   100%;
+  padding: 2px 8px;
 }
 .hero .stats-item span {
-  font-size:      2.3rem;
-  display:        block;
-  font-weight:    700;
-  margin-bottom:  15px;
-  padding-bottom: 15px;
-  position:       relative;
+  font-size:   2.6rem;
+  display:     block;
+  font-weight: 700;
+  line-height: 1.1;
+  margin-bottom: 7px;
 }
-.hero .stats-item span::after {
-  content:    "";
-  position:   absolute;
-  display:    block;
-  width:      20px;
-  height:     3px;
-  background: var(--accent-color);
-  left:       0;
-  right:      0;
-  bottom:     0;
-  margin:     auto;
-}
+/* Cifras "más de": el + se agrega con CSS, así el contador sigue
+   animando el número limpio. Para quitarlo, borra la clase "mas"
+   del <span class="purecounter mas"> en index.html */
+.hero .stats-item span.mas::before { content: '+'; }
+
 .hero .stats-item p {
-  padding:     0;
-  margin:      0;
-  font-family: var(--heading-font);
-  font-size:   15px;
-  font-weight: 600;
+  padding:        0;
+  margin:         0;
+  font-family:    var(--heading-font);
+  font-size:      13px;
+  font-weight:    600;
+  letter-spacing: 1.4px;
+  text-transform: uppercase;
+  color:          rgba(255,255,255,0.62);
+}
+/* Separadores verticales entre cifras (no en la primera) */
+.hero .hero__stats > div + div .stats-item {
+  border-left: 1px solid rgba(255,255,255,0.14);
+}
+@media (max-width: 991px) {
+  .hero .stats-item span { font-size: 2.1rem; }
+  .hero .hero__stats > div + div .stats-item { border-left: none; }
 }
 
 /*
- * 📐 Tarjeta de la van — ajusta width para hacerla más grande o pequeña.
- *    La van se oculta automáticamente en pantallas < 992px (d-none d-lg-block).
+ * 📐 VAN RECORTADA DEL HERO (PNG con fondo transparente).
+ *    Va suelta sobre el fondo, sin marco ni tarjeta.
+ *    max-width   → qué tan grande se ve la van
+ *    drop-shadow → sombra que le da volumen sobre el azul
  */
-.van-crop {
-  position:   absolute;
-  top:        50%;
-  right:      4%;
-  transform:  translateY(-50%);
-  width:      510px;          /* ← ANCHO DE LA TARJETA DE LA VAN */
-  height:     auto;
-  overflow:   visible;
-  pointer-events: none;
-  z-index:    4;
-  /* Efecto cristal — integra el fondo blanco de la imagen */
-  background:         rgba(255,255,255,0.08);
-  border-radius:      22px;
-  border:             1px solid rgba(255,255,255,0.20);
-  backdrop-filter:    blur(10px);
-  -webkit-backdrop-filter: blur(10px);
-  padding:            26px 30px 18px;
-  display:            flex;
-  align-items:        center;
-  box-shadow:
-    0 24px 60px rgba(0,0,0,0.40),
-    inset 0 1px 0 rgba(255,255,255,0.25);
+.hero-vehiculo {
+  display:   block;
+  width:     100%;
+  max-width: 620px;          /* ← ANCHO MÁXIMO DE LA VAN */
+  height:    auto;
+  margin:    0 0 0 auto;     /* alineada al borde derecho de su columna */
+  filter:    drop-shadow(0 20px 24px rgba(0,0,0,0.45));
+  position:  relative;
+  z-index:   4;
 }
-.van-crop img {
-  width:           100%;
-  height:          auto;
-  object-fit:      contain;
-  object-position: center;
+@media (max-width: 991px) {
+  .hero-vehiculo {
+    margin:    0 auto;
+    max-width: 520px;
+  }
+}
+
+/*
+ * 📐 Alternativa: foto con marco en el hero (en vez de la van recortada).
+ *    Se activa cambiando la clase del <img> a "hero-photo" en index.html.
+ *    aspect-ratio → proporción del recorte (16/10, 4/3, 3/2...)
+ *    object-position → qué parte de la foto queda visible
+ */
+.hero-photo {
   display:         block;
-  filter:          drop-shadow(0 12px 24px rgba(0,0,0,0.30));
+  width:           100%;
+  max-width:       580px;          /* ← ANCHO MÁXIMO DE LA FOTO */
+  margin:          0 0 0 auto;     /* alineada al borde derecho de su columna */
+  aspect-ratio:    16 / 10;        /* ← PROPORCIÓN DEL RECORTE */
+  object-fit:      cover;
+  object-position: center center;  /* ← ENCUADRE DE LA FOTO */
+  border-radius:   18px;
+  border:          1px solid rgba(255,255,255,0.14);
+  box-shadow:      0 26px 60px rgba(0,0,0,0.45);
+  position:        relative;
+  z-index:         4;
+}
+@media (max-width: 991px) {
+  .hero-photo {
+    margin:    0 auto;
+    max-width: 540px;
+  }
 }
 
 
 /* ─── ABOUT ───────────────────────────────────────────────────── */
 
-.about .content h3 {
+.about .content > h2 {
   font-size:      2rem;
   font-weight:    700;
   padding-bottom: 18px;
@@ -725,7 +756,7 @@ section,
   position:       relative;
 }
 /* Línea de acento bajo "Quiénes somos" */
-.about .content h3::after {
+.about .content > h2::after {
   content:       '';
   position:      absolute;
   bottom:        0;
@@ -738,25 +769,35 @@ section,
 
 .about .content p:last-child { margin-bottom: 0; }
 
-.about .content ul {
-  list-style: none;
-  padding:    0;
+/*
+ * Los tres recuadros de "Quiénes Somos" (columna derecha).
+ * 📐 Separación entre recuadros → gap
+ *    Alto: se reparten para quedar parejos con el texto de la izquierda.
+ */
+.about .about-features {
+  list-style:      none;
+  padding:         0;
+  margin:          0;
+  height:          100%;
+  display:         flex;
+  flex-direction:  column;
+  justify-content: center;
+  gap:             16px;            /* ← SEPARACIÓN ENTRE RECUADROS */
 }
-.about .content ul li {
+.about .about-features li {
   display:       flex;
   align-items:   flex-start;
-  margin-top:    14px;
   background:    #f3f6ff;
   border-left:   4px solid var(--accent-color);
   border-radius: 0 10px 10px 0;
-  padding:       18px 20px;
+  padding:       20px 22px;
   transition:    transform 0.25s ease, box-shadow 0.25s ease;
 }
-.about .content ul li:hover {
+.about .about-features li:hover {
   transform:  translateX(6px);
   box-shadow: 5px 4px 22px rgba(13,66,255,0.10);
 }
-.about .content ul i {
+.about .about-features i {
   flex-shrink:  0;
   font-size:    28px;
   color:        var(--accent-color);
@@ -764,14 +805,22 @@ section,
   margin-top:   3px;
   line-height:  0;
 }
-.about .content ul h5 {
-  font-size:   18px;
-  font-weight: 700;
+.about .about-features h3 {
+  font-size:     18px;
+  font-weight:   700;
+  margin-bottom: 6px;
 }
-.about .content ul p { font-size: 15px; }
+.about .about-features p {
+  font-size:     15px;
+  margin-bottom: 0;
+}
 
 /*
- * 📐 Foto de la sección "Quiénes Somos"
+ * 📐 Foto de la sección "Quiénes Somos" — SIN USO HOY: ahí van los tres
+ *    recuadros (.about-features). Si quieres volver a poner una foto,
+ *    reemplaza el <ul class="about-features"> por:
+ *      <img src="assets/img/transporte-ejecutivo-arica.jpg" class="about-photo" alt="...">
+ *
  *    Cambia height para hacerla más alta o baja (solo en desktop).
  *
  * 📍 Reencuadrar la foto:
@@ -891,6 +940,9 @@ section,
   margin-bottom: 12px;
 }
 .features .features-item img {
+  width:         100%;
+  aspect-ratio:  3 / 2;      /* mismo recorte en los 4 bloques */
+  object-fit:    cover;
   border-radius: 14px;
   box-shadow:    0 14px 42px rgba(0,0,0,0.13);
 }
@@ -899,113 +951,21 @@ section,
   padding:    0;
 }
 .features .features-item ul li {
-  padding-bottom: 8px;
-  padding-top:    8px;
+  padding-bottom: 7px;
+  padding-top:    7px;
   display:        flex;
-  align-items:    center;
+  align-items:    flex-start;   /* alinea el ✓ con la 1ª línea del texto */
+  gap:            9px;
   font-size:      15px;
 }
 .features .features-item ul li:last-child { padding-bottom: 0; }
 .features .features-item ul i {
-  font-size:    20px;
-  padding-right:4px;
+  font-size:    18px;           /* mismo tamaño de viñeta en todo el sitio */
+  line-height:  1.3;
   color:        var(--accent-color);
 }
 .features .features-item p:last-child { margin-bottom: 0; }
 .features .features-item p            { font-size: 15px; }
-
-
-/* ─── TESTIMONIOS ─────────────────────────────────────────────── */
-
-.testimonials {
-  padding:  80px 0;
-  position: relative;
-}
-/* Overlay oscuro sobre la imagen de fondo */
-.testimonials::before {
-  content:    "";
-  background: rgba(3,8,44,0.82);
-  position:   absolute;
-  inset:      0;
-  z-index:    2;
-}
-/* Imagen de fondo — buscar class="testimonials-bg" en el HTML */
-.testimonials-bg {
-  position:        absolute;
-  inset:           0;
-  display:         block;
-  width:           100%;
-  height:          100%;
-  object-fit:      cover;
-  object-position: center center;  /* ← ENCUADRE DEL FONDO DE TESTIMONIOS */
-  z-index:         1;
-}
-.testimonials .container { position: relative; z-index: 3; }
-
-.testimonials .swiper { padding: 10px 0 42px; }
-
-.testimonials .testimonial-item {
-  text-align:    center;
-  background:    rgba(255,255,255,0.07);
-  border:        1px solid rgba(255,255,255,0.15);
-  border-radius: 20px;
-  padding:       42px 38px;
-  max-width:     700px;
-  margin:        0 auto;
-}
-.testimonials .testimonial-item .testimonial-img {
-  width:         80px;
-  height:        80px;
-  border-radius: 50%;
-  object-fit:    cover;
-  border:        3px solid rgba(255,255,255,0.32);
-  margin:        0 auto;
-}
-.testimonials .testimonial-item h3 {
-  font-size:   18px;
-  font-weight: bold;
-  margin:      14px 0 5px 0;
-}
-.testimonials .testimonial-item h4 {
-  font-size: 14px;
-  margin:    0 0 14px 0;
-  color:     rgba(255,255,255,0.50);
-}
-.testimonials .testimonial-item .stars { margin-bottom: 15px; }
-.testimonials .testimonial-item .stars i {
-  color:    #ffc107;
-  margin:   0 1px;
-  font-size:15px;
-}
-.testimonials .testimonial-item .quote-icon-left,
-.testimonials .testimonial-item .quote-icon-right {
-  color:    color-mix(in srgb, var(--default-color), transparent 40%);
-  font-size:26px;
-  line-height:0;
-}
-.testimonials .testimonial-item .quote-icon-left  { display:inline-block; left:-5px; position:relative; }
-.testimonials .testimonial-item .quote-icon-right { display:inline-block; right:-5px; position:relative; top:10px; transform:scale(-1,-1); }
-.testimonials .testimonial-item p {
-  font-style:  italic;
-  font-size:   15px;
-  line-height: 1.78;
-  color:       rgba(255,255,255,0.84);
-  margin:      0 auto 15px auto;
-}
-@media (min-width: 992px) { .testimonials .testimonial-item p { width: 80%; } }
-
-.testimonials .swiper-wrapper    { height: auto; }
-.testimonials .swiper-pagination { margin-top: 20px; position: relative; }
-.testimonials .swiper-pagination .swiper-pagination-bullet {
-  width:            12px;
-  height:           12px;
-  background-color: color-mix(in srgb, var(--default-color), transparent 50%);
-  opacity:          0.5;
-}
-.testimonials .swiper-pagination .swiper-pagination-bullet-active {
-  background-color: var(--default-color);
-  opacity:          1;
-}
 
 
 /* ─── FAQ ─────────────────────────────────────────────────────── */
@@ -1205,10 +1165,13 @@ section,
   50%       { box-shadow: 0 8px 58px rgba(37,211,102,0.75); }
 }
 
-/* Botón flotante fijo (esquina inferior izquierda) */
+/* Botón flotante fijo — SIN USO HOY (se quitó de todas las páginas).
+   Si vuelve, agrega en el HTML:
+     <a href="https://wa.me/56991622929" class="whatsapp-float" ...><i class="bi bi-whatsapp"></i></a>
+   y baja .scroll-top a right:28px / bottom:88px para que no se monten. */
 .whatsapp-float {
   position:      fixed;
-  left:          20px;             /* ← posición horizontal */
+  right:         20px;             /* ← posición horizontal */
   bottom:        20px;             /* ← posición vertical   */
   width:         56px;
   height:        56px;
@@ -1248,6 +1211,7 @@ section,
 /* ─── Responsive final ────────────────────────────────────────── */
 
 @media (max-width: 768px) {
+  .hero h1,
   .hero h2       { font-size: 2.1rem; }
   .cta-contact h2{ font-size: 1.9rem; }
 
@@ -1257,3 +1221,413 @@ section,
   }
   .hero .stats-item span { font-size: 1.9rem; }
 }
+
+
+/* ================================================================
+   AÑADIDOS — hero, servicios enlazados, cobertura y páginas
+   de servicio (landing pages)
+   ================================================================ */
+
+
+/* ─── Hero: bajada superior y botones ─────────────────────────── */
+
+/* Rótulo sobre el título del hero — es texto, NO un botón:
+   sin fondo ni borde, para que nadie intente hacerle clic.
+   Contiene las palabras clave del negocio. */
+.hero p.hero__eyebrow {
+  display:        flex;
+  align-items:    center;
+  gap:            12px;
+  max-width:      none;      /* anula el max-width de .hero p */
+  font-family:    var(--heading-font);
+  font-size:      12.5px;
+  font-weight:    600;
+  letter-spacing: 2.2px;
+  text-transform: uppercase;
+  color:          #8fadff;
+  margin-bottom:  14px !important;
+}
+/* Rayita de acento a la izquierda del rótulo */
+.hero p.hero__eyebrow::before {
+  content:       '';
+  display:       block;
+  width:         34px;
+  height:        2px;
+  flex-shrink:   0;
+  background:    #8fadff;
+  opacity:       0.7;
+}
+
+/* Fila de botones del hero — sin uso hoy (se quitaron del index).
+   Si vuelven, envolver los botones en <div class="hero__cta"> */
+.hero__cta {
+  display:       flex;
+  flex-wrap:     wrap;
+  gap:           14px;
+  margin-bottom: 0;
+}
+
+/* Banda de cifras al pie del hero, a todo el ancho del contenedor */
+.hero .hero__stats {
+  margin-top:  58px;
+  padding-top: 46px;
+  border-top:  1px solid rgba(255,255,255,0.13);
+}
+.hero .stats-item { height: 100%; }
+
+@media (max-width: 991px) {
+  .hero .hero__stats {
+    margin-top:  40px;
+    padding-top: 32px;
+  }
+}
+
+/* Botón secundario del hero ("Ver servicios") */
+.btn-hero-ghost {
+  display:         inline-flex;
+  align-items:     center;
+  padding:         14px 30px;
+  border-radius:   50px;
+  font-size:       1rem;
+  font-weight:     600;
+  color:           #fff;
+  border:          1px solid rgba(255,255,255,0.34);
+  background:      rgba(255,255,255,0.06);
+  backdrop-filter: blur(6px);
+  transition:      all 0.25s ease;
+}
+.btn-hero-ghost:hover {
+  color:        #fff;
+  background:   rgba(255,255,255,0.16);
+  border-color: rgba(255,255,255,0.6);
+  transform:    translateY(-2px);
+}
+
+
+/* ─── Servicios: tarjetas enlazadas a su página ───────────────── */
+
+/* La imagen de cada tarjeta es un enlace <a class="card-img"> */
+.services .card            { display: flex; flex-direction: column; }
+.services .card a.card-img { display: block; flex-shrink: 0; }
+
+/* El texto crece para que "Ver servicio" quede alineado al pie
+   de todas las tarjetas, aunque los textos tengan largos distintos */
+.services .card p { padding-bottom: 10px; flex-grow: 1; }
+
+/* "Ver servicio →" al pie de cada tarjeta */
+.services .card .card-link {
+  display:        inline-flex;
+  align-items:    center;
+  gap:            7px;
+  margin:         0 22px 22px;
+  font-family:    var(--heading-font);
+  font-size:      13px;
+  font-weight:    600;
+  letter-spacing: 0.4px;
+  color:          var(--accent-color);
+}
+.services .card .card-link i    { transition: transform 0.25s ease; }
+.services .card:hover .card-link i { transform: translateX(5px); }
+
+
+/* ─── Cobertura (dónde te llevamos) ───────────────────────────────
+ *
+ * Esta sección va sobre la foto panorámica de Arica con un velo
+ * oscuro encima (antes era el fondo de la sección de opiniones).
+ *
+ * 🖼  Cambiar la foto: editar src en el <img class="coverage-bg">
+ * 🎨 Oscurecer o aclarar el velo: el rgba de .coverage::before
+ * 📍 Reencuadrar la foto: object-position en .coverage-bg
+ */
+.coverage {
+  position: relative;
+  padding:  80px 0;
+}
+.coverage-bg {
+  position:        absolute;
+  inset:           0;
+  display:         block;
+  width:           100%;
+  height:          100%;
+  object-fit:      cover;
+  object-position: center center;   /* ← ENCUADRE DE LA FOTO DE FONDO */
+  z-index:         1;
+}
+/* Velo oscuro sobre la foto — da contraste al texto */
+.coverage::before {
+  content:    "";
+  position:   absolute;
+  inset:      0;
+  background: rgba(3,8,44,0.86);    /* ← OSCURIDAD DEL VELO */
+  z-index:    2;
+}
+.coverage > .container { position: relative; z-index: 3; }
+
+/* Tarjetas en cristal, para que se lean sobre la foto */
+.coverage-card {
+  height:        100%;
+  background:    rgba(255,255,255,0.07);
+  border:        1px solid rgba(255,255,255,0.15);
+  border-radius: 16px;
+  padding:       30px 28px;
+  backdrop-filter:         blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  box-shadow:    0 14px 40px rgba(0,0,0,0.28);
+  transition:    transform 0.28s ease, background 0.28s ease;
+}
+.coverage-card:hover {
+  transform:  translateY(-6px);
+  background: rgba(255,255,255,0.12);
+}
+.coverage-card h3 {
+  display:       flex;
+  align-items:   center;
+  gap:           10px;
+  font-size:     1.15rem;
+  font-weight:   700;
+  color:         #fff;
+  margin-bottom: 18px;
+}
+.coverage-card h3 i { color: #7ea2ff; font-size: 1.3rem; }
+
+.coverage-list {
+  list-style: none;
+  padding:    0;
+  margin:     0;
+}
+.coverage-list li {
+  display:     flex;
+  align-items: center;
+  gap:         9px;
+  padding:     7px 0;
+  font-size:   15px;
+  color:       rgba(255,255,255,0.80);
+  border-bottom: 1px solid rgba(255,255,255,0.10);
+}
+.coverage-list li:last-child { border-bottom: none; }
+.coverage-list li::before {
+  content:     '\F285';                /* chevron-right de Bootstrap Icons */
+  font-family: 'bootstrap-icons';
+  font-size:   11px;
+  color:       #7ea2ff;
+}
+.coverage-cta {
+  display:     inline-flex;
+  align-items: center;
+  gap:         7px;
+  margin-top:  18px;
+  font-family: var(--heading-font);
+  font-size:   14px;
+  font-weight: 600;
+  color:       #7ea2ff;
+}
+.coverage-cta:hover { color: #fff; }
+.coverage-cta i { transition: transform 0.25s ease; }
+.coverage-cta:hover i { transform: translateX(5px); }
+
+
+/* ─── Footer: enlaces ─────────────────────────────────────────── */
+
+.footer a { color: rgba(255,255,255,0.55); }
+.footer a:hover { color: #fff; }
+
+.footer .footer-links ul {
+  list-style: none;
+  padding:    0;
+  margin:     0;
+}
+.footer .footer-links ul li {
+  display:     flex;
+  align-items: center;
+  padding:     6px 0;
+}
+.footer .footer-links ul li::before {
+  content:     '\F285';                /* chevron-right */
+  font-family: 'bootstrap-icons';
+  font-size:   11px;
+  color:       var(--accent-color);
+  margin-right:8px;
+}
+.footer .footer-contact a { color: rgba(255,255,255,0.62); }
+.footer .footer-contact a:hover { color: #fff; }
+
+
+/* ================================================================
+   PÁGINAS DE SERVICIO (traslado-aeropuerto-chacalluta.html, etc.)
+   ================================================================ */
+
+/* Cabecera con foto de cada página de servicio */
+.page-hero {
+  position:   relative;
+  padding:    140px 0 66px;
+  overflow:   hidden;
+  background: #0e1d34;
+}
+.page-hero__bg {
+  position:        absolute;
+  inset:           0;
+  width:           100%;
+  height:          100%;
+  object-fit:      cover;
+  object-position: center center;
+  z-index:         1;
+}
+.page-hero::before {
+  content:  '';
+  position: absolute;
+  inset:    0;
+  z-index:  2;
+  background: linear-gradient(120deg, rgba(0,8,52,0.92) 0%, rgba(0,18,76,0.78) 55%, rgba(0,5,30,0.55) 100%);
+}
+.page-hero .container { position: relative; z-index: 3; }
+.page-hero h1 {
+  color:       #fff;
+  font-size:   2.7rem;
+  font-weight: 800;
+  line-height: 1.18;
+  max-width:   840px;
+  margin:      12px 0 16px;
+  text-shadow: 0 2px 22px rgba(0,0,0,0.45);
+}
+.page-hero p {
+  color:     rgba(255,255,255,0.82);
+  font-size: 1.05rem;
+  max-width: 700px;
+  margin:    0;
+}
+@media (max-width: 768px) {
+  .page-hero    { padding: 130px 0 50px; }
+  .page-hero h1 { font-size: 1.95rem; }
+}
+
+/* Migas de pan (Inicio › Servicio) */
+.breadcrumbs ol {
+  display:     flex;
+  flex-wrap:   wrap;
+  align-items: center;
+  gap:         8px;
+  list-style:  none;
+  padding:     0;
+  margin:      0;
+  font-size:   14px;
+  color:       rgba(255,255,255,0.6);
+}
+.breadcrumbs ol li + li::before {
+  content:      '›';
+  margin-right: 8px;
+  color:        rgba(255,255,255,0.4);
+}
+.breadcrumbs a { color: rgba(255,255,255,0.75); }
+.breadcrumbs a:hover { color: #fff; }
+
+/* Cuerpo de la página de servicio */
+.lp-body h2 {
+  font-size:     1.7rem;
+  font-weight:   700;
+  margin-bottom: 16px;
+  margin-top:    34px;
+}
+.lp-body h2:first-child { margin-top: 0; }
+.lp-body p {
+  font-size:   16px;
+  line-height: 1.8;
+  color:       color-mix(in srgb, var(--default-color), transparent 20%);
+}
+.lp-body ul {
+  list-style: none;
+  padding:    0;
+  margin:     0 0 20px;
+}
+.lp-body ul li {
+  display:        flex;
+  align-items:    flex-start;
+  gap:            9px;
+  padding:        7px 0;
+  font-size:      16px;
+  color:          color-mix(in srgb, var(--default-color), transparent 20%);
+}
+.lp-body ul li i { color: var(--accent-color); font-size: 18px; line-height: 1.45; }
+
+/* Foto dentro del texto: recorte 16:9 fijo para que todas las
+   páginas de servicio se vean parejas, sea cual sea la foto */
+.lp-photo {
+  display:       block;
+  width:         100%;
+  aspect-ratio:  16 / 9;
+  height:        auto;
+  object-fit:    cover;
+  border-radius: 14px;
+  box-shadow:    0 14px 42px rgba(0,0,0,0.13);
+  margin:        18px 0 30px;
+}
+
+/* Tarjeta lateral de contacto */
+.lp-aside {
+  position:      sticky;
+  top:           110px;      /* justo bajo el header fijo */
+  background:    #fff;
+  border-radius: 18px;
+  padding:       30px 28px;
+  box-shadow:    0 8px 40px rgba(0,0,0,0.10);
+  border-top:    4px solid var(--accent-color);
+}
+.lp-aside h3 {
+  font-size:     1.2rem;
+  font-weight:   700;
+  margin-bottom: 12px;
+}
+.lp-aside p {
+  font-size:     15px;
+  line-height:   1.7;
+  color:         color-mix(in srgb, var(--default-color), transparent 30%);
+  margin-bottom: 20px;
+}
+.lp-aside .btn-whatsapp-hero { width: 100%; justify-content: center; }
+.lp-aside__phone {
+  display:     block;
+  margin-top:  16px;
+  font-size:   14px;
+  text-align:  center;
+  color:       color-mix(in srgb, var(--default-color), transparent 35%);
+}
+.lp-aside__data {
+  list-style: none;
+  padding:    0;
+  margin:     20px 0 0;
+  border-top: 1px solid rgba(0,0,0,0.07);
+  padding-top:16px;
+}
+.lp-aside__data li {
+  display:     flex;
+  align-items: center;
+  gap:         9px;
+  padding:     6px 0;
+  font-size:   14px;
+  color:       color-mix(in srgb, var(--default-color), transparent 30%);
+}
+.lp-aside__data i { color: var(--accent-color); font-size: 17px; }
+
+@media (max-width: 991px) {
+  .lp-aside { position: static; margin-top: 30px; }
+}
+
+/* Otros servicios (enlaces internos al final de cada página) */
+.lp-related a {
+  display:        block;
+  background:     #fff;
+  border-radius:  12px;
+  padding:        18px 20px;
+  height:         100%;
+  font-family:    var(--heading-font);
+  font-weight:    600;
+  font-size:      15px;
+  color:          var(--heading-color);
+  box-shadow:     0 4px 20px rgba(0,0,0,0.06);
+  transition:     transform 0.25s ease, box-shadow 0.25s ease, color 0.25s ease;
+}
+.lp-related a:hover {
+  color:      var(--accent-color);
+  transform:  translateY(-5px);
+  box-shadow: 0 16px 34px rgba(0,0,0,0.10);
+}
+.lp-related i { color: var(--accent-color); margin-right: 8px; }

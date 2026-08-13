@@ -19,7 +19,6 @@ import {
 } from "@/lib/encomiendas/pago";
 import {
   aPeriodo,
-  colorPeriodo,
   indicePeriodoDe,
   periodosEnRango,
   type ResumenPeriodo,
@@ -297,12 +296,11 @@ export default async function EncomiendasPage() {
   // función. Se calcula para todos los periodos y no solo los visibles: el
   // diálogo de comparar ingresos los ofrece todos, con su estimado.
   const pagosPeriodos = pagosPeriodosData ?? [];
-  const resumenPeriodos: ResumenPeriodo[] = periodos.map((p, i) => {
+  const resumenPeriodos: ResumenPeriodo[] = periodos.map((p) => {
     const suyos = pagosPeriodos.filter((x) => x.fecha >= p.fecha_inicio && x.fecha <= p.fecha_fin);
     const real = ingresosReales.find((r) => r.periodo_id === p.id) ?? null;
     return {
       ...p,
-      color: colorPeriodo(i),
       dias: new Set(suyos.map((x) => x.fecha)).size,
       entregados: suyos.reduce((a, x) => a + x.pedidos_entregados, 0),
       ingresos: suyos.reduce((a, x) => a + x.ingresos_totales, 0),
@@ -479,10 +477,6 @@ export default async function EncomiendasPage() {
           periodos={periodos}
           sugerenciaInicio={sugerenciaInicio}
           errorPeriodos={errorPeriodos?.message ?? null}
-          // Arranca en la vista de periodos cuando hay alguno que tocar: es la
-          // que responde la pregunta por la que se definieron. Sin cortes en
-          // este mes, la de periodos pintaría todo gris y no diría nada.
-          modoInicial={resumenVisibles.length > 0 ? "periodos" : "mes"}
         />
       </div>
 

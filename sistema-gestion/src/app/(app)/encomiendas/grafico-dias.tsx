@@ -5,10 +5,14 @@
 // MES: todas las barras del azul de siempre. Es la pregunta "cómo viene el mes"
 // y los cortes de facturación no tienen nada que decir ahí.
 //
-// PERIODOS: cada barra toma el color de su corte y las que no caen en ninguno se
-// van a gris. El gris es el punto: un día trabajado que quedó afuera de todo
-// periodo no se está facturando en ninguna parte, y sobre el azul de antes eso
-// no se veía — parecía un día normal.
+// PERIODOS: los días que caen en un corte se pintan del violeta de periodo —el
+// MISMO para todos— y donde termina uno y empieza el siguiente baja una línea
+// del mismo violeta pero más oscuro. Un color por corte se leía como categorías
+// distintas; el corte es lo único que hay que ver, y la línea es lo que lo dice.
+// Las barras que no caen en ningún periodo se van a gris. El gris es el punto:
+// un día trabajado que quedó afuera de todo periodo no se está facturando en
+// ninguna parte, y sobre el azul de antes eso no se veía — parecía un día
+// normal.
 //
 // El toggle vive en el cliente y el resto de la pantalla no depende de él: la
 // serie y las cifras las calcula el servidor una sola vez y acá solo se decide
@@ -21,7 +25,8 @@ import { Vacio } from "@/components/ui/vacio";
 import { cn } from "@/lib/utils";
 import { formatCLP, formatNumber } from "@/lib/format";
 import {
-  colorPeriodo,
+  COLOR_CORTE_PERIODO,
+  COLOR_PERIODO,
   nombrePeriodo,
   nombrePeriodoCorto,
   type PeriodoFacturacion,
@@ -52,7 +57,6 @@ export function GraficoDias({
   periodos,
   sugerenciaInicio,
   errorPeriodos,
-  modoInicial,
 }: {
   /** El periodo global en pantalla: "agosto 2026" o "Año 2026". */
   etiqueta: string;
@@ -64,10 +68,12 @@ export function GraficoDias({
   periodos: PeriodoFacturacion[];
   sugerenciaInicio: string;
   errorPeriodos: string | null;
-  /** Con qué vista arranca: periodos si hay alguno que tocar, mes si no. */
-  modoInicial: Modo;
 }) {
-  const [modo, setModo] = useState<Modo>(modoInicial);
+  // Siempre arranca en "Mes", haya periodos o no. La primera pregunta al abrir
+  // el panel es cómo viene el mes; mirar los cortes es un segundo paso, y que
+  // la vista de arranque cambiara sola según hubiera o no un corte tocando el
+  // mes hacía que la misma pantalla apareciera distinta según el mes elegido.
+  const [modo, setModo] = useState<Modo>("mes");
   const maxSerie = Math.max(1, ...serie.map((s) => s.pedidos));
   const porPeriodos = modo === "periodos";
   // Sin ningún corte definido, la vista de periodos pintaría el mes entero de
@@ -131,48 +137,65 @@ export function GraficoDias({
           />
         ) : (
           <div className="flex items-end gap-1 sm:gap-1.5">
-            {serie.map((s) => {
+            {serie.map((s, i) => {
               const enPeriodo = s.periodoIdx >= 0;
               // El color de la barra sale del modo: en vista de mes ninguna
               // barra se tiñe, y en vista de periodos el gris es una respuesta
               // ("este día no está en ningún corte"), no la ausencia de una.
-              const color = !porPeriodos
-                ? null
-                : enPeriodo
-                  ? colorPeriodo(s.periodoIdx)
-                  : GRIS_SIN_PERIODO;
+              const color = !porPeriodos ? null : enPeriodo ? COLOR_PERIODO : GRIS_SIN_PERIODO;
+              // Acá cambia el corte. Con todos los periodos del mismo violeta,
+              // esta línea es lo ÚNICO que los separa, así que también se dibuja
+              // cuando el vecino es un día fuera de todo periodo: ahí empieza
+              // (o termina) un corte igual. En la primera columna no va: no
+              // separa nada, solo ensucia el borde del gráfico.
+              const cortaAcá =
+                porPeriodos &&
+                i > 0 &&
+                s.periodoIdx !== serie[i - 1].periodoIdx &&
+                (enPeriodo || serie[i - 1].periodoIdx >= 0);
               return (
                 <div key={s.clave} className="flex flex-1 flex-col items-center gap-1.5">
-                  <div className="flex h-32 w-full items-end justify-center">
-                    <div
-                      title={tituloColumna(s, porPeriodos, resumen)}
-                      className={cn(
-                        "w-full rounded-t-[3px] transition-colors duration-200",
-                        s.pedidos === 0 ? "bg-border/40" : color ? "" : "bg-brand",
-                      )}
-                      // Un día con entregas nunca puede verse como uno sin
-                      // salir: con un pico de 60, un día de 1 entrega daba
-                      // 2% — exactamente el mismo hilo que se pinta para el
-                      // domingo. El piso de los días con actividad es 10%.
-                      style={{
-                        height:
-                          s.pedidos > 0
-                            ? `${Math.max(10, Math.round((s.pedidos / maxSerie) * 100))}%`
-                            : "2%",
-                        ...(color && s.pedidos > 0 ? { background: color } : null),
-                      }}
+                  {/* Envuelve barra y franja para que la línea de corte pueda
+                      cruzarlas de arriba abajo sin llegar al número del día. */}
+                  <div className="relative flex w-full flex-col items-center gap-1.5">
+                    {cortaAcá ? (
+                      // Centrada en el hueco entre las dos columnas: el corte
+                      // cae ENTRE dos días, no sobre uno.
+                      <span
+                        className="absolute inset-y-0 -left-[3px] w-[2px] rounded-full sm:-left-1"
+                        style={{ background: COLOR_CORTE_PERIODO }}
+                        aria-hidden
+                      />
+                    ) : null}
+                    <div className="flex h-32 w-full items-end justify-center">
+                      <div
+                        title={tituloColumna(s, porPeriodos, resumen)}
+                        className={cn(
+                          "w-full rounded-t-[3px] transition-colors duration-200",
+                          s.pedidos === 0 ? "bg-border/40" : color ? "" : "bg-brand",
+                        )}
+                        // Un día con entregas nunca puede verse como uno sin
+                        // salir: con un pico de 60, un día de 1 entrega daba
+                        // 2% — exactamente el mismo hilo que se pinta para el
+                        // domingo. El piso de los días con actividad es 10%.
+                        style={{
+                          height:
+                            s.pedidos > 0
+                              ? `${Math.max(10, Math.round((s.pedidos / maxSerie) * 100))}%`
+                              : "2%",
+                          ...(color && s.pedidos > 0 ? { background: color } : null),
+                        }}
+                      />
+                    </div>
+                    {/* La franja bajo el eje marca el corte incluso donde no
+                        hubo reparto: un periodo se define por sus fechas, no por
+                        los días que se trabajó dentro de él. */}
+                    <span
+                      className="h-[3px] w-full rounded-full transition-colors duration-200"
+                      style={{ background: porPeriodos && enPeriodo ? COLOR_PERIODO : "transparent" }}
+                      aria-hidden
                     />
                   </div>
-                  {/* La franja bajo el eje marca el corte incluso donde no hubo
-                      reparto: un periodo se define por sus fechas, no por los
-                      días que se trabajó dentro de él. */}
-                  <span
-                    className="h-[3px] w-full rounded-full transition-colors duration-200"
-                    style={{
-                      background: porPeriodos && enPeriodo ? colorPeriodo(s.periodoIdx) : "transparent",
-                    }}
-                    aria-hidden
-                  />
                   <span className="text-[9px] leading-none text-muted sm:text-[10px]">
                     {s.etiqueta}
                   </span>
@@ -184,9 +207,12 @@ export function GraficoDias({
 
         {porPeriodos ? (
           <>
-            {/* Para qué existen los colores: cuánto facturó cada corte. Las
-                cifras son de TODOS los días del periodo, incluidos los que caen
-                fuera del mes que se está mirando. */}
+            {/* Cuánto facturó cada corte. Las cifras son de TODOS los días del
+                periodo, incluidos los que caen fuera del mes que se está
+                mirando. Van en el mismo orden que el gráfico —de izquierda a
+                derecha, como corren las fechas— porque ya no hay un color por
+                periodo que permita emparejarlos de otra forma; el nombre de
+                cada uno son sus fechas, y con eso alcanza. */}
             {resumen.length > 0 ? (
               <div className="mt-4 grid gap-2 border-t border-divider pt-3 sm:grid-cols-2">
                 {resumen.map((p) => (
@@ -198,7 +224,7 @@ export function GraficoDias({
                     <span className="flex min-w-0 items-center gap-2">
                       <span
                         className="h-2.5 w-2.5 shrink-0 rounded-full"
-                        style={{ background: p.color }}
+                        style={{ background: COLOR_PERIODO }}
                         aria-hidden
                       />
                       <span className="truncate text-xs font-medium">{nombrePeriodoCorto(p)}</span>
