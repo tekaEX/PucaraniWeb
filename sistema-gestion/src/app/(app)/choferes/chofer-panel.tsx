@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, useEffect, useRef, useState, useTransition } from "react";
+import { useActionState, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import {
   guardarChofer,
@@ -8,19 +8,16 @@ import {
   desactivarChofer,
   tieneHistorialChofer,
   guardarCategoriasChofer,
-  invitarChofer,
-  reenviarInvitacionChofer,
   type FormState,
-  type InvitarState,
 } from "./actions";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { Button, buttonClass } from "@/components/ui/button";
+import { buttonClass } from "@/components/ui/button";
 import { VencimientoBadge } from "@/components/ui/badge";
 import { FotoUploader } from "./foto-uploader";
 import { LicenciaForm } from "./licencia-form";
-import { Trash2, Check, Loader2, Copy, RefreshCw } from "lucide-react";
+import { Trash2, Check, Loader2 } from "lucide-react";
 import { VEHICULO_CATEGORIAS, type Chofer } from "@/types/db";
 
 // Diálogo al eliminar un chofer: distingue "ya no trabaja aquí" (se
@@ -198,116 +195,6 @@ function CategoriasChofer({
   );
 }
 
-// Muestra el link de acceso generado, con botón de copiar. No se manda por
-// correo automáticamente (eso agota rápido el límite de envío de Supabase
-// en el plan gratuito) — el admin lo copia y se lo pasa al chofer por
-// donde prefiera (WhatsApp, correo, SMS).
-function LinkAcceso({ link }: { link: string }) {
-  const [copiado, setCopiado] = useState(false);
-
-  async function copiar() {
-    await navigator.clipboard.writeText(link);
-    setCopiado(true);
-    setTimeout(() => setCopiado(false), 2000);
-  }
-
-  return (
-    <div className="mt-2 flex items-center gap-2 rounded-lg border border-border bg-background px-3 py-2">
-      <input
-        readOnly
-        value={link}
-        onFocus={(e) => e.currentTarget.select()}
-        className="min-w-0 flex-1 truncate bg-transparent text-xs text-muted outline-none"
-      />
-      <button
-        type="button"
-        onClick={copiar}
-        className="flex shrink-0 items-center gap-1 text-xs font-medium text-brand hover:text-brand-dark"
-      >
-        <Copy className="h-4 w-4" />
-        {copiado ? "¡Copiado!" : "Copiar"}
-      </button>
-    </div>
-  );
-}
-
-// Invita al chofer (crea su login con rol "chofer") o, si ya tiene cuenta,
-// permite regenerar el link de acceso ("Reenviar invitación") — por si el
-// link anterior venció o no le llegó.
-function AccesoChofer({ chofer }: { chofer: Chofer }) {
-  const [state, formAction, pending] = useActionState<InvitarState, FormData>(
-    invitarChofer,
-    {},
-  );
-  const [reenviarState, setReenviarState] = useState<InvitarState>({});
-  const [reenviarPending, startReenviar] = useTransition();
-
-  function onReenviar() {
-    setReenviarState({});
-    startReenviar(async () => {
-      setReenviarState(await reenviarInvitacionChofer(chofer.id));
-    });
-  }
-
-  if (chofer.user_id) {
-    return (
-      <div>
-        <p className="text-sm text-muted">
-          Cuenta vinculada{chofer.email ? `: ${chofer.email}` : ""}.
-        </p>
-        <button
-          type="button"
-          onClick={onReenviar}
-          disabled={reenviarPending}
-          className="mt-2 inline-flex items-center gap-1.5 text-sm font-medium text-brand hover:text-brand-dark disabled:opacity-50"
-        >
-          <RefreshCw className={`h-3.5 w-3.5 ${reenviarPending ? "animate-spin" : ""}`} />
-          {reenviarPending ? "Generando…" : "Reenviar invitación"}
-        </button>
-        {reenviarState.error ? (
-          <p className="mt-2 text-sm text-danger">{reenviarState.error}</p>
-        ) : null}
-        {reenviarState.link ? (
-          <>
-            <p className="mt-2 text-xs text-muted">
-              Copia este link y envíaselo al chofer (WhatsApp, correo, SMS):
-            </p>
-            <LinkAcceso link={reenviarState.link} />
-          </>
-        ) : null}
-      </div>
-    );
-  }
-
-  return (
-    <form action={formAction} className="flex flex-col gap-2">
-      <div className="flex flex-wrap items-center gap-2">
-        <input type="hidden" name="id" value={chofer.id} />
-        <Input
-          name="email"
-          type="email"
-          placeholder="correo@ejemplo.com"
-          defaultValue={chofer.email ?? ""}
-          className="max-w-xs"
-          required
-        />
-        <Button type="submit" size="sm" disabled={pending}>
-          {pending ? "Invitando…" : "Invitar"}
-        </Button>
-      </div>
-      {state.error ? <p className="text-sm text-danger">{state.error}</p> : null}
-      {state.link ? (
-        <>
-          <p className="text-xs text-muted">
-            Cuenta creada. Copia este link y envíaselo al chofer (WhatsApp, correo, SMS):
-          </p>
-          <LinkAcceso link={state.link} />
-        </>
-      ) : null}
-    </form>
-  );
-}
-
 export function ChoferPanel({
   chofer,
   categorias,
@@ -454,31 +341,13 @@ export function ChoferPanel({
         </div>
       </div>
 
-      {/* Categorías (líneas de trabajo) · Acceso a la app del chofer
-          Sin "items-start": así las dos cajas quedan del mismo alto en vez de
-          que cada una tome el de su contenido — la de acceso trae un campo de
-          correo y un botón, la de categorías solo una fila de casillas, y una
-          quedaba bastante más alta que la otra.
-          El flex-col de cada columna con flex-1 en la caja es lo que hace que
-          el borde llegue abajo; sin eso, estirar la celda del grid no estira la
-          caja que tiene adentro. */}
-      <div className="grid gap-5 lg:grid-cols-2">
-        <div className="flex flex-col">
-          <p className="mb-2 text-sm font-semibold">Categorías</p>
-          {/* Centrado en los dos ejes: al emparejar los altos sobra lugar, y
-              con el contenido arriba a la izquierda ese sobrante quedaba todo
-              junto abajo, como un hueco. Centrado se reparte y no se lee como
-              espacio vacío. */}
-          <div className="flex flex-1 items-center justify-center rounded-xl border border-border bg-white p-4">
-            <CategoriasChofer choferId={chofer.id} categorias={categorias} />
-          </div>
-        </div>
-
-        <div className="flex flex-col">
-          <p className="mb-2 text-sm font-semibold">Acceso a la app del chofer</p>
-          <div className="flex-1 rounded-xl border border-border bg-white p-4">
-            <AccesoChofer chofer={chofer} />
-          </div>
+      {/* Categorías (líneas de trabajo). Ocupa el ancho completo: al lado tenía
+          la caja de "Acceso a la app del chofer", que se fue con encomiendas —
+          el chofer ya no tiene cuenta. */}
+      <div>
+        <p className="mb-2 text-sm font-semibold">Categorías</p>
+        <div className="flex items-center justify-center rounded-xl border border-border bg-white p-4">
+          <CategoriasChofer choferId={chofer.id} categorias={categorias} />
         </div>
       </div>
     </div>

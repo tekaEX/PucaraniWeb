@@ -8,7 +8,6 @@
     "start": "next start",
     "lint": "eslint",
     "test": "node --import ./pruebas/registrar.mjs --test \"pruebas/*.test.mjs\"",
-    "test:base": "node --env-file=.env.local --import ./pruebas/registrar.mjs pruebas/base.mjs",
     "test:esquema": "node --env-file=.env.local pruebas/esquema.mjs",
     "test:datos": "node --env-file=.env.local --import ./pruebas/registrar.mjs pruebas/datos.mjs"
   },
@@ -21,7 +20,6 @@
     "date-fns": "^4.4.0",
     "exceljs": "^4.4.0",
     "lucide-react": "^1.21.0",
-    "mapbox-gl": "^3.27.0",
     "next": "16.2.9",
     "react": "19.2.4",
     "react-dom": "19.2.4",
@@ -36,7 +34,6 @@
     "@types/react-dom": "^19",
     "eslint": "^9",
     "eslint-config-next": "16.2.9",
-    "fake-indexeddb": "^6.2.5",
     "tailwindcss": "^4",
     "typescript": "^5"
   }

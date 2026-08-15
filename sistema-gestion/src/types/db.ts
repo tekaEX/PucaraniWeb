@@ -17,7 +17,7 @@ export type ViajeEstado = "programado" | "realizado" | "cancelado";
 /** Estado del DOCUMENTO tributario (no de la cobranza). */
 export type FacturaEstado = "borrador" | "emitida" | "anulada";
 
-export type RolUsuario = "admin" | "operador" | "contador" | "chofer";
+export type RolUsuario = "admin" | "operador" | "contador";
 
 export type GastoCategoria = "combustible" | "mantencion" | "seguros" | "otros";
 export type GastoOrigen = "manual" | "sii";
@@ -165,13 +165,12 @@ export interface Factura {
   updated_at: string;
 }
 
+/** La ficha de quien maneja. No es un usuario: el chofer no entra al sistema.
+ *  Tuvo cuenta (user_id/email, borrados en la migración 0036) mientras existió
+ *  la app de reparto, que se fue a Ares junto con encomiendas. */
 export interface Chofer {
   id: string;
   empresa_id: string;
-  /** Cuenta de acceso del chofer (rol 'chofer'), si la tiene. */
-  user_id: string | null;
-  /** Correo con el que se invitó/vinculó su login (no viene de auth.users). */
-  email: string | null;
   nombre: string;
   rut: string | null;
   telefono: string | null;
@@ -208,7 +207,6 @@ export interface Vehiculo {
 export const VEHICULO_CATEGORIAS = {
   operacion: "Operación",
   taxis: "Taxis",
-  encomiendas: "Encomiendas",
 } as const;
 export type VehiculoCategoria = keyof typeof VEHICULO_CATEGORIAS;
 
@@ -402,7 +400,6 @@ export const ROLES: Record<RolUsuario, string> = {
   admin: "Administrador",
   operador: "Operador",
   contador: "Contador",
-  chofer: "Chofer",
 };
 
 export const GASTO_CATEGORIAS: Record<GastoCategoria, string> = {
@@ -411,271 +408,3 @@ export const GASTO_CATEGORIAS: Record<GastoCategoria, string> = {
   seguros: "Seguros y permisos",
   otros: "Otros",
 };
-
-// ----------------------------------------------------------------------------
-// Encomiendas: pedidos, rutas diarias, paradas, reglas y pago a conductores.
-// Los destinatarios NO son "clientes" de la empresa (son personas puntuales);
-// el conductor SÍ es un chofer más del sistema (tabla choferes).
-// ----------------------------------------------------------------------------
-
-// Se empieza con el mínimo de estados posible; se agregan más (ej.
-// "programado", "cancelado") solo cuando realmente se necesiten.
-export const ENCOMIENDA_ESTADOS = {
-  pendiente: "Pendiente",
-  entregado: "Entregado",
-} as const;
-export type EncomiendaEstado = keyof typeof ENCOMIENDA_ESTADOS;
-
-export interface EncomiendaPedido {
-  id: string;
-  empresa_id: string;
-  fecha_pedido: string;
-  destinatario_nombre: string;
-  destinatario_telefono: string;
-  destinatario_direccion: string;
-  destinatario_lat: number | null;
-  destinatario_lng: number | null;
-  estado: EncomiendaEstado;
-  notas: string | null;
-  created_at: string;
-  updated_at: string;
-}
-
-export const ENCOMIENDA_RUTA_ESTADOS = {
-  generada: "Generada",
-  en_curso: "En curso",
-  finalizada: "Finalizada",
-} as const;
-export type EncomiendaRutaEstado = keyof typeof ENCOMIENDA_RUTA_ESTADOS;
-
-export interface EncomiendaRuta {
-  id: string;
-  empresa_id: string;
-  chofer_id: string | null;
-  fecha: string;
-  estado: EncomiendaRutaEstado;
-  distancia_total_m: number | null;
-  duracion_total_s: number | null;
-  /** Trazado real por calles (OSRM), [lng, lat] por punto — formato GeoJSON.
-   *  null si OSRM no respondió al generar la ruta (el mapa se queda solo
-   *  con los puntos, sin el trazado). */
-  geometria: [number, number][] | null;
-  created_at: string;
-  updated_at: string;
-}
-
-export const ENCOMIENDA_ESTADO_LLAMADA = {
-  pendiente: "Pendiente",
-  contesto: "Contestó",
-  no_contesto: "No contestó",
-} as const;
-export type EncomiendaEstadoLlamada = keyof typeof ENCOMIENDA_ESTADO_LLAMADA;
-
-export const ENCOMIENDA_ESTADO_ENTREGA = {
-  pendiente: "Pendiente",
-  entregado: "Entregado",
-  omitido: "Omitido",
-} as const;
-export type EncomiendaEstadoEntrega = keyof typeof ENCOMIENDA_ESTADO_ENTREGA;
-
-export interface EncomiendaParada {
-  id: string;
-  ruta_id: string;
-  pedido_id: string;
-  secuencia: number;
-  estado_llamada: EncomiendaEstadoLlamada;
-  estado_entrega: EncomiendaEstadoEntrega;
-  hora_llamada: string | null;
-  hora_entrega: string | null;
-  created_at: string;
-  updated_at: string;
-}
-
-export interface EncomiendaParadaConPedido extends EncomiendaParada {
-  pedido: EncomiendaPedido;
-}
-
-export interface EncomiendaRutaConParadas extends EncomiendaRuta {
-  chofer: { id: string; nombre: string } | null;
-  paradas: EncomiendaParadaConPedido[];
-}
-
-// ----------------------------------------------------------------------------
-// Actividad en terreno (0026) — reemplaza pedidos/rutas/paradas del lado del
-// servidor. Los datos del destinatario y el orden de la ruta viven en el
-// teléfono del chofer: acá solo queda el hecho de que la acción ocurrió, que es
-// lo único que la empresa necesita para el ingreso estimado y la liquidación.
-// ----------------------------------------------------------------------------
-export const ENCOMIENDA_ACTIVIDAD_TIPOS = {
-  entrega: "Entregado",
-  omision: "Omitido",
-  llamada: "Llamada",
-} as const;
-export type EncomiendaActividadTipo = keyof typeof ENCOMIENDA_ACTIVIDAD_TIPOS;
-
-// De dónde salió el evento (0028). 'app' es el default en la base: la app del
-// chofer no manda esta columna.
-export const ENCOMIENDA_ACTIVIDAD_ORIGENES = {
-  app: "App del conductor",
-  manual: "Carga manual",
-} as const;
-export type EncomiendaActividadOrigen = keyof typeof ENCOMIENDA_ACTIVIDAD_ORIGENES;
-
-export interface EncomiendaActividad {
-  /** Generado en el TELÉFONO (UUIDv7), no en la base: es la clave de
-   *  idempotencia que hace que reenviar un evento desde la cola offline no
-   *  pueda contarlo dos veces (ver 0026). */
-  id: string;
-  empresa_id: string;
-  chofer_id: string | null;
-  /** Día de trabajo en fecha local de Chile (hoyChile()), no derivada de la
-   *  hora del servidor: una entrega de las 21:30 en Arica ya es del día
-   *  siguiente en UTC y el pago se movería de día. */
-  fecha: string;
-  tipo: EncomiendaActividadTipo;
-  /** Cuándo ocurrió según el teléfono — puede ser bastante anterior a
-   *  created_at si se marcó sin señal. En las filas de origen 'manual' es de
-   *  relleno (mediodía UTC del día cargado): nadie sabe la hora real. */
-  hora: string;
-  /** Cuándo llegó al servidor. */
-  created_at: string;
-  /** 'app' = lo envió el teléfono del chofer · 'manual' = lo cargó la oficina
-   *  (ver 0028). Los dos cuentan igual para el pago. */
-  origen: EncomiendaActividadOrigen;
-}
-
-export const ENCOMIENDA_TIPO_PAGO = {
-  porcentaje: "% por pedido entregado",
-  monto_fijo: "Monto fijo por pedido entregado",
-} as const;
-export type EncomiendaTipoPago = keyof typeof ENCOMIENDA_TIPO_PAGO;
-
-/** La regla de pago del conductor. Hay UNA sola fila y se edita encima: no
- *  tiene historial ni vigencias (0031).
- *
- *  Eso NO significa que cambiarla reescriba el pasado. Cada día guarda sus
- *  propias cifras en EncomiendaPago apenas se registra, así que la regla solo
- *  decide lo que se registre de ahí en adelante. */
-export interface EncomiendaReglaPago {
-  id: string;
-  empresa_id: string;
-  tipo_pago: EncomiendaTipoPago;
-  /** numeric en Postgres: PostgREST lo devuelve como string ("15.00"). */
-  valor_pago: number;
-  /** CLP que se estima que entra por cada entrega (0029). Antes era una
-   *  constante del código; vive acá porque con tipo_pago 'porcentaje' entra
-   *  también en la fórmula del sueldo. */
-  valor_pedido: number;
-  /** Fijo en CLP por día trabajado, aparte de lo que pague por pedido (0024). */
-  monto_dia: number;
-  meta_entregas_dia: number | null;
-  bono_monto: number | null;
-  /** Cuándo se configuró por primera vez. */
-  created_at: string;
-  /** Desde cuándo rige lo que dice ahora (0031). */
-  updated_at: string;
-}
-
-/** Lo que Starken liquidó DE VERDAD (0029). Se contrasta contra el ingreso
- *  estimado del mismo rango para saber si valor_pedido está bien calibrado.
- *
- *  Una fila se imputa a un PERIODO de facturación o a un mes, nunca a los dos
- *  (0035): lo que se carga hoy va por periodo —así es como llega la liquidación—
- *  y las filas anteriores a la 0035 quedaron por (anio, mes) y se conservan como
- *  historial de solo lectura. La base garantiza que sea exactamente una de las
- *  dos cosas. */
-export interface EncomiendaIngresoReal {
-  id: string;
-  empresa_id: string;
-  /** El corte al que pertenece esta liquidación. null solo en las filas viejas,
-   *  cargadas por mes antes de que existieran los periodos. */
-  periodo_id: string | null;
-  /** null cuando la fila va por periodo. */
-  anio: number | null;
-  /** null cuando la fila va por periodo. */
-  mes: number | null;
-  monto: number;
-  /** De dónde salió el número: nº de liquidación, si es parcial, etc. */
-  nota: string | null;
-  created_at: string;
-  updated_at: string;
-}
-
-/** Una ruta de reparto: cuándo empezó y cuándo terminó (0032).
- *
- *  Es el sobre del día. Mientras `cerrada_en` sea null la jornada está EN CURSO
- *  y el día no se valora: no hay fila en EncomiendaPago y el panel no muestra
- *  plata. Al cerrarse —el conductor llega a la última parada, la oficina carga
- *  el día a mano, o el barrido nocturno la cierra— la base congela las cifras
- *  de una sola vez. */
-export interface EncomiendaJornada {
-  id: string;
-  empresa_id: string;
-  chofer_id: string | null;
-  fecha: string;
-  /** Cuándo se generó la ruta. null en jornadas levantadas desde la oficina. */
-  inicio: string | null;
-  /** Cuándo se cerró la última parada. null = sigue en curso. */
-  cerrada_en: string | null;
-  created_at: string;
-}
-
-/** Lo que valió un (conductor, día): ingreso estimado y desglose del pago.
- *
- *  Lo escribe la base sola —un trigger sobre encomienda_actividad, ver 0031—
- *  cada vez que cambia la actividad de ese día. Son las cifras DEFINITIVAS del
- *  día: nada las recalcula después, ni siquiera cambiar la regla de pago. Por
- *  eso ya no guarda regla_id: con una regla mutable apuntaría siempre a la
- *  misma fila y sus valores no serían los que se usaron acá. */
-export interface EncomiendaPago {
-  id: string;
-  empresa_id: string;
-  chofer_id: string | null;
-  fecha: string;
-  pedidos_entregados: number;
-  pedidos_no_entregados: number;
-  ingresos_totales: number;
-  /** Por cantidad de pedidos entregados. */
-  pago_base: number;
-  /** Fijo por el día trabajado (0024). */
-  pago_dia: number;
-  pago_bono: number;
-  /** Columna generada: pago_base + pago_bono + pago_dia. */
-  pago_total: number;
-  /** Cuándo la base congeló estas cifras. */
-  calculado_en: string;
-
-  // La tarifa con la que se calculó ESTE día (0031). Se copia de la regla la
-  // primera vez que el día se congela y no cambia después, aunque la regla sí:
-  // es lo que hace que sumarle una entrega a un día en curso no lo arrastre a
-  // una regla que cambió hace diez minutos. null solo en filas anteriores a la
-  // 0031, que la migración vuelve a calcular.
-  regla_valor_pedido: number | null;
-  regla_tipo_pago: EncomiendaTipoPago | null;
-  /** numeric en Postgres: PostgREST lo devuelve como string ("15.00"). */
-  regla_valor_pago: number | null;
-  regla_monto_dia: number | null;
-  regla_meta_entregas_dia: number | null;
-  regla_bono_monto: number | null;
-}
-
-/** Un corte de facturación: de qué fecha a qué fecha (0034).
- *
- *  Es distinto del periodo global de la app (lib/periodo.ts), que es un mes del
- *  calendario y vive en una cookie. Este lo dicta quien factura y puede empezar
- *  y terminar cualquier día.
- *
- *  No tiene nombre —se llama por sus fechas— ni color guardado: el color con el
- *  que se pinta sale de su posición en la lista, ver lib/encomiendas/periodos.ts.
- *  Dentro de una misma empresa dos periodos no pueden solaparse, y eso lo
- *  garantiza una restricción de exclusión en la base. */
-export interface EncomiendaPeriodoFacturacion {
-  id: string;
-  empresa_id: string;
-  /** Inclusive: el día `fecha_inicio` es parte del periodo. */
-  fecha_inicio: string;
-  /** Inclusive también: el día `fecha_fin` es el último del periodo. */
-  fecha_fin: string;
-  created_at: string;
-  updated_at: string;
-}

@@ -39,24 +39,7 @@ export async function updateSession(request: NextRequest) {
   }
 
   const path = request.nextUrl.pathname;
-  const isPublic =
-    path.startsWith("/login") ||
-    path.startsWith("/auth") ||
-    // La sesión del link de invitación llega en el fragmento de la URL
-    // (#access_token=...), que el servidor nunca ve — así que esta ruta
-    // debe ser pública para que el cliente alcance a procesarla.
-    path.startsWith("/set-password") ||
-    path === "/favicon.ico" ||
-    // El navegador pide el manifest SIN cookies (el <link rel="manifest"> que
-    // emite Next no lleva crossorigin="use-credentials"), así que si no es
-    // pública recibe el HTML del login en vez del JSON y la PWA del conductor
-    // deja de ser instalable.
-    path === "/manifest.webmanifest" ||
-    // Meta llama a este endpoint sin cookies de sesión (verificación del
-    // webhook y eventos de WhatsApp); la propia ruta valida el token/origen.
-    // Coincidencia EXACTA a propósito: futuras rutas /api/whatsapp/* (ej. un
-    // endpoint de envío) deben seguir exigiendo sesión.
-    path === "/api/whatsapp/webhook";
+  const isPublic = path.startsWith("/login") || path.startsWith("/auth") || path === "/favicon.ico";
 
   if (!user && !isPublic) {
     const url = request.nextUrl.clone();
@@ -65,8 +48,12 @@ export async function updateSession(request: NextRequest) {
     return NextResponse.redirect(url);
   }
 
-  // Si ya inició sesión y va a /login, lo mandamos al inicio.
-  if (user && path.startsWith("/login")) {
+  // Si ya inició sesión y va a /login, lo mandamos al inicio. La excepción es
+  // ?sin_acceso=1: ahí lo mandó exigirPanel() justamente PORQUE su sesión no
+  // sirve para el panel. Rebotarlo al inicio lo devolvería a exigirPanel() y
+  // de vuelta acá, en un ciclo infinito; se lo deja ver el login para que
+  // pueda cerrar esa sesión o entrar con otra cuenta.
+  if (user && path.startsWith("/login") && !request.nextUrl.searchParams.has("sin_acceso")) {
     const url = request.nextUrl.clone();
     url.pathname = "/";
     url.search = "";

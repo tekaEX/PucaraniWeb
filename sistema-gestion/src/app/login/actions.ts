@@ -2,7 +2,7 @@
 
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { inicioSegunRol } from "@/lib/auth";
+import { tieneAccesoAlPanel } from "@/lib/auth";
 import type { RolUsuario } from "@/types/db";
 
 export type LoginState = { error?: string };
@@ -26,23 +26,26 @@ export async function login(
     return { error: "Correo o contraseña incorrectos." };
   }
 
-  // El destino depende del ROL, no solo de a dónde iba antes: el proxy pone
-  // ?redirect=<ruta> con la página que el usuario intentó abrir sin sesión, y
-  // si eso apunta al panel, un chofer terminaría en una pantalla donde RLS le
-  // niega casi todo. Solo se respeta el destino guardado si es coherente con
-  // su rol; si no, cada uno arranca en su propio inicio.
+  // La contraseña puede ser correcta y la cuenta igual no tener nada que hacer
+  // acá: las cuentas de chofer existían solo para la app de reparto, que se fue
+  // con encomiendas. Se rechazan en el login —y se cierra la sesión que
+  // signInWithPassword acaba de abrir— en vez de dejarlas entrar a un panel
+  // donde RLS les niega todo: es más honesto que una pantalla llena de errores.
   const { data: perfil } = data.user
     ? await supabase.from("perfiles").select("rol").eq("id", data.user.id).maybeSingle()
     : { data: null };
   const rol = (perfil?.rol as RolUsuario | undefined) ?? null;
-  const inicio = inicioSegunRol(rol);
 
-  const destinoValido =
-    redirectTo.startsWith("/") &&
-    !redirectTo.startsWith("//") &&
-    (rol === "chofer" ? redirectTo.startsWith("/conductor") : !redirectTo.startsWith("/conductor"));
+  if (!tieneAccesoAlPanel(rol)) {
+    await supabase.auth.signOut();
+    return { error: "Esta cuenta no tiene acceso al sistema." };
+  }
 
-  redirect(destinoValido ? redirectTo : inicio);
+  // El proxy pone ?redirect=<ruta> con la página que se intentó abrir sin
+  // sesión. Solo se respeta si es una ruta interna ("//" abre otro sitio).
+  const destinoValido = redirectTo.startsWith("/") && !redirectTo.startsWith("//");
+
+  redirect(destinoValido ? redirectTo : "/");
 }
 
 export async function logout() {

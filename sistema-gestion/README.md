@@ -46,6 +46,12 @@ archivos) y **Tailwind CSS v4**.
      — la **patente pasa a ser el identificador del vehículo** (PK) y vincula los gastos
      del SII automáticamente.
 
+   La numeración salta (`0017`–`0019`, `0021`–`0029`, `0031`–`0035`): esas migraciones
+   creaban y ajustaban las tablas `encomienda_*`, que se fueron al proyecto Ares junto
+   con el reparto. Los huecos son a propósito y no hay nada que reponer — correr los
+   archivos que quedan, en orden, deja la base completa. Los números no se
+   renumeraron porque en la base ya instalada están registrados con el número viejo.
+
    Opcionales: [`seed_demo.sql`](supabase/seed_demo.sql) carga datos de prueba realistas
    (evergreen, relativos a hoy); [`fix_encoding.sql`](supabase/fix_encoding.sql) repara
    acentos si algún `.sql` se ejecutó con codificación equivocada.

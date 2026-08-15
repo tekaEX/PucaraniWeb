@@ -1,5 +1,5 @@
-// Verificación del ESQUEMA COMPLETO de la base contra lo que el código espera,
-// para TODA la app y no solo encomiendas. SOLO LECTURA.
+// Verificación del ESQUEMA COMPLETO de la base contra lo que el código espera.
+// SOLO LECTURA.
 //
 //   npm run test:esquema
 //
@@ -10,10 +10,10 @@
 // verificación.
 //
 // Por qué hace falta: tsc, eslint y next build pueden estar los tres en verde
-// con la app rota, porque ninguno sabe qué columnas tiene la base. Pasó con la
-// migración 0028 — la columna `origen` no estaba corrida, todas las consultas
-// del panel de encomiendas fallaban, y la pantalla mostraba "sin actividad" con
-// los KPI en $0. Corré esto después de cada migración.
+// con la app rota, porque ninguno sabe qué columnas tiene la base. Pasó de
+// verdad: una migración sin correr dejó una columna que todas las consultas de
+// una pantalla pedían, y la pantalla mostraba "sin datos" con los KPI en $0 en
+// vez de un error. Corré esto después de cada migración.
 import { readFileSync } from "node:fs";
 import { createClient } from "@supabase/supabase-js";
 
@@ -54,10 +54,6 @@ const TABLAS = {
   SiiCredencial: "sii_credenciales",
   GastoVehiculo: "gastos_vehiculo",
   ServicioTaxi: "servicios_taxi",
-  EncomiendaActividad: "encomienda_actividad",
-  EncomiendaReglaPago: "encomienda_reglas_pago",
-  EncomiendaIngresoReal: "encomienda_ingresos_reales",
-  EncomiendaPago: "encomienda_pagos",
 };
 
 // Tablas que el código usa pero que no tienen una interfaz propia.
@@ -66,9 +62,21 @@ const TABLAS = {
 // sección 4.
 const SIN_TIPO = ["chofer_categorias"];
 
-// Retiradas por la 0027: si reaparecen, alguien restauró un respaldo viejo y
-// con él datos personales de destinatarios que no deberían existir.
-const RETIRADAS = ["encomienda_pedidos", "encomienda_rutas", "encomienda_paradas"];
+// Encomiendas se fue a Ares y la 0036 borró su rastro de esta base. Si alguna
+// de estas tablas reaparece, alguien restauró un respaldo viejo: además de
+// resucitar un negocio que ya no es de esta empresa, las tres primeras traen
+// datos personales de destinatarios que no deberían existir acá.
+const RETIRADAS = [
+  "encomienda_pedidos",
+  "encomienda_rutas",
+  "encomienda_paradas",
+  "encomienda_actividad",
+  "encomienda_reglas_pago",
+  "encomienda_ingresos_reales",
+  "encomienda_pagos",
+  "encomienda_jornadas",
+  "encomienda_periodos_facturacion",
+];
 
 // ---------------------------------------------------------------------------
 // Campos de cada interfaz, leídos del propio archivo de tipos
@@ -106,9 +114,12 @@ for (const tabla of [...Object.values(TABLAS), ...SIN_TIPO]) {
 }
 for (const tabla of RETIRADAS) {
   const { error } = await db.from(tabla).select("*").limit(1);
-  if (!error) mal(`${tabla}: volvió a existir después de la 0027 (datos personales)`);
+  if (!error) mal(`${tabla}: volvió a existir después de la 0036 (encomiendas se fue a Ares)`);
 }
-if (fallas.length === 0) ok(`las ${Object.keys(TABLAS).length + SIN_TIPO.length} tablas existen y las 3 retiradas no están`);
+if (fallas.length === 0)
+  ok(
+    `las ${Object.keys(TABLAS).length + SIN_TIPO.length} tablas existen y las ${RETIRADAS.length} retiradas no están`,
+  );
 
 // ---------------------------------------------------------------------------
 console.log("\n=== 2. Cada campo de cada tipo existe como columna ===");
@@ -139,7 +150,6 @@ const JOINS = [
   ["servicios_taxi", "*, cliente:clientes(id,nombre), chofer:choferes(id,nombre)"],
   ["gastos_vehiculo", "*, vehiculo:vehiculos(patente)"],
   ["chofer_categorias", "chofer:choferes(id, nombre, activo)"],
-  ["encomienda_actividad", "*, chofer:choferes(id,nombre)"],
 ];
 for (const [tabla, select] of JOINS) {
   const { error } = await db.from(tabla).select(select).limit(1);

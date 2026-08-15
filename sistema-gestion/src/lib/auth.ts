@@ -22,8 +22,17 @@ export type Sesion = {
   rol: RolUsuario | null;
 };
 
-/** Roles que ven el panel de escritorio. El chofer NO: su app es /conductor. */
+// Roles que ven el panel. Son TODOS los que hay: este sistema no tiene
+// ninguna pantalla para el chofer. La tenía —la app de reparto en /conductor,
+// que se fue a Ares junto con encomiendas— y era el único motivo por el que un
+// chofer necesitaba cuenta. El valor 'chofer' sigue existiendo en el enum
+// rol_usuario de Postgres (de un enum no se pueden quitar valores) pero ya no
+// se le asigna a nadie; esta lista es la que manda en la app.
 export const ROLES_PANEL: RolUsuario[] = ["admin", "operador", "contador"];
+
+export function tieneAccesoAlPanel(rol: RolUsuario | null | undefined): boolean {
+  return !!rol && ROLES_PANEL.includes(rol);
+}
 
 export const sesionActual = cache(async (): Promise<Sesion | null> => {
   const supabase = await createClient();
@@ -54,27 +63,15 @@ export async function exigirSesion(): Promise<Sesion> {
   return sesion;
 }
 
-// Puerta del panel admin. Un chofer con sesión abierta que entra a "/" (o a
-// cualquier ruta del grupo (app)) termina acá: se lo manda a su propia app en
-// vez de mostrarle un panel donde RLS le niega casi todos los datos y las
-// acciones. Antes esto solo pasaba en el momento del login, así que la
-// SEGUNDA visita — con la cookie ya puesta — caía directo en el panel admin.
+// Puerta del panel. El login ya rechaza a quien no tenga un rol de panel, pero
+// esto NO es redundante: las cuentas de chofer que quedaron con la sesión
+// abierta en el teléfono desde antes de sacar encomiendas traen la cookie
+// puesta y nunca vuelven a pasar por el login. Sin esta guardia verían el
+// armazón del panel de una empresa que ya no es la suya (vacío, porque RLS les
+// niega los datos, pero visible). Van al login con el aviso, y ahí sí se les
+// cierra la sesión.
 export async function exigirPanel(): Promise<Sesion> {
   const sesion = await exigirSesion();
-  if (sesion.rol === "chofer") redirect("/conductor");
+  if (!tieneAccesoAlPanel(sesion.rol)) redirect("/login?sin_acceso=1");
   return sesion;
-}
-
-// Puerta de la app del conductor, simétrica a exigirPanel(). Sin esto, un
-// admin que teclea /conductor cae en la pantalla "Cuenta sin vincular" (no
-// tiene ficha de chofer) sin ningún link de vuelta al panel.
-export async function exigirConductor(): Promise<Sesion> {
-  const sesion = await exigirSesion();
-  if (sesion.rol !== "chofer") redirect("/");
-  return sesion;
-}
-
-/** Ruta de inicio de cada rol: a dónde mandar a alguien recién autenticado. */
-export function inicioSegunRol(rol: RolUsuario | null | undefined): string {
-  return rol === "chofer" ? "/conductor" : "/";
 }

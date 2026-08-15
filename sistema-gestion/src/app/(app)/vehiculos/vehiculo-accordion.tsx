@@ -15,7 +15,6 @@ import {
 const categoriaTone: Record<VehiculoCategoria, Tone> = {
   operacion: "blue",
   taxis: "amber",
-  encomiendas: "violet",
 };
 
 type Pestana = "todos" | VehiculoCategoria | "sin_categoria";
@@ -24,9 +23,17 @@ const PESTANAS: { value: Pestana; label: string }[] = [
   { value: "todos", label: "Todos" },
   { value: "operacion", label: VEHICULO_CATEGORIAS.operacion },
   { value: "taxis", label: VEHICULO_CATEGORIAS.taxis },
-  { value: "encomiendas", label: VEHICULO_CATEGORIAS.encomiendas },
   { value: "sin_categoria", label: "Sin categoría" },
 ];
+
+// La base todavía acepta 'encomiendas' en vehiculos_categoria_valida (migración
+// 0016) y puede haber filas con ese valor: la categoría se fue con Ares pero no
+// se tocó Postgres. Una fila así no tiene entrada en VEHICULO_CATEGORIAS, y
+// leerla a ciegas devolvería undefined y rompería el Badge al buscar el tono.
+// Se muestra el valor crudo en gris hasta que esos vehículos se reclasifiquen.
+function esCategoriaConocida(c: string): c is VehiculoCategoria {
+  return c in VEHICULO_CATEGORIAS;
+}
 
 export function VehiculoAccordion({
   vehiculos,
@@ -119,12 +126,14 @@ export function VehiculoAccordion({
                   {v.km_actual != null ? ` · ${formatNumber(v.km_actual)} km` : ""}
                 </td>
                 <td className="px-4 py-3">
-                  {v.categoria ? (
+                  {!v.categoria ? (
+                    <span className="text-xs text-muted">Sin categoría</span>
+                  ) : esCategoriaConocida(v.categoria) ? (
                     <Badge tone={categoriaTone[v.categoria]}>
                       {VEHICULO_CATEGORIAS[v.categoria]}
                     </Badge>
                   ) : (
-                    <span className="text-xs text-muted">Sin categoría</span>
+                    <Badge tone="gray">{v.categoria}</Badge>
                   )}
                 </td>
                 <td className="px-4 py-3 text-center">{v.capacidad ?? "—"}</td>

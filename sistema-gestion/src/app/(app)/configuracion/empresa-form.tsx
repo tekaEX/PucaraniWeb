@@ -4,7 +4,6 @@ import { useActionState, useRef, useState } from "react";
 import { guardarEmpresa, type FormState } from "./actions";
 import { createClient } from "@/lib/supabase/client";
 import { Input } from "@/components/ui/input";
-import { DireccionInput } from "@/components/ui/direccion-input";
 import { Field } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Card, CardBody, CardHeader, CardTitle } from "@/components/ui/card";
@@ -17,10 +16,6 @@ export function EmpresaForm({ empresa }: { empresa?: Empresa }) {
     {},
   );
   const [logoUrl, setLogoUrl] = useState<string>(empresa?.logo_url ?? "");
-  // El único campo controlado del formulario: el de dirección ofrece
-  // sugerencias mientras se escribe y necesita poder reescribir su propio valor
-  // al elegir una. El resto viaja como FormData, igual que siempre.
-  const [direccion, setDireccion] = useState(empresa?.direccion ?? "");
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState<string>("");
   const fileRef = useRef<HTMLInputElement>(null);
@@ -71,15 +66,15 @@ export function EmpresaForm({ empresa }: { empresa?: Empresa }) {
           <Field label="Giro" htmlFor="giro">
             <Input id="giro" name="giro" defaultValue={empresa?.giro ?? ""} />
           </Field>
-          {/* Con sugerencias: de acá sale el punto de partida de la ruta de
-              reparto (ver generar-ruta.ts), así que si esta dirección no se
-              puede ubicar en el mapa, el chofer arranca desde otro lado. */}
+          {/* Texto libre. Tuvo sugerencias de Mapbox mientras de acá salía el
+              punto de partida de la ruta de reparto; eso se fue a Ares con
+              encomiendas, y hoy esta dirección solo se imprime en cotizaciones
+              e informes. */}
           <Field label="Dirección" htmlFor="direccion">
-            <DireccionInput
+            <Input
               id="direccion"
               name="direccion"
-              value={direccion}
-              onChange={setDireccion}
+              defaultValue={empresa?.direccion ?? ""}
               placeholder="Calle y número"
             />
           </Field>
