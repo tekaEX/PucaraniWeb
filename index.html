@@ -27,19 +27,32 @@
   <meta property="og:title" content="Transportes Pucarani | Transporte y Traslados en Arica">
   <meta property="og:description" content="Traslados al aeropuerto Chacalluta, taxi ejecutivo, transporte de personal y city tour en Arica y Tacna. Servicio 24/7.">
   <meta property="og:url" content="https://transportespucarani.cl/">
-  <meta property="og:image" content="https://transportespucarani.cl/assets/img/arica-vista-panoramica.jpg">
-  <meta property="og:image:width" content="1366">
-  <meta property="og:image:height" content="768">
-  <meta property="og:image:alt" content="Vista panorámica de la ciudad de Arica">
+  <meta property="og:image" content="https://transportespucarani.cl/assets/img/og-transportes-pucarani.jpg">
+  <meta property="og:image:secure_url" content="https://transportespucarani.cl/assets/img/og-transportes-pucarani.jpg">
+  <meta property="og:image:type" content="image/jpeg">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta property="og:image:alt" content="Van de pasajeros de Transportes Pucarani en Arica">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="Transportes Pucarani | Transporte y Traslados en Arica">
   <meta name="twitter:description" content="Traslados al aeropuerto Chacalluta, taxi ejecutivo, transporte de personal y city tour en Arica y Tacna.">
-  <meta name="twitter:image" content="https://transportespucarani.cl/assets/img/arica-vista-panoramica.jpg">
+  <meta name="twitter:image" content="https://transportespucarani.cl/assets/img/og-transportes-pucarani.jpg">
+  <meta name="twitter:image:alt" content="Van de pasajeros de Transportes Pucarani en Arica">
   <meta name="theme-color" content="#0e1d34">
 
-  <!-- Favicons -->
-  <link href="assets/img/pucaranilogo-icono.png" rel="icon">
-  <link href="assets/img/pucaranilogo.png" rel="apple-touch-icon">
+  <!-- ══ Favicon — es el logo que Google muestra junto al resultado ═════
+       Google exige que sea CUADRADO, de un tamaño múltiplo de 48px y que
+       la URL sea siempre la misma en todo el sitio (por eso van con "/").
+       No renombrar ni mover estos archivos: Google los cachea por URL. -->
+  <link rel="icon" href="/favicon.ico" sizes="any">
+  <link rel="icon" type="image/png" sizes="48x48" href="/assets/img/favicon-48x48.png">
+  <link rel="icon" type="image/png" sizes="96x96" href="/assets/img/favicon-96x96.png">
+  <link rel="icon" type="image/png" sizes="192x192" href="/assets/img/favicon-192x192.png">
+  <link rel="apple-touch-icon" sizes="180x180" href="/assets/img/apple-touch-icon.png">
+  <link rel="manifest" href="/site.webmanifest">
+
+  <!-- El fondo del hero es CSS: se precarga para que no retrase el primer pintado -->
+  <link rel="preload" as="image" href="assets/img/mapa-arica-parinacota-tacna.jpg" fetchpriority="high">
 
   <!-- Fonts -->
   <link href="https://fonts.googleapis.com" rel="preconnect">
@@ -70,9 +83,21 @@
         "alternateName": ["Pucarani", "Transportes Pucarani Arica"],
         "description": "Empresa de transporte de pasajeros en Arica: traslados al aeropuerto Chacalluta, taxi ejecutivo, transporte de personal para empresas, traslados al puerto, city tour en Arica y city tour en Tacna.",
         "url": "https://transportespucarani.cl/",
-        "logo": "https://transportespucarani.cl/assets/img/pucaranilogo.png",
+        "logo": {
+          "@type": "ImageObject",
+          "@id": "https://transportespucarani.cl/#logo",
+          "url": "https://transportespucarani.cl/assets/img/favicon-512x512.png",
+          "contentUrl": "https://transportespucarani.cl/assets/img/favicon-512x512.png",
+          "width": 512,
+          "height": 512,
+          "caption": "Transportes Pucarani"
+        },
         "sameAs": ["https://www.facebook.com/PucaraniArica/"],
-        "image": "https://transportespucarani.cl/assets/img/arica-vista-panoramica.jpg",
+        "image": [
+          "https://transportespucarani.cl/assets/img/og-transportes-pucarani.jpg",
+          "https://transportespucarani.cl/assets/img/van-pucarani-portada.jpg",
+          "https://transportespucarani.cl/assets/img/arica-vista-panoramica.jpg"
+        ],
         "telephone": "+56991622929",
         "email": "nanotransportes@gmail.com",
         "priceRange": "$$",
@@ -123,12 +148,38 @@
         "publisher": { "@id": "https://transportespucarani.cl/#empresa" }
       },
       {
+        "@type": "ItemList",
+        "@id": "https://transportespucarani.cl/#navegacion",
+        "name": "Servicios de Transportes Pucarani",
+        "description": "Secciones principales del sitio de Transportes Pucarani, Arica.",
+        "numberOfItems": 7,
+        "itemListOrder": "https://schema.org/ItemListOrderAscending",
+        "itemListElement": [
+          { "@type": "SiteNavigationElement", "position": 1, "name": "Aeropuerto Chacalluta", "description": "Traslados privados al aeropuerto Chacalluta desde cualquier sector de Arica.", "url": "https://transportespucarani.cl/traslado-aeropuerto-chacalluta.html" },
+          { "@type": "SiteNavigationElement", "position": 2, "name": "Taxi ejecutivo", "description": "Taxi ejecutivo privado en Arica para reuniones y traslados de negocios.", "url": "https://transportespucarani.cl/taxi-ejecutivo-arica.html" },
+          { "@type": "SiteNavigationElement", "position": 3, "name": "Traslado a Tacna", "description": "Traslado privado de Arica a Tacna con el paso de frontera coordinado.", "url": "https://transportespucarani.cl/traslado-arica-tacna.html" },
+          { "@type": "SiteNavigationElement", "position": 4, "name": "City tour Arica", "description": "City tour privado por el Morro, el centro histórico y la costanera de Arica.", "url": "https://transportespucarani.cl/city-tour-arica.html" },
+          { "@type": "SiteNavigationElement", "position": 5, "name": "City tour Tacna", "description": "City tour privado en Tacna saliendo desde Arica.", "url": "https://transportespucarani.cl/city-tour-tacna.html" },
+          { "@type": "SiteNavigationElement", "position": 6, "name": "Puerto de Arica", "description": "Traslados al Puerto de Arica coordinados con los cambios de turno.", "url": "https://transportespucarani.cl/traslado-puerto-arica.html" },
+          { "@type": "SiteNavigationElement", "position": 7, "name": "Traslado de artistas", "description": "Traslado de artistas, músicos y equipos de producción en Arica.", "url": "https://transportespucarani.cl/traslado-artistas-arica.html" }
+        ]
+      },
+      {
         "@type": ["WebPage", "FAQPage"],
         "@id": "https://transportespucarani.cl/#pagina",
         "url": "https://transportespucarani.cl/",
         "name": "Transportes Pucarani | Transporte y Traslados en Arica",
         "isPartOf": { "@id": "https://transportespucarani.cl/#sitio" },
         "about": { "@id": "https://transportespucarani.cl/#empresa" },
+        "primaryImageOfPage": {
+          "@type": "ImageObject",
+          "@id": "https://transportespucarani.cl/#portada",
+          "url": "https://transportespucarani.cl/assets/img/og-transportes-pucarani.jpg",
+          "contentUrl": "https://transportespucarani.cl/assets/img/og-transportes-pucarani.jpg",
+          "width": 1200,
+          "height": 630,
+          "caption": "Van de pasajeros de Transportes Pucarani en Arica"
+        },
         "inLanguage": "es-CL",
         "mainEntity": [
           {
@@ -199,7 +250,14 @@
 
     <!-- Hero Section -->
     <section id="hero" class="hero section dark-background">
-      <img src="assets/img/mapa-arica-parinacota-tacna.jpg" alt="Mapa de Arica y la frontera con Tacna" class="hero-bg" width="1500" height="804" fetchpriority="high" decoding="async">
+      <!-- Fondo decorativo del hero. Va como imagen de CSS (.hero-bg en styles.css)
+           y NO como <img>: el mapa está tapado casi por completo por el degradado,
+           pero al ser un <img> era la imagen más grande de la página y Google lo
+           usaba de miniatura en los resultados, suelto y sin contexto. Como fondo
+           CSS ya no es candidato; la miniatura la manda la foto de la van
+           (og:image + primaryImageOfPage del JSON-LD). Para cambiar el encuadre,
+           edita background-position en .hero-bg. -->
+      <div class="hero-bg" aria-hidden="true"></div>
 
       <div class="container hero__container">
 

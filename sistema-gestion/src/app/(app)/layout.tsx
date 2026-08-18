@@ -1,7 +1,8 @@
 import { createClient } from "@/lib/supabase/server";
 import { AppShell } from "@/components/app-shell";
+import { ToastProvider } from "@/components/ui/toast";
 import { exigirPanel } from "@/lib/auth";
-import { getPeriodo } from "@/lib/periodo";
+import { getPeriodo } from "@/lib/periodo-server";
 import { construirAlertas } from "@/lib/vencimientos";
 import type { Chofer, Vehiculo } from "@/types/db";
 
@@ -39,8 +40,16 @@ export default async function AppLayout({
         (vehiculos ?? []) as Vehiculo[],
       )}
     >
-      {children}
-      {modal}
+      {/* El aviso breve ("Viaje registrado con éxito en Viajes") es la respuesta
+          del sistema a una acción puntual, y lo necesita cualquier pantalla, no
+          solo Taxis —que era la única que lo montaba, por haber sido la
+          primera—. Envuelve a `children` acá: un provider por página obliga a
+          acordarse de ponerlo, y olvidarlo no rompe nada visible hasta que
+          alguien llama a useToast() y revienta en el navegador. */}
+      <ToastProvider>
+        {children}
+        {modal}
+      </ToastProvider>
     </AppShell>
   );
 }

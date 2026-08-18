@@ -82,6 +82,7 @@ export function ViajeAccordion({
           <th className="px-4 py-3 font-medium text-right">Valor</th>
           <th className="px-4 py-3 font-medium text-right">Costos</th>
           <th className="px-4 py-3 font-medium">Estado</th>
+          <th className="px-4 py-3 font-medium">Cotización</th>
           <th className="px-4 py-3 font-medium">Factura</th>
           <th className="px-4 py-3"></th>
         </tr>
@@ -136,6 +137,21 @@ export function ViajeAccordion({
                   className="whitespace-nowrap px-4 py-3"
                   onClick={(e) => e.stopPropagation()}
                 >
+                  {v.cotizacion ? (
+                    <Link
+                      href={`/cotizaciones/${v.cotizacion.id}`}
+                      className="text-brand hover:underline"
+                    >
+                      N° {v.cotizacion.numero}
+                    </Link>
+                  ) : (
+                    <span className="text-muted">—</span>
+                  )}
+                </td>
+                <td
+                  className="whitespace-nowrap px-4 py-3"
+                  onClick={(e) => e.stopPropagation()}
+                >
                   {v.factura ? (
                     <Link
                       href={`/facturas/${v.factura.id}`}
@@ -156,7 +172,7 @@ export function ViajeAccordion({
 
               {open ? (
                 <tr>
-                  <td colSpan={9} className="bg-background px-4 py-5">
+                  <td colSpan={10} className="bg-background px-4 py-5">
                     <div className="animate-expand">
                     <div className="mb-4 flex flex-wrap items-center gap-2">
                       <EstadoViajeControl viaje={v} />

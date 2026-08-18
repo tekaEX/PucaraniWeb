@@ -1,12 +1,13 @@
 "use server";
 
+import { exigirPanel, puedeEditar, SIN_PERMISO } from "@/lib/auth";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { hoyChile } from "@/lib/format";
 import { s, sReq, bool, intNull, num } from "@/lib/form-helpers";
 import { formatearPatente, PATENTE_HINT } from "@/lib/patentes";
-import { VEHICULO_CATEGORIAS } from "@/types/db";
+import { categoriaVehiculo, validarVehiculo } from "@/lib/flota";
 
 export type FormState = { error?: string; ok?: boolean };
 
@@ -14,15 +15,14 @@ export async function guardarVehiculo(
   _prev: FormState,
   formData: FormData,
 ): Promise<FormState> {
+  if (!(await puedeEditar())) return { error: SIN_PERMISO };
+
   // La patente ES el identificador: se guarda solo en formato canónico.
   const patenteOriginal = s(formData.get("patente_original"));
   const patenteRaw = sReq(formData.get("patente"));
   if (!patenteRaw) return { error: "La patente es obligatoria." };
   const patente = formatearPatente(patenteRaw);
   if (!patente) return { error: `Patente inválida. ${PATENTE_HINT}.` };
-
-  const categoriaRaw = s(formData.get("categoria"));
-  const categoria = categoriaRaw && categoriaRaw in VEHICULO_CATEGORIAS ? categoriaRaw : null;
 
   const values = {
     patente,
@@ -34,10 +34,15 @@ export async function guardarVehiculo(
     revision_tecnica_venc: s(formData.get("revision_tecnica_venc")),
     soap_venc: s(formData.get("soap_venc")),
     permiso_circulacion_venc: s(formData.get("permiso_circulacion_venc")),
-    categoria,
+    categoria: categoriaVehiculo(s(formData.get("categoria"))),
     activo: bool(formData.get("activo")),
     notas: s(formData.get("notas")),
   };
+
+  // Los vencimientos son el dato por el que existe esta ficha: si uno llega
+  // ilegible, se avisa acá y no como un error de Postgres sobre una columna date.
+  const problema = validarVehiculo(values);
+  if (problema) return { error: problema };
 
   const supabase = await createClient();
   const { error } = patenteOriginal
@@ -61,6 +66,8 @@ export async function eliminarVehiculo(
   _prev: FormState,
   formData: FormData,
 ): Promise<FormState> {
+  if (!(await puedeEditar())) return { error: SIN_PERMISO };
+
   const patente = sReq(formData.get("patente"));
   if (!patente) return { error: "Falta la patente." };
   const supabase = await createClient();
@@ -76,6 +83,8 @@ export async function desactivarVehiculo(
   _prev: FormState,
   formData: FormData,
 ): Promise<FormState> {
+  if (!(await puedeEditar())) return { error: SIN_PERMISO };
+
   const patente = sReq(formData.get("patente"));
   if (!patente) return { error: "Falta la patente." };
   const supabase = await createClient();
@@ -91,7 +100,12 @@ export async function desactivarVehiculo(
 
 // Antes de eliminar, se consulta al vuelo si el vehículo tiene historial
 // (viajes o gastos) para decidir qué advertencia mostrar en el diálogo.
+//
+// Lleva guardia aunque solo devuelva un booleano: una Server Action es un
+// endpoint POST público, y sin sesión esta consulta devolvía `false` por RLS
+// —o sea, "no tiene historial"—, que es la respuesta equivocada, no un rechazo.
 export async function tieneHistorialVehiculo(patente: string): Promise<boolean> {
+  await exigirPanel();
   const supabase = await createClient();
   const [asig, gastos] = await Promise.all([
     supabase
@@ -113,6 +127,8 @@ export async function agregarGasto(
   _prev: FormState,
   formData: FormData,
 ): Promise<FormState> {
+  if (!(await puedeEditar())) return { error: SIN_PERMISO };
+
   const vehiculo_id = sReq(formData.get("vehiculo_id"));
   if (!vehiculo_id) return { error: "Falta el vehículo." };
 
@@ -152,6 +168,8 @@ export async function eliminarGasto(
   _prev: FormState,
   formData: FormData,
 ): Promise<FormState> {
+  if (!(await puedeEditar())) return { error: SIN_PERMISO };
+
   const id = sReq(formData.get("id"));
   if (!id) return { error: "Falta el identificador." };
   const supabase = await createClient();

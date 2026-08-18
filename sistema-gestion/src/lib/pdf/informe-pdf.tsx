@@ -8,7 +8,7 @@ import {
   StyleSheet,
   renderToBuffer,
 } from "@react-pdf/renderer";
-import { formatDate, formatCLP } from "@/lib/format";
+import { formatDate, formatCLP, hoyChile } from "@/lib/format";
 import type { ViajesInforme } from "@/lib/queries";
 import type { LogoData } from "@/lib/logo";
 
@@ -135,7 +135,9 @@ function InformeDoc({
             </Text>
             <Text style={styles.metaLine}>
               <Text style={styles.metaLabel}>Emitido: </Text>
-              {formatDate(new Date())}
+              {/* Del día de Chile, no del reloj del servidor: un informe
+                  generado a las 21:00 salía fechado mañana. */}
+              {formatDate(hoyChile())}
             </Text>
           </View>
         </View>

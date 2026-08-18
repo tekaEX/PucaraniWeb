@@ -17,11 +17,14 @@ export type ViajeEstado = "programado" | "realizado" | "cancelado";
 /** Estado del DOCUMENTO tributario (no de la cobranza). */
 export type FacturaEstado = "borrador" | "emitida" | "anulada";
 
-export type RolUsuario = "admin" | "operador" | "contador";
+export type RolUsuario = "admin" | "operador";
 
 export type GastoCategoria = "combustible" | "mantencion" | "seguros" | "otros";
 export type GastoOrigen = "manual" | "sii";
 
+/** Los siete servicios del talonario. Los seis primeros son las casillas
+ *  impresas del vale; "especial" no tiene casilla y se escribe a mano, por eso
+ *  es el único que pide descripción. */
 export type TaxiTipo =
   | "aeropuerto_arica"
   | "arica_aeropuerto"
@@ -36,6 +39,12 @@ export interface Perfil {
   nombre: string;
   rol: RolUsuario;
   activo: boolean;
+  /**
+   * A qué empresa pertenece la cuenta (migración 0050). Es la columna que
+   * decide qué datos ve: todas las policies RLS filtran por ella, así que dos
+   * cuentas con empresa_id distinto no comparten ni un cliente.
+   */
+  empresa_id: string;
   created_at: string;
   updated_at: string;
 }
@@ -250,7 +259,8 @@ export interface ServicioTaxi {
   empresa_id: string;
   fecha: string;
   tipo: TaxiTipo;
-  /** Solo cuando tipo = "especial". */
+  /** Qué fue el servicio, cuando el tipo no lo dice: solo para "especial"
+   *  ("Tour Lauca medio día"). En el vale sale como la línea escrita a mano. */
   descripcion: string | null;
   monto: number;
   /** Nombre del pasajero. */
@@ -288,18 +298,44 @@ export function facturaEstadoDerivado(
   return facturaPagada(f) ? "pagada" : "por_cobrar";
 }
 
-export function costoTotalViaje(v: {
+export type CostosViaje = {
   costo_combustible?: number;
   costo_peajes?: number;
   costo_viaticos?: number;
   costo_otros?: number;
-}): number {
+};
+
+export function costoTotalViaje(v: CostosViaje): number {
   return (
     Number(v.costo_combustible ?? 0) +
     Number(v.costo_peajes ?? 0) +
     Number(v.costo_viaticos ?? 0) +
     Number(v.costo_otros ?? 0)
   );
+}
+
+/**
+ * Lo que deja un viaje: su valor menos lo que costó moverlo.
+ *
+ * El `valor` es lo que se le cobra al cliente SIN IVA — el IVA no es plata de
+ * la empresa, se le entrega al Estado. Meterlo acá inflaría la utilidad de cada
+ * viaje en un 19% que nunca fue suyo.
+ *
+ * Puede dar negativo, y así se muestra: un viaje que costó más de lo que se
+ * cobró es exactamente lo que hay que poder ver.
+ */
+export function utilidadViaje(v: CostosViaje & { valor?: number }): number {
+  return Number(v.valor ?? 0) - costoTotalViaje(v);
+}
+
+/**
+ * Margen del viaje en porcentaje. `null` si no tiene valor cargado: 0% diría
+ * que se trabajó a pérdida total, y lo que pasa es que todavía no se sabe.
+ */
+export function margenViaje(v: CostosViaje & { valor?: number }): number | null {
+  const valor = Number(v.valor ?? 0);
+  if (valor <= 0) return null;
+  return Math.round((utilidadViaje(v) / valor) * 100);
 }
 
 // ---------------------------------------------------------------------------
@@ -369,6 +405,15 @@ export const VIAJE_ESTADOS: Record<ViajeEstado, string> = {
   cancelado: "Cancelado",
 };
 
+// Estado del DOCUMENTO. No confundir con FACTURA_ESTADOS_DERIVADOS, que es lo
+// que la app muestra al usuario y sale de cruzar este estado con la fecha de
+// pago: una factura "emitida" se ve como "por cobrar" o "pagada" según cobre.
+export const FACTURA_ESTADOS: Record<FacturaEstado, string> = {
+  borrador: "Borrador",
+  emitida: "Emitida",
+  anulada: "Anulada",
+};
+
 export const FACTURA_ESTADOS_DERIVADOS: Record<FacturaEstadoDerivado, string> = {
   borrador: "Borrador",
   por_cobrar: "Emitida (por cobrar)",
@@ -376,18 +421,70 @@ export const FACTURA_ESTADOS_DERIVADOS: Record<FacturaEstadoDerivado, string> = 
   anulada: "Anulada",
 };
 
-// Tipos de servicio de taxi (mismo orden que el talonario físico; los 6
-// primeros son las casillas del vale, "especial" se escribe a mano).
-// `monto` es el valor por defecto que precarga el formulario.
-export const TAXI_TIPOS: Record<TaxiTipo, { label: string; monto: number | null }> = {
-  aeropuerto_arica: { label: "Aeropuerto → Ciudad Arica", monto: 8000 },
-  arica_aeropuerto: { label: "Ciudad Arica → Aeropuerto", monto: 8000 },
-  tacna_peru: { label: "Tacna – Perú", monto: null },
-  local: { label: "Servicio local", monto: null },
-  taxi_exclusivo: { label: "Taxi exclusivo", monto: null },
-  taxi_compartido: { label: "Taxi compartido", monto: null },
-  especial: { label: "Especial", monto: null },
+/**
+ * Los tipos de servicio de taxi, en el MISMO ORDEN que el talonario físico.
+ * Una sola tabla para las tres cosas que hay que saber de cada tipo:
+ *
+ *   `label`  — cómo se lee en la pantalla y en el informe Excel
+ *   `monto`  — tarifa que precarga el formulario, editable. null = no hay fija
+ *   `vale`   — el texto TAL CUAL va impreso en el vale
+ *   `casilla`— si tiene casilla propia en el papel. "Especial" no la tiene: en
+ *              el talonario se escribe a mano, así que en el vale sale como
+ *              línea aparte con su descripción
+ *
+ * Estaba partida en dos —las etiquetas acá y los textos del vale escritos otra
+ * vez dentro del PDF—, y el papel y la pantalla podían dejar de coincidir sin
+ * que nada avisara.
+ */
+export const TAXI_TIPOS: Record<
+  TaxiTipo,
+  { label: string; monto: number | null; vale: string; casilla: boolean }
+> = {
+  aeropuerto_arica: {
+    label: "Aeropuerto → Ciudad Arica",
+    monto: 8000,
+    vale: "AEROPUERTO CIUDAD ARICA",
+    casilla: true,
+  },
+  arica_aeropuerto: {
+    label: "Ciudad Arica → Aeropuerto",
+    monto: 8000,
+    vale: "CIUDAD ARICA AEROPUERTO",
+    casilla: true,
+  },
+  tacna_peru: { label: "Tacna – Perú", monto: null, vale: "TACNA-PERÚ", casilla: true },
+  local: { label: "Servicio local", monto: null, vale: "SERVICIO LOCAL", casilla: true },
+  taxi_exclusivo: {
+    label: "Taxi exclusivo",
+    monto: null,
+    vale: "TAXI EXCLUSIVO",
+    casilla: true,
+  },
+  taxi_compartido: {
+    label: "Taxi compartido",
+    monto: null,
+    vale: "TAXI COMPARTIDO",
+    casilla: true,
+  },
+  especial: { label: "Especial", monto: null, vale: "ESPECIAL", casilla: false },
 };
+
+/** El único tipo que necesita que alguien escriba QUÉ fue el servicio. */
+export const TAXI_TIPO_CON_DESCRIPCION: TaxiTipo = "especial";
+
+export function taxiPideDescripcion(tipo: string): boolean {
+  return tipo === TAXI_TIPO_CON_DESCRIPCION;
+}
+
+/**
+ * El nombre del tipo para mostrar. Un valor que la app no conozca —una fila
+ * vieja de un respaldo restaurado— se muestra crudo en vez de reventar la
+ * pantalla entera con `undefined.label`. Mismo criterio que la categoría del
+ * vehículo.
+ */
+export function taxiTipoLabel(tipo: string): string {
+  return TAXI_TIPOS[tipo as TaxiTipo]?.label ?? tipo;
+}
 
 export const TIPOS_DTE: Record<number, string> = {
   33: "Factura afecta",
@@ -399,7 +496,6 @@ export const TIPOS_DTE: Record<number, string> = {
 export const ROLES: Record<RolUsuario, string> = {
   admin: "Administrador",
   operador: "Operador",
-  contador: "Contador",
 };
 
 export const GASTO_CATEGORIAS: Record<GastoCategoria, string> = {

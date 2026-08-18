@@ -6,10 +6,11 @@ import { ConfirmForm } from "@/components/ui/confirm-form";
 import { Input } from "@/components/ui/input";
 import { InitialsAvatar } from "@/components/ui/avatar";
 import { EstadoCuenta } from "@/components/estado-cuenta";
-import { Trash2, Check, Loader2 } from "lucide-react";
+import { Trash2 } from "lucide-react";
 import type { CuentaCliente } from "@/lib/cobranza";
 import type { Cliente } from "@/types/db";
 import { buttonClass } from "@/components/ui/button";
+import { EstadoGuardado } from "@/components/ui/estado-guardado";
 
 export function ClientePanel({
   cliente,
@@ -104,21 +105,7 @@ export function ClientePanel({
               Eliminar
             </button>
           </ConfirmForm>
-          <span className="flex h-4 items-center gap-1.5 text-xs text-muted">
-            {pending ? (
-              <>
-                <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                Guardando…
-              </>
-            ) : state.ok ? (
-              <>
-                <Check className="h-3.5 w-3.5 text-ok" />
-                Guardado
-              </>
-            ) : (
-              ""
-            )}
-          </span>
+          <EstadoGuardado pending={pending} ok={state.ok} />
         </div>
       </div>
 

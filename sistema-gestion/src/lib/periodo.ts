@@ -1,7 +1,25 @@
-import { cookies } from "next/headers";
-import { hoyChile } from "@/lib/format";
-
-// Periodo global de la app. mes: 1-12, o null = año completo.
+// Periodo global de la app: la matemática PURA. mes: 1-12, o null = año completo.
+//
+// Leer el periodo elegido es otra cosa y vive en periodo-server.ts, porque sale
+// de una cookie y eso solo existe en el servidor. Están separados por el mismo
+// motivo que cobranza.ts / cobranza-server.ts: si una sola función que toca
+// next/headers vive acá, el módulo entero queda marcado `server-only` y ningún
+// componente de cliente puede usar enRango ni etiquetaPeriodo, aunque sean
+// aritmética de fechas y strings.
+//
+// La regla que este módulo NO puede aplicar sola, y que hay que tener presente
+// cada vez que se filtra algo por periodo: **cada concepto entra al periodo por
+// una fecha distinta**.
+//
+//   ingresos (facturas)   → fecha_pago
+//   por cobrar            → fecha_emision
+//   pendiente de facturar → fecha_inicio del viaje
+//   servicios de taxi     → fecha (se cobran al momento)
+//   gastos de flota       → fecha
+//   costos de viaje       → fecha_inicio del viaje
+//
+// Usar la fecha equivocada no rompe nada visiblemente: devuelve un número
+// plausible en el mes equivocado. Por eso está escrito acá arriba.
 export type Periodo = { anio: number; mes: number | null };
 
 const MESES = [
@@ -18,21 +36,6 @@ const MESES = [
   "noviembre",
   "diciembre",
 ];
-
-// Lee el periodo desde la cookie (server-side). Por defecto, el mes actual
-// EN CHILE (el servidor corre en UTC: de noche ya sería el mes siguiente).
-export async function getPeriodo(): Promise<Periodo> {
-  const raw = (await cookies()).get("periodo")?.value;
-  const [hAnio, hMes] = hoyChile().split("-").map(Number);
-  const fallback: Periodo = { anio: hAnio, mes: hMes };
-  if (!raw) return fallback;
-  const [a, m] = raw.split("-");
-  const anio = Number(a);
-  if (!anio) return fallback;
-  if (m === "ALL") return { anio, mes: null };
-  const mes = Number(m);
-  return { anio, mes: mes >= 1 && mes <= 12 ? mes : fallback.mes };
-}
 
 // Rango de fechas inclusivo [desde, hasta] en formato YYYY-MM-DD.
 export function rangoPeriodo(p: Periodo): { desde: string; hasta: string } {
@@ -69,4 +72,41 @@ export function periodoAnterior(p: Periodo): Periodo {
 // Etiqueta corta para comparaciones: "mayo" o "2025".
 export function etiquetaCorta(p: Periodo): string {
   return p.mes === null ? String(p.anio) : MESES[p.mes - 1];
+}
+
+// Etiqueta de tres letras para el eje del gráfico: "ene". En vista anual, el año.
+export function etiquetaMes(p: Periodo): string {
+  return p.mes === null ? String(p.anio) : MESES[p.mes - 1].slice(0, 3);
+}
+
+/**
+ * Los `n` meses que terminan en el periodo elegido, del más viejo al más nuevo.
+ * Es la ventana del gráfico de tendencia.
+ *
+ * `hoy` se pasa (formato YYYY-MM-DD, de hoyChile()) en vez de leer el reloj:
+ * el servidor corre en UTC y de noche en Chile allá ya es el día —y a fin de
+ * mes, el MES— siguiente. Un gráfico que se adelanta un mes el día 31 muestra
+ * una columna vacía y esconde la del mes que se está mirando.
+ *
+ * En vista anual (mes = null) la ventana termina en el mes en curso si el año
+ * elegido es el corriente, y en diciembre si es cualquier otro.
+ */
+export function mesesVentana(p: Periodo, hoy: string, n = 6): Periodo[] {
+  const anioHoy = Number(hoy.slice(0, 4));
+  const mesHoy = Number(hoy.slice(5, 7));
+  const finMes = p.mes ?? (p.anio === anioHoy ? mesHoy : 12);
+
+  // Aritmética en meses absolutos, sin Date: enero menos uno es diciembre del
+  // año anterior y no hay husos horarios de por medio.
+  const meses: Periodo[] = [];
+  for (let i = n - 1; i >= 0; i--) {
+    const absoluto = p.anio * 12 + (finMes - 1) - i;
+    meses.push({ anio: Math.floor(absoluto / 12), mes: (absoluto % 12) + 1 });
+  }
+  return meses;
+}
+
+/** ¿Son el mismo mes (o el mismo año, en vista anual)? */
+export function mismoPeriodo(a: Periodo, b: Periodo): boolean {
+  return a.anio === b.anio && a.mes === b.mes;
 }

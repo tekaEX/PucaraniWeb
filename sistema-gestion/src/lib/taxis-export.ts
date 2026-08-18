@@ -1,15 +1,21 @@
 // Carga compartida para las exportaciones de taxis (vales PDF y Excel):
 // servicios del periodo global (cookie), con filtro opcional por nombre de
-// empresa — el mismo que aplica la tabla en pantalla.
+// empresa —el mismo que aplica la tabla en pantalla— o por un servicio puntual,
+// que es el vale de una fila.
+import "server-only";
 import { createClient } from "@/lib/supabase/server";
-import { getPeriodo, rangoPeriodo, type Periodo } from "@/lib/periodo";
+import { rangoPeriodo, type Periodo } from "@/lib/periodo";
+import { getPeriodo } from "@/lib/periodo-server";
 import {
   taxiNombreCliente,
   type Empresa,
   type ServicioTaxiConRelaciones,
 } from "@/types/db";
 
-export async function cargarServiciosExport(clienteFiltro: string | null): Promise<{
+export async function cargarServiciosExport(
+  clienteFiltro: string | null,
+  servicioId?: string | null,
+): Promise<{
   servicios: ServicioTaxiConRelaciones[];
   empresa: Empresa | null;
   periodo: Periodo;
@@ -30,7 +36,11 @@ export async function cargarServiciosExport(clienteFiltro: string | null): Promi
   let servicios = (sData ?? []) as ServicioTaxiConRelaciones[];
   const empresa = (eData ?? null) as Empresa | null;
 
-  if (clienteFiltro) {
+  // Un servicio puntual manda sobre el filtro de empresa: es el botón de vale
+  // de esa fila, y la fila ya está a la vista.
+  if (servicioId) {
+    servicios = servicios.filter((s) => s.id === servicioId);
+  } else if (clienteFiltro) {
     servicios = servicios.filter((s) => taxiNombreCliente(s) === clienteFiltro);
   }
 

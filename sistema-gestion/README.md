@@ -21,7 +21,7 @@ Permite:
   de documentos (revisión técnica, SOAP, permiso, licencias) en una **campana** siempre visible.
 - **Periodo global** (mes/año) que filtra toda la app y edición **inline con autoguardado**
   en cada lista.
-- **Inicio de sesión** con roles (admin / operador / contador / chofer) para proteger los datos.
+- **Inicio de sesión** con roles (admin / operador) para proteger los datos.
 
 Construido con **Next.js 16** (App Router), **React 19**, **Supabase** (PostgreSQL + login +
 archivos) y **Tailwind CSS v4**.
@@ -45,6 +45,11 @@ archivos) y **Tailwind CSS v4**.
      [`0008_patente_identificador.sql`](supabase/migrations/0008_patente_identificador.sql)
      — la **patente pasa a ser el identificador del vehículo** (PK) y vincula los gastos
      del SII automáticamente.
+   - [`0050_empresa_por_cuenta.sql`](supabase/migrations/0050_empresa_por_cuenta.sql) —
+     **cada cuenta ve solo su empresa**. Hasta acá `empresa_id` estaba en todas las tablas
+     pero no filtraba nada: cualquier admin veía los datos de todos. Agrega
+     `perfiles.empresa_id` y reescribe las 24 policies para filtrar por empresa además de
+     por rol. No cambia lo que ya existe (todos los perfiles quedan en la empresa actual).
 
    La numeración salta (`0017`–`0019`, `0021`–`0029`, `0031`–`0035`): esas migraciones
    creaban y ajustaban las tablas `encomienda_*`, que se fueron al proyecto Ares junto
@@ -53,8 +58,11 @@ archivos) y **Tailwind CSS v4**.
    renumeraron porque en la base ya instalada están registrados con el número viejo.
 
    Opcionales: [`seed_demo.sql`](supabase/seed_demo.sql) carga datos de prueba realistas
-   (evergreen, relativos a hoy); [`fix_encoding.sql`](supabase/fix_encoding.sql) repara
-   acentos si algún `.sql` se ejecutó con codificación equivocada.
+   (evergreen, relativos a hoy) en una **empresa DEMO aparte**, y mueve la cuenta
+   `admin619619@gmail.com` a esa empresa — los datos reales no se tocan y las dos cuentas
+   no se ven entre sí. Requiere la `0050` corrida antes;
+   [`fix_encoding.sql`](supabase/fix_encoding.sql) repara acentos si algún `.sql` se
+   ejecutó con codificación equivocada.
 4. Crea tu usuario: **Authentication → Users → Add user → Create new user**. Pon tu correo
    y una contraseña (el primer usuario queda como **admin**). Con eso inicias sesión.
 5. Copia tus credenciales en **Project Settings → API**:
@@ -165,7 +173,16 @@ botones "Nuevo…" abren una **ventana modal**.
 - **Patente = identificador del vehículo:** la patente es la clave primaria de `vehiculos`
   (formato `ABCD-12` / `AB-1234`, validado en la app y en la base). Los gastos del SII se
   vinculan solos por patente.
+- **Una empresa por cuenta:** `perfiles.empresa_id` decide qué datos ve cada cuenta, y
+  todas las policies RLS filtran por esa columna (migración `0050`). Dos cuentas de
+  empresas distintas no comparten ni un cliente. Los buckets privados (`adjuntos`,
+  `certificados`) también se separan por carpeta de empresa. Lo que **todavía es global**:
+  la patente (PK de `vehiculos`) y el correo del chofer — dos empresas no pueden registrar
+  la misma patente.
 - Usuarios: Supabase → **Authentication → Users → Add user**. Roles en la tabla `perfiles`.
+  Una cuenta nueva entra a la empresa del chofer pre-registrado con ese correo; si no hay
+  ninguno, a la empresa más antigua. Para mover una cuenta de empresa se edita
+  `perfiles.empresa_id`.
 - Archivos (logo, fotos, PDF de facturas, certificados) en **Supabase Storage**; los
   buckets `adjuntos` y `certificados` son privados (se acceden con URL firmada).
 - Correlativo de cotizaciones: campo *Próximo número de cotización* en **Configuración**

@@ -1,10 +1,13 @@
 "use server";
 
+import { esAdmin, puedeEditar, SIN_PERMISO } from "@/lib/auth";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { empresaActual } from "@/lib/empresa-server";
 import { encrypt } from "@/lib/crypto";
 import { sReq } from "@/lib/form-helpers";
+import { mismoRut, parsearCaf } from "@/lib/caf";
 
 export type FormState = { error?: string };
 
@@ -14,6 +17,8 @@ export async function guardarCredencialesSii(
   _prev: FormState,
   formData: FormData,
 ): Promise<FormState> {
+  if (!(await puedeEditar())) return { error: SIN_PERMISO };
+
   const rut = sReq(formData.get("rut"));
   const password = sReq(formData.get("password"));
   const cert = formData.get("certificado");
@@ -26,12 +31,7 @@ export async function guardarCredencialesSii(
   } = await supabase.auth.getUser();
   if (!user) return { error: "No autorizado." };
 
-  const { data: empresa } = await supabase
-    .from("empresa")
-    .select("id")
-    .order("created_at")
-    .limit(1)
-    .single();
+  const empresa = await empresaActual();
   if (!empresa) return { error: "No hay empresa configurada." };
   const empresaId = empresa.id;
 
@@ -84,6 +84,95 @@ export async function guardarCredencialesSii(
   );
   if (error) return { error: `No se pudo guardar: ${error.message}` };
 
-  revalidatePath("/combustible/configuracion");
-  redirect("/vehiculos");
+  revalidatePath("/facturas/configuracion");
+  redirect("/facturas/configuracion");
+}
+
+// Carga un CAF (archivo de folios del SII).
+//
+// Lo que se guarda es la METADATA del rango; el XML entero va al bucket privado
+// 'certificados', porque adentro viene la llave con la que se timbran los
+// documentos y no tiene por qué estar al alcance de un select.
+//
+// El rango NO se pide por formulario: se lee del propio archivo. Tipear a mano
+// "del 465 al 564" es exactamente el error que después emite un folio fuera de
+// rango y lo rechaza el SII.
+export async function guardarCaf(
+  _prev: FormState,
+  formData: FormData,
+): Promise<FormState> {
+  if (!(await esAdmin())) return { error: SIN_PERMISO };
+
+  const archivo = formData.get("caf");
+  if (!archivo || typeof archivo === "string" || archivo.size === 0) {
+    return { error: "Elegí el archivo CAF (.xml) que descargaste del SII." };
+  }
+
+  const empresa = await empresaActual();
+  if (!empresa) return { error: "No hay empresa configurada." };
+
+  const supabase = await createClient();
+  const { data: cred } = await supabase
+    .from("sii_credenciales")
+    .select("rut, ambiente")
+    .eq("empresa_id", empresa.id)
+    .maybeSingle();
+
+  // Cargar folios NO exige tener el certificado todavía: son dos cosas
+  // separadas y se consiguen en momentos distintos. Lo único que hace falta es
+  // el RUT, para verificar que el CAF sea de esta empresa; si no hay
+  // credenciales SII cargadas, sirve el RUT de la empresa.
+  const rutEmpresa = cred?.rut ?? empresa.rut;
+  if (!rutEmpresa) {
+    return {
+      error: "Falta el RUT de la empresa: cargalo en Configuración, o subí el certificado digital acá arriba.",
+    };
+  }
+
+  const xml = await archivo.text();
+  const leido = parsearCaf(xml);
+  if ("error" in leido) return { error: leido.error };
+  const caf = leido.datos;
+
+  // Un CAF de OTRO RUT timbra documentos que no son tuyos: el SII los rechaza y
+  // el error llega tarde y sin explicación. Se corta acá.
+  if (!mismoRut(caf.rutEmisor, rutEmpresa)) {
+    return {
+      error: `Ese CAF es del RUT ${caf.rutEmisor} y la empresa está configurada como ${rutEmpresa}.`,
+    };
+  }
+
+  const ambiente = (cred?.ambiente ?? "certificacion") as "certificacion" | "produccion";
+  const path = `${empresa.id}/caf/${ambiente}-${caf.tipoDte}-${caf.folioDesde}-${caf.folioHasta}.xml`;
+  const { error: upErr } = await supabase.storage
+    .from("certificados")
+    .upload(path, new Blob([xml], { type: "application/xml" }), {
+      contentType: "application/xml",
+      upsert: true,
+    });
+  if (upErr) return { error: `No se pudo guardar el CAF: ${upErr.message}` };
+
+  const { error } = await supabase.from("sii_caf").insert({
+    empresa_id: empresa.id,
+    tipo_dte: caf.tipoDte,
+    ambiente,
+    folio_desde: caf.folioDesde,
+    folio_hasta: caf.folioHasta,
+    folio_siguiente: caf.folioDesde,
+    fecha_autorizacion: caf.fechaAutorizacion,
+    xml_path: path,
+  });
+  if (error) {
+    // El índice único (empresa, tipo, ambiente, folio_desde) es lo que evita que
+    // volver a subir el mismo CAF reinicie el contador y repita folios ya usados.
+    if (error.code === "23505") {
+      return {
+        error: `Ese rango ya estaba cargado (tipo ${caf.tipoDte}, folios ${caf.folioDesde}–${caf.folioHasta}). No se volvió a cargar para no reiniciar los folios ya usados.`,
+      };
+    }
+    return { error: `No se pudo registrar el rango: ${error.message}` };
+  }
+
+  revalidatePath("/facturas/configuracion");
+  return {};
 }

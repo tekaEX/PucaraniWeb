@@ -36,7 +36,10 @@ export function Kpi({
         >
           {value}
         </div>
-        <div className={`mt-1 text-xs font-medium ${subClass}`}>{sub}</div>
+        {/* El comentario va a la DERECHA, no bajo el monto: así queda alineado
+            con el ícono y no compite con la cifra por el mismo borde. El monto
+            es lo que se lee primero; el "−9% vs. julio" es la nota al pie. */}
+        <div className={`mt-1 text-right text-xs font-medium ${subClass}`}>{sub}</div>
       </CardBody>
     </Card>
   );

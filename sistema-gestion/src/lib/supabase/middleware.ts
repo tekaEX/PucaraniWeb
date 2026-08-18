@@ -1,35 +1,37 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
+import { supabaseEnv } from "./env";
 
 // Refresca la sesión de Supabase en cada request y protege las rutas privadas.
 // Se invoca desde proxy.ts (el "middleware" de Next.js 16).
 export async function updateSession(request: NextRequest) {
   let supabaseResponse = NextResponse.next({ request });
 
-  const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    {
-      cookies: {
-        getAll() {
-          return request.cookies.getAll();
-        },
-        setAll(cookiesToSet) {
-          cookiesToSet.forEach(({ name, value }) =>
-            request.cookies.set(name, value),
-          );
-          supabaseResponse = NextResponse.next({ request });
-          cookiesToSet.forEach(({ name, value, options }) =>
-            supabaseResponse.cookies.set(name, value, options),
-          );
-        },
+  // Va ANTES del try/catch de abajo a propósito: ese catch existe para que
+  // Supabase caído no tire la app, y una variable faltante no es eso — es un
+  // error de configuración que tiene que verse.
+  const { url, anonKey } = supabaseEnv();
+
+  const supabase = createServerClient(url, anonKey, {
+    cookies: {
+      getAll() {
+        return request.cookies.getAll();
+      },
+      setAll(cookiesToSet) {
+        cookiesToSet.forEach(({ name, value }) => request.cookies.set(name, value));
+        supabaseResponse = NextResponse.next({ request });
+        cookiesToSet.forEach(({ name, value, options }) =>
+          supabaseResponse.cookies.set(name, value, options),
+        );
       },
     },
-  );
+  });
 
   // IMPORTANTE: no ejecutar código entre createServerClient y getUser().
   // Si Supabase no responde (mala config o red), tratamos como "sin sesión"
-  // en lugar de romper toda la app con un error 500.
+  // en lugar de romper toda la app con un error 500. Ojo con la diferencia:
+  // esto cubre a Supabase caído o inalcanzable, NO a una app mal configurada
+  // —eso ya falló arriba, con el nombre de la variable que falta.
   let user = null;
   try {
     const result = await supabase.auth.getUser();

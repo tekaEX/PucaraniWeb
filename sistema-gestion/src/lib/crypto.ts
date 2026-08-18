@@ -1,9 +1,11 @@
+import "server-only";
 import { createCipheriv, createDecipheriv, randomBytes } from "crypto";
 
 // Cifrado reversible AES-256-GCM (autenticado) para datos sensibles como la
 // contraseña del certificado digital. La llave vive solo en el entorno.
 // ENCRYPTION_KEY debe ser de 32 bytes en hexadecimal (64 caracteres).
-// Generar con: node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
+// Generar con:
+//   node -e "import('node:crypto').then(c=>console.log(c.randomBytes(32).toString('hex')))"
 function getKey(): Buffer {
   const key = Buffer.from(process.env.ENCRYPTION_KEY ?? "", "hex");
   if (key.length !== 32) {

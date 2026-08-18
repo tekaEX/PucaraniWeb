@@ -1,7 +1,6 @@
 "use client";
 
 import { useActionState, useMemo, useState } from "react";
-import Link from "next/link";
 import { addDays } from "date-fns";
 import type { FormState } from "./actions";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -10,12 +9,13 @@ import { MoneyInput } from "@/components/ui/money-input";
 import { Textarea } from "@/components/ui/textarea";
 import { Select } from "@/components/ui/select";
 import { Field } from "@/components/ui/label";
-import { Button, buttonClass } from "@/components/ui/button";
+import { Button } from "@/components/ui/button";
 import { Card, CardBody, CardHeader, CardTitle } from "@/components/ui/card";
 import { Plus, Trash2, Save } from "lucide-react";
 import { formatCLP, toInputDate, todayInput } from "@/lib/format";
 import { COTIZACION_ESTADOS } from "@/types/db";
 import type { Cotizacion, CotizacionItem } from "@/types/db";
+import { calcularTotales } from "@/lib/totales";
 
 const NOTA_DEFAULT =
   "En caso de sufrir algún desperfecto la máquina en servicio, contamos con máquinas de reemplazo al instante.";
@@ -66,14 +66,11 @@ export function CotizacionForm({
       : [{ key: newKey(), fecha: "", descripcion: "", valor_unitario: "" }],
   );
 
-  const totales = useMemo(() => {
-    const subtotal = rows.reduce(
-      (acc, r) => acc + Math.round(toNum(r.valor_unitario)),
-      0,
-    );
-    const iva = exento ? 0 : Math.round(subtotal * 0.19);
-    return { subtotal, iva, total: subtotal + iva };
-  }, [rows, exento]);
+  // Mismo cálculo que usa la Server Action al guardar (lib/totales.ts).
+  const totales = useMemo(
+    () => calcularTotales(rows.map((r) => ({ valor_unitario: toNum(r.valor_unitario) })), exento),
+    [rows, exento],
+  );
 
   const itemsJson = JSON.stringify(
     rows.map((r) => ({
@@ -268,14 +265,11 @@ export function CotizacionForm({
         </p>
       ) : null}
 
-      <div className="flex items-center gap-2">
+      <div className="flex items-center justify-end">
         <Button type="submit" disabled={pending}>
           <Save className="h-4 w-4" />
           {pending ? "Guardando…" : "Guardar cotización"}
         </Button>
-        <Link href="/cotizaciones" className={buttonClass({ variant: "outline" })}>
-          Cancelar
-        </Link>
       </div>
     </form>
   );

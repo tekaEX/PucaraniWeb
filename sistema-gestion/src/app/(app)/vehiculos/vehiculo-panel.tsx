@@ -17,11 +17,13 @@ import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { GastoForm } from "./gasto-form";
-import { Trash2, Check, Loader2 } from "lucide-react";
+import { Trash2 } from "lucide-react";
 import { toInputDate, formatCLP, formatDate } from "@/lib/format";
 import { PATENTE_PATTERN, PATENTE_HINT } from "@/lib/patentes";
+import { DOCS_VEHICULO } from "@/lib/vencimientos";
 import { buttonClass } from "@/components/ui/button";
 import { Vacio } from "@/components/ui/vacio";
+import { EstadoGuardado } from "@/components/ui/estado-guardado";
 import {
   GASTO_CATEGORIAS,
   VEHICULO_CATEGORIAS,
@@ -219,21 +221,7 @@ export function VehiculoPanel({
     <div className="space-y-4">
       {/* Estado de guardado + eliminar */}
       <div className="flex items-center justify-end gap-3">
-        <span className="flex h-4 items-center gap-1.5 text-xs text-muted">
-          {pending ? (
-            <>
-              <Loader2 className="h-3.5 w-3.5 animate-spin" />
-              Guardando…
-            </>
-          ) : state.ok ? (
-            <>
-              <Check className="h-3.5 w-3.5 text-ok" />
-              Guardado
-            </>
-          ) : (
-            ""
-          )}
-        </span>
+        <EstadoGuardado pending={pending} ok={state.ok} />
         <button
           type="button"
           onClick={() => setEliminarAbierto(true)}
@@ -323,36 +311,22 @@ export function VehiculoPanel({
 
           <div>
             <p className="mb-2 text-sm font-semibold">Documentos (vencimientos)</p>
+            {/* Un campo por documento, desde la misma lista que la tabla y la
+                campana (lib/vencimientos.ts). El `name` ES la columna. */}
             <div className="grid gap-3 sm:grid-cols-3">
-              <Campo label="Rev. técnica">
-                <Input
-                  name="revision_tecnica_venc"
-                  type="date"
-                  defaultValue={
-                    vehiculo.revision_tecnica_venc
-                      ? toInputDate(vehiculo.revision_tecnica_venc)
-                      : ""
-                  }
-                />
-              </Campo>
-              <Campo label="SOAP">
-                <Input
-                  name="soap_venc"
-                  type="date"
-                  defaultValue={vehiculo.soap_venc ? toInputDate(vehiculo.soap_venc) : ""}
-                />
-              </Campo>
-              <Campo label="Permiso circ.">
-                <Input
-                  name="permiso_circulacion_venc"
-                  type="date"
-                  defaultValue={
-                    vehiculo.permiso_circulacion_venc
-                      ? toInputDate(vehiculo.permiso_circulacion_venc)
-                      : ""
-                  }
-                />
-              </Campo>
+              {DOCS_VEHICULO.map((d) => {
+                const fecha = vehiculo[d.campo] as string | null;
+                return (
+                  <Campo key={d.campo} label={d.corto}>
+                    <Input
+                      name={d.campo}
+                      type="date"
+                      title={d.label}
+                      defaultValue={fecha ? toInputDate(fecha) : ""}
+                    />
+                  </Campo>
+                );
+              })}
             </div>
           </div>
 

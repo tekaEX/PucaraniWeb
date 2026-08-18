@@ -36,6 +36,37 @@
   --danger-bg: #fbe7e4;
   --info: #0c3f9b;
   --info-bg: #e8eefa;
+
+  /* Gráficos — dos series: lo que entra y lo que sale.
+     El verde es de la familia de --ok, apenas levantado: L 0.47 → 0.51.
+
+     --ok NO se usa tal cual, y no es por estética: #0f6b45 contra este naranjo
+     da ΔE 5.7 en protanopía, o sea las dos barras se ven iguales para quien no
+     distingue rojo de verde.
+
+     Cuidado al mover la luminosidad de este verde, porque el margen NO crece de
+     forma pareja: el naranjo está en L 0.535, y a medida que el verde se le
+     acerca las dos barras se confunden. Medido contra este naranjo:
+
+       L 0.65 → ΔE 12.6      L 0.56 → ΔE 7.9  ← NO PASA
+       L 0.59 → ΔE  9.0      L 0.51 → ΔE 9.3  ← el de acá abajo
+       L 0.58 → ΔE  8.3      L 0.47 → ΔE 5.7  ← NO PASA (--ok tal cual)
+
+     Hay un valle alrededor de L 0.56 y otro derrumbe bajo L 0.48. Este verde
+     está en el mejor punto de la zona oscura, que es la que se pidió.
+
+     Validado con el script de la guía de visualización contra el blanco de la
+     tarjeta. Pasa los seis chequeos: banda de luminosidad, croma, separación
+     para daltonismo (ΔE 9.3 protan / 27.2 tritan), piso de visión normal (22.1)
+     y contraste. Si se cambia uno, hay que volver a correrlo.
+
+     Verde contra naranjo es un par bastante más exigente que el azul contra
+     naranjo que había antes (ΔE 26.9): aprueba, pero con poco margen. Por eso
+     el gráfico no puede quedarse en el color solo — la leyenda, el orden fijo
+     de las barras y el título de cada una son parte de la lectura, no un
+     adorno. */
+  --chart-ingresos: #0e7a55;
+  --chart-egresos: #b04a00;
 }
 
 @theme inline {
@@ -81,6 +112,11 @@
   --ease-suave: cubic-bezier(0.16, 1, 0.3, 1);
   --animate-fade-in: fade-in 0.2s ease-out both;
   --animate-scale-in: scale-in 0.24s var(--ease-suave) both;
+  /* La salida es el espejo de scale-in, pero más corta y con ease-IN: entrar
+     desacelera (algo que llega y se posa), salir acelera (algo que se va). Si
+     ambas usaran la misma curva y duración, el aviso parecería dudar antes de
+     irse. Su duración tiene que coincidir con SALIDA_MS en ui/toast.tsx. */
+  --animate-scale-out: scale-out 0.2s ease-in both;
   --animate-expand: expand 0.28s var(--ease-suave) both;
   --animate-page: page-in 0.22s ease-out both;
   --animate-slide-up: slide-up 0.4s var(--ease-suave) both;
@@ -93,6 +129,10 @@
 @keyframes scale-in {
   from { opacity: 0; transform: scale(0.965) translateY(10px); }
   to { opacity: 1; transform: none; }
+}
+@keyframes scale-out {
+  from { opacity: 1; transform: none; }
+  to { opacity: 0; transform: scale(0.965) translateY(10px); }
 }
 @keyframes expand {
   from { opacity: 0; transform: translateY(-6px); }

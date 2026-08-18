@@ -8,12 +8,20 @@ import { MoneyInput } from "@/components/ui/money-input";
 import { Textarea } from "@/components/ui/textarea";
 import { Select } from "@/components/ui/select";
 import { Field } from "@/components/ui/label";
-import { Button, buttonClass } from "@/components/ui/button";
+import { Button } from "@/components/ui/button";
 import { Card, CardBody, CardHeader, CardTitle } from "@/components/ui/card";
-import { Save, Plus, X, Check, Loader2 } from "lucide-react";
+import { Save, Plus, X, AlertTriangle } from "lucide-react";
 import { toInputDate, todayInput, formatCLP } from "@/lib/format";
-import { VIAJE_ESTADOS } from "@/types/db";
+import {
+  avisoDocumento,
+  documentosChofer,
+  documentosVehiculo,
+  marcaDocumentos,
+  type Documento,
+} from "@/lib/vencimientos";
+import { VIAJE_ESTADOS, costoTotalViaje, utilidadViaje } from "@/types/db";
 import type { ViajeConRelaciones, ViajeEstado } from "@/types/db";
+import { EstadoGuardado } from "@/components/ui/estado-guardado";
 
 export type ClienteOpt = { id: string; nombre: string; codigo: string | null };
 export type CotizacionOpt = {
@@ -23,10 +31,72 @@ export type CotizacionOpt = {
   total: number;
   titulo?: string | null;
 };
-export type ChoferOpt = { id: string; nombre: string };
-export type VehiculoOpt = { patente: string };
+export type ChoferOpt = {
+  id: string;
+  nombre: string;
+  activo?: boolean;
+  licencia_vencimiento?: string | null;
+};
+export type VehiculoOpt = {
+  patente: string;
+  activo?: boolean;
+  revision_tecnica_venc?: string | null;
+  soap_venc?: string | null;
+  permiso_circulacion_venc?: string | null;
+};
 
 type AsigRow = { chofer_id: string; vehiculo_id: string; fecha: string };
+
+// ---------------------------------------------------------------------------
+// Documentación al asignar (US5, T042)
+//
+// El vencimiento de los papeles no es un módulo aparte que alguien revisa los
+// lunes: el momento en que importa es este, cuando se decide qué bus y qué
+// chofer salen a la ruta. Un bus con la revisión técnica vencida es una multa o
+// un servicio detenido en la carretera, y hasta acá esa información estaba solo
+// en /vehiculos y en la campana.
+//
+// El aviso NO bloquea: el dueño manda, y a veces el papel está en trámite o el
+// servicio sale igual. Lo que no puede pasar es que la decisión se tome sin
+// saberlo.
+// ---------------------------------------------------------------------------
+
+function docsChofer(c: ChoferOpt): Documento[] {
+  return documentosChofer({ licencia_vencimiento: c.licencia_vencimiento ?? null });
+}
+
+function docsVehiculo(v: VehiculoOpt): Documento[] {
+  return documentosVehiculo({
+    revision_tecnica_venc: v.revision_tecnica_venc ?? null,
+    soap_venc: v.soap_venc ?? null,
+    permiso_circulacion_venc: v.permiso_circulacion_venc ?? null,
+  });
+}
+
+/** Los papeles que hay que mirar de lo YA asignado, una frase por documento.
+ *  Se deduplica por ficha+documento: el mismo bus asignado tres días no repite
+ *  tres veces que su revisión técnica venció. */
+function avisosAsignados(
+  asignaciones: AsigRow[],
+  choferes: ChoferOpt[],
+  vehiculos: VehiculoOpt[],
+): string[] {
+  const avisos = new Map<string, string>();
+  const anotar = (nombre: string, docs: Documento[]) => {
+    for (const d of docs) {
+      const aviso = avisoDocumento(nombre, d);
+      if (aviso) avisos.set(`${nombre}-${d.label}`, aviso);
+    }
+  };
+
+  for (const a of asignaciones) {
+    const chofer = choferes.find((c) => c.id === a.chofer_id);
+    if (chofer) anotar(chofer.nombre, docsChofer(chofer));
+    const vehiculo = vehiculos.find((v) => v.patente === a.vehiculo_id);
+    if (vehiculo) anotar(vehiculo.patente, docsVehiculo(vehiculo));
+  }
+  return [...avisos.values()];
+}
 
 function toNum(v: string): number {
   const n = Number(String(v).replace(/\./g, "").replace(",", "."));
@@ -103,13 +173,19 @@ export function ViajeForm({
     setEstado(viaje.estado);
   }
 
-  const ingreso = toNum(valor);
-  const costoTotal =
-    toNum(costos.combustible) +
-    toNum(costos.peajes) +
-    toNum(costos.viaticos) +
-    toNum(costos.otros);
-  const utilidad = ingreso - costoTotal;
+  // Las mismas funciones que usa el resumen financiero del dashboard: lo que
+  // el usuario ve mientras tipea y lo que después aparece en las cifras del mes
+  // salen del mismo código.
+  const fila = {
+    valor: toNum(valor),
+    costo_combustible: toNum(costos.combustible),
+    costo_peajes: toNum(costos.peajes),
+    costo_viaticos: toNum(costos.viaticos),
+    costo_otros: toNum(costos.otros),
+  };
+  const ingreso = fila.valor;
+  const costoTotal = costoTotalViaje(fila);
+  const utilidad = utilidadViaje(fila);
 
   function onCotizacionChange(value: string) {
     setCotizacionId(value);
@@ -123,6 +199,8 @@ export function ViajeForm({
   function setAsig(i: number, patch: Partial<AsigRow>) {
     setAsignaciones((rows) => rows.map((r, j) => (j === i ? { ...r, ...patch } : r)));
   }
+
+  const avisosDocs = avisosAsignados(asignaciones, choferes, vehiculos);
 
   const asignacionesJson = JSON.stringify(
     asignaciones
@@ -282,7 +360,7 @@ export function ViajeForm({
                 <option value="">— Sin chofer —</option>
                 {choferes.map((c) => (
                   <option key={c.id} value={c.id}>
-                    {c.nombre}
+                    {marcaDocumentos(c.nombre, docsChofer(c), c.activo)}
                   </option>
                 ))}
               </Select>
@@ -294,7 +372,7 @@ export function ViajeForm({
                 <option value="">— Sin vehículo —</option>
                 {vehiculos.map((v) => (
                   <option key={v.patente} value={v.patente}>
-                    {v.patente}
+                    {marcaDocumentos(v.patente, docsVehiculo(v), v.activo)}
                   </option>
                 ))}
               </Select>
@@ -326,6 +404,23 @@ export function ViajeForm({
             <Plus className="h-4 w-4" />
             Agregar chofer/vehículo
           </Button>
+
+          {avisosDocs.length > 0 ? (
+            <div className="rounded-xl border border-warn/30 bg-warn-bg px-3 py-2.5">
+              <p className="flex items-center gap-2 text-sm font-medium text-warn">
+                <AlertTriangle className="h-4 w-4 shrink-0" />
+                Documentación de lo asignado
+              </p>
+              <ul className="mt-1 space-y-0.5 pl-6 text-xs text-warn">
+                {avisosDocs.map((a) => (
+                  <li key={a}>{a}</li>
+                ))}
+              </ul>
+              <p className="mt-1.5 pl-6 text-xs text-muted">
+                El viaje se puede guardar igual: esto es un aviso, no un bloqueo.
+              </p>
+            </div>
+          ) : null}
         </CardBody>
       </Card>
 
@@ -406,30 +501,18 @@ export function ViajeForm({
       ) : null}
 
       {editando ? (
-        <div className="flex h-5 items-center gap-1.5 text-xs text-muted">
-          {pending ? (
-            <>
-              <Loader2 className="h-3.5 w-3.5 animate-spin" />
-              Guardando…
-            </>
-          ) : state.ok ? (
-            <>
-              <Check className="h-3.5 w-3.5 text-ok" />
-              Guardado
-            </>
-          ) : (
-            "Los cambios se guardan solos"
-          )}
-        </div>
+        <EstadoGuardado
+          pending={pending}
+          ok={state.ok}
+          reposo="Los cambios se guardan solos"
+          className="h-5"
+        />
       ) : (
-        <div className="flex items-center gap-2">
+        <div className="flex items-center justify-end">
           <Button type="submit" disabled={pending}>
             <Save className="h-4 w-4" />
             {pending ? "Guardando…" : "Guardar viaje"}
           </Button>
-          <Link href="/viajes" className={buttonClass({ variant: "outline" })}>
-            Cancelar
-          </Link>
         </div>
       )}
     </form>

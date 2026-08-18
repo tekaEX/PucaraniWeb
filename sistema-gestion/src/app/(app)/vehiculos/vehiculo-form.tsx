@@ -1,18 +1,18 @@
 "use client";
 
 import { useActionState } from "react";
-import Link from "next/link";
 import { guardarVehiculo, type FormState } from "./actions";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Select } from "@/components/ui/select";
 import { Field } from "@/components/ui/label";
-import { Button, buttonClass } from "@/components/ui/button";
+import { Button } from "@/components/ui/button";
 import { Card, CardBody, CardHeader, CardTitle } from "@/components/ui/card";
 import { Save } from "lucide-react";
 import { toInputDate } from "@/lib/format";
 import { PATENTE_PATTERN, PATENTE_HINT } from "@/lib/patentes";
+import { DOCS_VEHICULO } from "@/lib/vencimientos";
 import { VEHICULO_CATEGORIAS, type Vehiculo } from "@/types/db";
 
 export function VehiculoForm({ vehiculo }: { vehiculo?: Vehiculo }) {
@@ -80,35 +80,22 @@ export function VehiculoForm({ vehiculo }: { vehiculo?: Vehiculo }) {
         <CardHeader>
           <CardTitle>Documentos (vencimientos)</CardTitle>
         </CardHeader>
+        {/* Un campo por documento, desde lib/vencimientos.ts: la misma lista
+            que la tabla, el panel y la campana. El `name` ES la columna. */}
         <CardBody className="grid gap-3 sm:grid-cols-2">
-          <Field label="Revisión técnica" htmlFor="revision_tecnica_venc">
-            <Input
-              id="revision_tecnica_venc"
-              name="revision_tecnica_venc"
-              type="date"
-              defaultValue={vehiculo?.revision_tecnica_venc ? toInputDate(vehiculo.revision_tecnica_venc) : ""}
-            />
-          </Field>
-          <Field label="SOAP (seguro)" htmlFor="soap_venc">
-            <Input
-              id="soap_venc"
-              name="soap_venc"
-              type="date"
-              defaultValue={vehiculo?.soap_venc ? toInputDate(vehiculo.soap_venc) : ""}
-            />
-          </Field>
-          <Field label="Permiso de circulación" htmlFor="permiso_circulacion_venc">
-            <Input
-              id="permiso_circulacion_venc"
-              name="permiso_circulacion_venc"
-              type="date"
-              defaultValue={
-                vehiculo?.permiso_circulacion_venc
-                  ? toInputDate(vehiculo.permiso_circulacion_venc)
-                  : ""
-              }
-            />
-          </Field>
+          {DOCS_VEHICULO.map((d) => {
+            const fecha = vehiculo?.[d.campo] as string | null | undefined;
+            return (
+              <Field key={d.campo} label={d.label} htmlFor={d.campo}>
+                <Input
+                  id={d.campo}
+                  name={d.campo}
+                  type="date"
+                  defaultValue={fecha ? toInputDate(fecha) : ""}
+                />
+              </Field>
+            );
+          })}
         </CardBody>
       </Card>
 
@@ -134,14 +121,11 @@ export function VehiculoForm({ vehiculo }: { vehiculo?: Vehiculo }) {
       </div>
       </div>
 
-      <div className="flex items-center gap-2">
+      <div className="flex items-center justify-end">
         <Button type="submit" disabled={pending}>
           <Save className="h-4 w-4" />
           {pending ? "Guardando…" : "Guardar vehículo"}
         </Button>
-        <Link href="/vehiculos" className={buttonClass({ variant: "outline" })}>
-          Cancelar
-        </Link>
       </div>
     </form>
   );

@@ -3,10 +3,12 @@ import { createClient } from "@/lib/supabase/server";
 import { PageHeader } from "@/components/page-header";
 import { Card } from "@/components/ui/card";
 import { buttonClass } from "@/components/ui/button";
-import { Plus, Bus, Settings } from "lucide-react";
-import { getPeriodo, rangoPeriodo } from "@/lib/periodo";
+import { Plus, Bus } from "lucide-react";
+import { rangoPeriodo } from "@/lib/periodo";
+import { getPeriodo } from "@/lib/periodo-server";
+import { DocsResumen } from "@/components/docs-resumen";
+import { documentosVehiculo, enUso, resumenDocumentos } from "@/lib/vencimientos";
 import type { Vehiculo, GastoVehiculo } from "@/types/db";
-import { SincronizarSiiButton } from "./sincronizar-sii";
 import { VehiculoAccordion } from "./vehiculo-accordion";
 
 export const dynamic = "force-dynamic";
@@ -34,19 +36,23 @@ export default async function VehiculosPage() {
         title="Vehículos"
         description="Flota, gastos y documentos. Haz clic en uno para ver y editar."
       >
-        <Link
-          href="/combustible/configuracion"
-          className={buttonClass({ variant: "secondary" })}
-        >
-          <Settings className="h-4 w-4" />
-          Configurar SII
-        </Link>
-        <SincronizarSiiButton />
         <Link href="/vehiculos/nuevo" className={buttonClass()}>
           <Plus className="h-4 w-4" />
           Nuevo vehículo
         </Link>
       </PageHeader>
+
+      {/* Solo de la flota EN USO: los papeles de un vehículo dado de baja son
+          historia, no una tarea (misma regla que la campana). Sin vehículos no
+          se muestra nada: un "documentación al día" con la flota vacía sería
+          una afirmación sobre nada. */}
+      {vehiculos.length > 0 ? (
+        <DocsResumen
+          resumen={resumenDocumentos(
+            vehiculos.filter(enUso).map((v) => documentosVehiculo(v)),
+          )}
+        />
+      ) : null}
 
       {vehiculos.length === 0 ? (
         <Card className="flex flex-col items-center gap-3 px-6 py-16 text-center">

@@ -1,5 +1,6 @@
 "use server";
 
+import type { Route } from "next";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { tieneAccesoAlPanel } from "@/lib/auth";
@@ -45,7 +46,10 @@ export async function login(
   // sesión. Solo se respeta si es una ruta interna ("//" abre otro sitio).
   const destinoValido = redirectTo.startsWith("/") && !redirectTo.startsWith("//");
 
-  redirect(destinoValido ? redirectTo : "/");
+  // El destino viene de la query, así que no es una ruta literal y typedRoutes
+  // no puede verificarlo solo: hay que afirmarlo. Lo que sostiene el cast es la
+  // validación de la línea de arriba, no la confianza en el string.
+  redirect((destinoValido ? redirectTo : "/") as Route);
 }
 
 export async function logout() {

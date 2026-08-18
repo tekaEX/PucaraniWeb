@@ -5,14 +5,15 @@ import { Card } from "@/components/ui/card";
 import { Select } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import { buttonClass } from "@/components/ui/button";
-import { Plus, Receipt, Filter, Eye } from "lucide-react";
+import { Plus, Receipt, Filter, Eye, Settings } from "lucide-react";
 import {
   FACTURA_ESTADOS_DERIVADOS,
   type Cliente,
   type FacturaConRelaciones,
   type FacturaEstadoDerivado,
 } from "@/types/db";
-import { getPeriodo, rangoPeriodo, etiquetaPeriodo } from "@/lib/periodo";
+import { rangoPeriodo, etiquetaPeriodo } from "@/lib/periodo";
+import { getPeriodo } from "@/lib/periodo-server";
 import { datosNuevaFactura } from "./nueva/datos";
 import { FacturaAccordion } from "./factura-accordion";
 
@@ -85,11 +86,18 @@ export default async function FacturasPage({
         description={`Documentos emitidos en ${etiquetaPeriodo(periodo).toLowerCase()} (los borradores se muestran siempre). Haz clic en una para editarla.`}
       >
         <Link
+          href="/facturas/configuracion"
+          className={buttonClass({ variant: "secondary" })}
+        >
+          <Settings className="h-4 w-4" />
+          Configuración SII
+        </Link>
+        <Link
           href={`/facturas/informe${informeSuffix}`}
           className={buttonClass({ variant: "secondary" })}
         >
           <Eye className="h-4 w-4" />
-          Ver informe
+          Ver informe general
         </Link>
         <Link href="/facturas/nueva" className={buttonClass()}>
           <Plus className="h-4 w-4" />

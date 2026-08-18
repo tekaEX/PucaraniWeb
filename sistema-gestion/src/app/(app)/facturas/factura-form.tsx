@@ -10,12 +10,14 @@ import { MoneyInput, formatMiles } from "@/components/ui/money-input";
 import { Textarea } from "@/components/ui/textarea";
 import { Select } from "@/components/ui/select";
 import { Field } from "@/components/ui/label";
-import { Button, buttonClass } from "@/components/ui/button";
+import { Button } from "@/components/ui/button";
 import { Card, CardBody, CardHeader, CardTitle } from "@/components/ui/card";
-import { Save, Upload, Paperclip, FileText, Check, Loader2 } from "lucide-react";
+import { Save, Upload, Paperclip, FileText } from "lucide-react";
 import { toInputDate, todayInput, formatCLP, formatDate } from "@/lib/format";
 import { TIPOS_DTE } from "@/types/db";
 import type { FacturaConRelaciones, FacturaEstado } from "@/types/db";
+import { desglosarTotal } from "@/lib/totales";
+import { EstadoGuardado } from "@/components/ui/estado-guardado";
 
 type ClienteOpt = { id: string; nombre: string; codigo: string | null };
 export type ViajeOpt = {
@@ -30,8 +32,6 @@ function toNum(v: string): number {
   const n = Number(String(v).replace(/\./g, "").replace(",", "."));
   return Number.isFinite(n) ? n : 0;
 }
-
-const IVA_RATE = 0.19;
 
 export function FacturaForm({
   clientes,
@@ -97,8 +97,9 @@ export function FacturaForm({
 
   const total = totalManual.trim() !== "" ? toNum(totalManual) : suma;
   const esAfecta = tipoDte === "33";
-  const neto = esAfecta ? Math.round(total / (1 + IVA_RATE)) : total;
-  const iva = esAfecta ? total - neto : 0;
+  // El camino inverso del de cotizaciones: acá se conoce el total con IVA y hay
+  // que descomponerlo. Vive en lib/totales.ts junto al directo.
+  const { subtotal: neto, iva } = desglosarTotal(total, esAfecta);
 
   function onClienteChange(value: string) {
     setClienteId(value);
@@ -119,8 +120,22 @@ export function FacturaForm({
     setUploadError("");
     try {
       const supabase = createClient();
+      // El adjunto se guarda en la carpeta de la empresa:
+      // `<empresa_id>/factura-<timestamp>.pdf`. La policy del bucket privado
+      // (migración 0050) exige esa primera carpeta, así que sin el prefijo la
+      // subida se rechaza. Antes el path era plano y `adjuntos` era el único
+      // rincón compartido que quedaba: cualquier admin podía listar y firmar
+      // los PDF de las facturas de otra empresa.
+      //
+      // La empresa se pregunta acá en vez de recibirla por prop porque la
+      // policy `empresa_read_auth` deja ver una sola fila —la propia—, así que
+      // este select devuelve la correcta sin pasar por los cuatro lugares que
+      // montan este formulario.
+      const { data: empresa } = await supabase.from("empresa").select("id").maybeSingle();
+      if (!empresa) throw new Error("No se pudo determinar la empresa de tu cuenta.");
+
       const ext = file.name.split(".").pop() ?? "pdf";
-      const path = `factura-${Date.now()}.${ext}`;
+      const path = `${empresa.id}/factura-${Date.now()}.${ext}`;
       const { error } = await supabase.storage
         .from("adjuntos")
         .upload(path, file, { upsert: true });
@@ -201,20 +216,26 @@ export function FacturaForm({
             </Select>
           </Field>
 
-          <Field label="Estado" htmlFor="estado">
-            <Select
-              id="estado"
-              name="estado"
-              value={estado}
-              onChange={(e) => setEstado(e.target.value as FacturaEstado)}
-            >
-              <option value="borrador">Borrador</option>
-              <option value="emitida">Emitida</option>
-              {factura ? <option value="anulada">Anulada</option> : null}
-            </Select>
-          </Field>
-          <div className="grid grid-cols-2 gap-4">
-            <Field label="Folio (N°)" htmlFor="folio" className="mb-0">
+          {/* Estado, folio y fecha van en una sola fila que ocupa la tarjeta
+              entera. Antes Estado se llevaba media tarjeta y los otros dos se
+              repartían la otra mitad: la fecha quedaba tan angosta que el
+              navegador la recortaba a "dd - r". El minmax le garantiza a la
+              fecha el ancho de "dd-mm-aaaa" más el ícono del calendario, pase
+              lo que pase con el resto. */}
+          <div className="grid gap-3 sm:col-span-2 sm:grid-cols-[minmax(0,1fr)_minmax(0,0.75fr)_minmax(9.5rem,1fr)]">
+            <Field label="Estado" htmlFor="estado">
+              <Select
+                id="estado"
+                name="estado"
+                value={estado}
+                onChange={(e) => setEstado(e.target.value as FacturaEstado)}
+              >
+                <option value="borrador">Borrador</option>
+                <option value="emitida">Emitida</option>
+                {factura ? <option value="anulada">Anulada</option> : null}
+              </Select>
+            </Field>
+            <Field label="Folio (N°)" htmlFor="folio">
               <Input
                 id="folio"
                 name="folio"
@@ -224,7 +245,7 @@ export function FacturaForm({
                 required={estado === "emitida"}
               />
             </Field>
-            <Field label="Fecha de emisión" htmlFor="fecha_emision" className="mb-0">
+            <Field label="Fecha de emisión" htmlFor="fecha_emision">
               <Input
                 id="fecha_emision"
                 name="fecha_emision"
@@ -385,30 +406,19 @@ export function FacturaForm({
       ) : null}
 
       {editando ? (
-        <div className="flex h-5 items-center gap-1.5 text-xs text-muted">
-          {pending || uploading ? (
-            <>
-              <Loader2 className="h-3.5 w-3.5 animate-spin" />
-              {uploading ? "Subiendo…" : "Guardando…"}
-            </>
-          ) : state.ok ? (
-            <>
-              <Check className="h-3.5 w-3.5 text-ok" />
-              Guardado
-            </>
-          ) : (
-            "Los cambios se guardan solos"
-          )}
-        </div>
+        <EstadoGuardado
+          pending={pending || uploading}
+          ok={state.ok}
+          guardando={uploading ? "Subiendo…" : "Guardando…"}
+          reposo="Los cambios se guardan solos"
+          className="h-5"
+        />
       ) : (
-        <div className="flex items-center gap-2">
+        <div className="flex items-center justify-end">
           <Button type="submit" disabled={pending || uploading}>
             <Save className="h-4 w-4" />
             {pending ? "Guardando…" : "Guardar factura"}
           </Button>
-          <Link href="/facturas" className={buttonClass({ variant: "outline" })}>
-            Cancelar
-          </Link>
         </div>
       )}
     </form>

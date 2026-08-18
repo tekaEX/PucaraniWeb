@@ -12,7 +12,8 @@ import {
   type ViajeConRelaciones,
   type ViajeEstado,
 } from "@/types/db";
-import { getPeriodo, rangoPeriodo, etiquetaPeriodo } from "@/lib/periodo";
+import { rangoPeriodo, etiquetaPeriodo } from "@/lib/periodo";
+import { getPeriodo } from "@/lib/periodo-server";
 import { datosNuevoViaje } from "./nueva/datos";
 import { ViajeAccordion } from "./viaje-accordion";
 

@@ -17,8 +17,9 @@ import { buttonClass } from "@/components/ui/button";
 import { VencimientoBadge } from "@/components/ui/badge";
 import { FotoUploader } from "./foto-uploader";
 import { LicenciaForm } from "./licencia-form";
-import { Trash2, Check, Loader2 } from "lucide-react";
+import { Trash2 } from "lucide-react";
 import { VEHICULO_CATEGORIAS, type Chofer } from "@/types/db";
+import { EstadoGuardado } from "@/components/ui/estado-guardado";
 
 // Diálogo al eliminar un chofer: distingue "ya no trabaja aquí" (se
 // desactiva, se conserva todo) de "eliminar todo el registro" (borrado real,
@@ -286,21 +287,7 @@ export function ChoferPanel({
               onClose={() => setEliminarAbierto(false)}
             />
           ) : null}
-          <span className="flex h-4 items-center gap-1.5 text-xs text-muted">
-            {pending ? (
-              <>
-                <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                Guardando…
-              </>
-            ) : state.ok ? (
-              <>
-                <Check className="h-3.5 w-3.5 text-ok" />
-                Guardado
-              </>
-            ) : (
-              ""
-            )}
-          </span>
+          <EstadoGuardado pending={pending} ok={state.ok} />
         </div>
       </div>
 

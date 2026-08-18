@@ -1,7 +1,7 @@
 "use client";
 
 import { useActionState } from "react";
-import { guardarCredencialesSii, type FormState } from "../actions";
+import { guardarCredencialesSii, type FormState } from "./actions";
 import { Input } from "@/components/ui/input";
 import { Field } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
@@ -68,10 +68,12 @@ export function CredForm({ rut, tieneCert }: { rut: string; tieneCert: boolean }
         </p>
       ) : null}
 
-      <Button type="submit" disabled={pending}>
-        <ShieldCheck className="h-4 w-4" />
-        {pending ? "Guardando…" : "Guardar credenciales"}
-      </Button>
+      <div className="flex items-center justify-end">
+        <Button type="submit" disabled={pending}>
+          <ShieldCheck className="h-4 w-4" />
+          {pending ? "Guardando…" : "Guardar credenciales"}
+        </Button>
+      </div>
     </form>
   );
 }

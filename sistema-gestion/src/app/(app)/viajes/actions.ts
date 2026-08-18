@@ -1,49 +1,23 @@
 "use server";
 
+import { puedeEditar, SIN_PERMISO } from "@/lib/auth";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { hoyChile } from "@/lib/format";
 import { s, sReq, num } from "@/lib/form-helpers";
-import type { ViajeEstado } from "@/types/db";
+import { estadoViaje, parsearAsignaciones } from "@/lib/viajes";
 
 export type FormState = { error?: string; ok?: boolean };
-
-const ESTADOS: ViajeEstado[] = ["programado", "realizado", "cancelado"];
-
-type AsignacionInput = {
-  chofer_id: string | null;
-  vehiculo_id: string | null;
-  fecha: string | null;
-};
-
-// El formulario envía las asignaciones como JSON en un input oculto.
-function parseAsignaciones(raw: string | null): AsignacionInput[] {
-  if (!raw) return [];
-  try {
-    const arr = JSON.parse(raw);
-    if (!Array.isArray(arr)) return [];
-    return arr
-      .map((a) => ({
-        chofer_id: typeof a?.chofer_id === "string" && a.chofer_id !== "" ? a.chofer_id : null,
-        vehiculo_id: typeof a?.vehiculo_id === "string" && a.vehiculo_id !== "" ? a.vehiculo_id : null,
-        fecha: typeof a?.fecha === "string" && a.fecha !== "" ? a.fecha : null,
-      }))
-      // Una asignación sin chofer NI vehículo no dice nada (el check de la BD
-      // también la rechazaría).
-      .filter((a) => a.chofer_id !== null || a.vehiculo_id !== null);
-  } catch {
-    return [];
-  }
-}
 
 export async function guardarViaje(
   _prev: FormState,
   formData: FormData,
 ): Promise<FormState> {
+  if (!(await puedeEditar())) return { error: SIN_PERMISO };
+
   const id = s(formData.get("id"));
-  const estadoRaw = sReq(formData.get("estado")) as ViajeEstado;
-  const estado: ViajeEstado = ESTADOS.includes(estadoRaw) ? estadoRaw : "programado";
+  const estado = estadoViaje(sReq(formData.get("estado")));
 
   const descripcion = s(formData.get("descripcion"));
   if (!descripcion) return { error: "La descripción del servicio es obligatoria." };
@@ -67,7 +41,7 @@ export async function guardarViaje(
     notas: s(formData.get("notas")),
   };
 
-  const asignaciones = parseAsignaciones(s(formData.get("asignaciones")));
+  const asignaciones = parsearAsignaciones(s(formData.get("asignaciones")));
 
   const supabase = await createClient();
   const result = id
@@ -104,13 +78,18 @@ export async function guardarViaje(
 
 // Cambio rápido de estado desde la lista.
 export async function actualizarEstadoViaje(formData: FormData) {
+  if (!(await puedeEditar())) return;
+
   const id = sReq(formData.get("id"));
-  const estadoRaw = sReq(formData.get("estado")) as ViajeEstado;
-  if (!ESTADOS.includes(estadoRaw)) return;
+  // Un estado inválido acá NO se degrada a "programado": vendría de la
+  // pastilla de la lista, y cambiar el estado a otra cosa distinta de la que se
+  // pidió es peor que no hacer nada.
+  const crudo = sReq(formData.get("estado"));
+  if (estadoViaje(crudo) !== crudo) return;
   if (!id) return;
 
   const supabase = await createClient();
-  await supabase.from("viajes").update({ estado: estadoRaw }).eq("id", id);
+  await supabase.from("viajes").update({ estado: crudo }).eq("id", id);
   revalidatePath("/viajes");
   revalidatePath("/");
 }
@@ -119,6 +98,8 @@ export async function eliminarViaje(
   _prev: FormState,
   formData: FormData,
 ): Promise<FormState> {
+  if (!(await puedeEditar())) return { error: SIN_PERMISO };
+
   const id = sReq(formData.get("id"));
   if (!id) return { error: "Falta el identificador." };
   const supabase = await createClient();

@@ -6,6 +6,8 @@ import { buttonClass } from "@/components/ui/button";
 import { Plus, UserRound } from "lucide-react";
 import type { Chofer } from "@/types/db";
 import { ChoferAccordion } from "./chofer-accordion";
+import { DocsResumen } from "@/components/docs-resumen";
+import { documentosChofer, enUso, resumenDocumentos } from "@/lib/vencimientos";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Choferes" };
@@ -36,6 +38,17 @@ export default async function ChoferesPage() {
           Nuevo chofer
         </Link>
       </PageHeader>
+
+      {/* Solo de quienes siguen trabajando acá: la licencia de un ex chofer no
+          se renueva (misma regla que la campana). Sin choferes no se muestra
+          nada, para no afirmar que está al día una lista vacía. */}
+      {choferes.length > 0 ? (
+        <DocsResumen
+          resumen={resumenDocumentos(
+            choferes.filter(enUso).map((c) => documentosChofer(c)),
+          )}
+        />
+      ) : null}
 
       {choferes.length === 0 ? (
         <Card className="flex flex-col items-center gap-3 px-6 py-16 text-center">

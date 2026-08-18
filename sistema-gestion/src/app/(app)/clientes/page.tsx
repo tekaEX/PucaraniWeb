@@ -4,7 +4,8 @@ import { PageHeader } from "@/components/page-header";
 import { Card } from "@/components/ui/card";
 import { buttonClass } from "@/components/ui/button";
 import { Plus, Users } from "lucide-react";
-import { getPeriodo, etiquetaPeriodo, rangoPeriodo } from "@/lib/periodo";
+import { etiquetaPeriodo, rangoPeriodo } from "@/lib/periodo";
+import { getPeriodo } from "@/lib/periodo-server";
 import type { Cliente, FacturaConRelaciones } from "@/types/db";
 import {
   cuentaVacia,

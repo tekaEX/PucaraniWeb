@@ -1,11 +1,11 @@
 "use server";
 
+import { puedeEditar, SIN_PERMISO } from "@/lib/auth";
 import { revalidatePath } from "next/cache";
-import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { z } from "zod";
 import { s, sReq, num } from "@/lib/form-helpers";
-import { TAXI_TIPOS, type TaxiTipo } from "@/types/db";
+import { TAXI_TIPOS, taxiPideDescripcion, type TaxiTipo } from "@/types/db";
 
 export type FormState = { error?: string; ok?: boolean };
 
@@ -21,6 +21,8 @@ export async function guardarServicioTaxi(
   _prev: FormState,
   formData: FormData,
 ): Promise<FormState> {
+  if (!(await puedeEditar())) return { error: SIN_PERMISO };
+
   const id = s(formData.get("id"));
   const fecha = sReq(formData.get("fecha"));
   if (!fecha) return { error: "La fecha es obligatoria." };
@@ -31,9 +33,11 @@ export async function guardarServicioTaxi(
   const monto = Math.round(num(formData.get("monto")));
   if (monto < 0) return { error: "El monto no puede ser negativo." };
 
-  // La descripción solo existe para el tipo "especial" (check en la base).
-  const descripcion = tipo === "especial" ? s(formData.get("descripcion")) : null;
-  if (tipo === "especial" && !descripcion) {
+  // La descripción es del tipo "Especial" y de ninguno de los otros seis: son
+  // los del talonario y su nombre ya dice qué fue el servicio. Sin ella, un
+  // "Especial" en el vale queda como una línea en blanco.
+  const descripcion = taxiPideDescripcion(tipo) ? s(formData.get("descripcion")) : null;
+  if (taxiPideDescripcion(tipo) && !descripcion) {
     return { error: "El servicio especial necesita una descripción." };
   }
 
@@ -55,8 +59,10 @@ export async function guardarServicioTaxi(
   if (error) return { error: `No se pudo guardar: ${error.message}` };
 
   revalidarTaxis();
-  // Al crear, vuelve a la lista; al editar inline, se queda en el acordeón.
-  if (!id) redirect("/taxis");
+  // No navega a ninguna parte, ni al crear ni al editar: el formulario de alta
+  // vive en la misma pantalla que la tabla —como en el sistema anterior—, así
+  // que cargar un servicio deja la vista donde está, con el cursor listo para
+  // el siguiente. Un redirect acá remontaría la página y se perdería el foco.
   return { ok: true };
 }
 
@@ -64,13 +70,17 @@ export async function eliminarServicioTaxi(
   _prev: FormState,
   formData: FormData,
 ): Promise<FormState> {
+  if (!(await puedeEditar())) return { error: SIN_PERMISO };
+
   const id = sReq(formData.get("id"));
   if (!id) return { error: "Falta el identificador." };
   const supabase = await createClient();
   const { error } = await supabase.from("servicios_taxi").delete().eq("id", id);
   if (error) return { error: `No se pudo eliminar: ${error.message}` };
   revalidarTaxis();
-  redirect("/taxis");
+  // Sin redirect, por lo mismo que al guardar: la fila desaparece de la tabla
+  // y el usuario sigue donde estaba.
+  return { ok: true };
 }
 
 // ---------------------------------------------------------------------------
@@ -99,7 +109,8 @@ export type ResumenImport = {
   error?: string;
 };
 
-// La app antigua guardaba "aeropuerto" en registros viejos.
+// La app antigua guardaba "aeropuerto" en registros viejos; los otros seis
+// tipos se llaman igual acá, así que no hay nada más que traducir.
 const TIPO_ALIAS: Record<string, TaxiTipo> = { aeropuerto: "aeropuerto_arica" };
 
 const norm = (s: string) => s.trim().toLowerCase();
@@ -117,6 +128,10 @@ export async function importarRespaldoTaxis(
     sinMatchEmpresa: 0,
     sinMatchChofer: 0,
   };
+
+  // Esta escribe como cualquier otra, pero no devuelve FormState: el rechazo
+  // viaja en el `error` del resumen, que es lo que la pantalla ya sabe mostrar.
+  if (!(await puedeEditar())) return { ...vacio, error: SIN_PERMISO };
 
   const supabase = await createClient();
 
@@ -154,18 +169,19 @@ export async function importarRespaldoTaxis(
     }
     const r = parsed.data;
 
-    // Normaliza el tipo (con alias legado). Un tipo desconocido con texto se
-    // rescata como "especial"; sin texto, se descarta.
+    // Normaliza el tipo (con el alias legado). Un tipo desconocido con texto se
+    // rescata como "especial", que es el que admite descripción; sin texto no
+    // hay nada que guardar y se descarta.
     let tipo = (TIPO_ALIAS[r.tipo] ?? r.tipo) as TaxiTipo;
+    const texto = r.servicio?.trim() || null;
     if (!(tipo in TAXI_TIPOS)) {
-      if (r.servicio?.trim()) tipo = "especial";
-      else {
+      if (!texto) {
         res.invalidos++;
         continue;
       }
+      tipo = "especial";
     }
-    const descripcion =
-      tipo === "especial" ? r.servicio?.trim() || "(sin descripción)" : null;
+    const descripcion = taxiPideDescripcion(tipo) ? texto || "(sin descripción)" : null;
 
     const empresaTxt = r.empresa?.trim() || null;
     const choferTxt = r.chofer?.trim() || null;

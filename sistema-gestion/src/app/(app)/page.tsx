@@ -1,5 +1,4 @@
 import Link from "next/link";
-import { createClient } from "@/lib/supabase/server";
 import { PageHeader } from "@/components/page-header";
 import { buttonClass } from "@/components/ui/button";
 import { Kpi } from "@/components/ui/kpi";
@@ -14,146 +13,48 @@ import {
   TrendingUp,
   TrendingDown,
 } from "lucide-react";
-import {
-  getPeriodo,
-  rangoPeriodo,
-  periodoAnterior,
-  enRango,
-  etiquetaPeriodo,
-  etiquetaCorta,
-  type Periodo,
-} from "@/lib/periodo";
-import {
-  viajePorFacturar,
-  costoTotalViaje,
-  facturaPagada,
-  type Factura,
-  type Viaje,
-  type GastoVehiculo,
-} from "@/types/db";
+import { periodoAnterior, etiquetaPeriodo, etiquetaCorta } from "@/lib/periodo";
+import { getPeriodo } from "@/lib/periodo-server";
+import { delta, resumenFinanciero } from "@/lib/finanzas";
+import { cargarDatosFinancieros } from "@/lib/finanzas-server";
 import { FinanzasSecciones } from "./finanzas/secciones";
 
 export const dynamic = "force-dynamic";
 
-function delta(actual: number, anterior: number): number | null {
-  if (!anterior) return null;
-  return Math.round(((actual - anterior) / anterior) * 100);
-}
-
+// El Dashboard no calcula nada por su cuenta: pide los datos a
+// lib/finanzas-server.ts y su significado a lib/finanzas.ts. Antes hacía las
+// dos cosas acá adentro, con las mismas definiciones que también estaban
+// escritas en finanzas/secciones.tsx — dos pantallas derivando por separado
+// las mismas cifras. Lo que queda acá es lo que de verdad le toca a una
+// página: pedir, y mostrar.
+//
+// Se pide el resumen dos veces sobre el MISMO conjunto de datos —el periodo y
+// el anterior— porque la carga trae los dos rangos de una pasada y las
+// funciones del modelo filtran en memoria.
 export default async function DashboardPage() {
   const periodo = await getPeriodo();
   const prev = periodoAnterior(periodo);
-  const { desde, hasta } = rangoPeriodo(periodo);
 
-  const supabase = await createClient();
-  // Todas las cifras del Dashboard son del periodo o del anterior (deltas),
-  // así que se trae SOLO ese rango — nunca tablas completas, que además del
-  // costo quedarían truncadas por el tope de filas de Supabase al crecer.
-  const rangoDesde = rangoPeriodo(prev).desde;
-  const [
-    { data: cotData, error: eCot },
-    { data: viajesData, error: eViajes },
-    { data: factData, error: eFact },
-    { data: gastosData, error: eGastos },
-    { data: taxisData, error: eTaxis },
-  ] = await Promise.all([
-    supabase
-      .from("cotizaciones")
-      .select("total")
-      .gte("fecha", desde)
-      .lte("fecha", hasta),
-    supabase
-      .from("viajes")
-      .select(
-        "estado, factura_id, fecha_inicio, valor, costo_combustible, costo_peajes, costo_viaticos, costo_otros",
-      )
-      .gte("fecha_inicio", rangoDesde)
-      .lte("fecha_inicio", hasta),
-    supabase
-      .from("facturas")
-      .select("estado, total, fecha_emision, fecha_pago")
-      .or(
-        `and(fecha_pago.gte.${rangoDesde},fecha_pago.lte.${hasta}),and(fecha_emision.gte.${rangoDesde},fecha_emision.lte.${hasta})`,
-      ),
-    supabase
-      .from("gastos_vehiculo")
-      .select("fecha, monto_total")
-      .gte("fecha", rangoDesde)
-      .lte("fecha", hasta),
-    supabase
-      .from("servicios_taxi")
-      .select("fecha, monto")
-      .gte("fecha", rangoDesde)
-      .lte("fecha", hasta),
-  ]);
-  // Todos los KPI del inicio salen de estas cinco consultas. Descartar el error
-  // convertía cualquier falla en "un mes sin trabajo": cero cotizado, cero por
-  // cobrar, cero ingresos — indistinguible de la realidad, y es la primera
-  // pantalla que mira el dueño.
-  const errorPanel = eCot ?? eViajes ?? eFact ?? eGastos ?? eTaxis;
-  if (errorPanel) {
+  const { datos, meses, error } = await cargarDatosFinancieros(periodo);
+  if (error) {
     return (
       <div>
         <PageHeader title="Inicio" description={etiquetaPeriodo(periodo)} />
         <ErrorDatos
           titulo="No se pudieron leer los datos del periodo."
-          detalle={errorPanel.message}
+          detalle={error.message}
         />
       </div>
     );
   }
 
-  const cotPeriodo: { total: number }[] = cotData ?? [];
-  const viajes = (viajesData ?? []) as unknown as Viaje[];
-  const facturas = (factData ?? []) as unknown as Factura[];
-  const gastos = (gastosData ?? []) as unknown as GastoVehiculo[];
-  const taxis: { fecha: string; monto: number }[] = taxisData ?? [];
+  const r = resumenFinanciero(datos, periodo);
+  const anterior = resumenFinanciero(datos, prev);
 
-  // Fila 1 — KPIs del periodo. Todos los estados son DERIVADOS:
-  // "por facturar" = viaje realizado sin factura; "por cobrar" = emitida sin
-  // fecha de pago; "pagado" = fecha de pago dentro del periodo.
-  const totalCotizado = cotPeriodo.reduce((a, c) => a + Number(c.total), 0);
-
-  const pendientes = viajes.filter(
-    (v) => viajePorFacturar(v) && enRango(v.fecha_inicio, periodo),
-  );
-  const pendienteFacturar = pendientes.reduce((a, v) => a + Number(v.valor), 0);
-
-  const porCobrarArr = facturas.filter(
-    (f) => f.estado === "emitida" && !facturaPagada(f) && enRango(f.fecha_emision, periodo),
-  );
-  const porCobrar = porCobrarArr.reduce((a, f) => a + Number(f.total), 0);
-
-  // Ingresos = facturas pagadas en el periodo + servicios de taxi del periodo
-  // (los taxis se cobran al momento: su fecha ES la fecha de cobro).
-  const pagadasEn = (p: Periodo) =>
-    facturas.filter((f) => f.estado === "emitida" && enRango(f.fecha_pago, p));
-  const taxisEn = (p: Periodo) =>
-    taxis.filter((t) => enRango(t.fecha, p)).reduce((a, t) => a + Number(t.monto), 0);
-  const pagadasPeriodo = pagadasEn(periodo);
-  const ingresos =
-    pagadasPeriodo.reduce((a, f) => a + Number(f.total), 0) + taxisEn(periodo);
-  const ingresosPrev =
-    pagadasEn(prev).reduce((a, f) => a + Number(f.total), 0) + taxisEn(prev);
-
-  // Fila 2 — mismas definiciones que Finanzas: cobrado vs egresos del periodo
-  // (gastos de flota + costos directos de los viajes: peajes, viáticos, etc.)
-  const costosViajesEn = (p: Periodo) =>
-    viajes
-      .filter((v) => v.estado !== "cancelado" && enRango(v.fecha_inicio, p))
-      .reduce((a, v) => a + costoTotalViaje(v), 0);
-  const gastosPeriodo = gastos.filter((g) => enRango(g.fecha, periodo));
-  const costos =
-    gastosPeriodo.reduce((a, g) => a + Number(g.monto_total), 0) + costosViajesEn(periodo);
-  const costosPrev =
-    gastos.filter((g) => enRango(g.fecha, prev)).reduce((a, g) => a + Number(g.monto_total), 0) +
-    costosViajesEn(prev);
-  const utilidad = ingresos - costos;
-  const margen = ingresos > 0 ? Math.round((utilidad / ingresos) * 100) : null;
-
-  const dIngresos = delta(ingresos, ingresosPrev);
-  const dCostos = delta(costos, costosPrev);
+  const dIngresos = delta(r.ingresos, anterior.ingresos);
+  const dCostos = delta(r.costos, anterior.costos);
   const vs = etiquetaCorta(prev);
+  const plural = (n: number, sing: string, plur = `${sing}s`) => (n === 1 ? sing : plur);
 
   return (
     <div>
@@ -175,29 +76,29 @@ export default async function DashboardPage() {
       <div className="stagger-in grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <Kpi
           label="Cotizaciones"
-          value={formatCLP(totalCotizado)}
-          sub={`${cotPeriodo.length} emitida${cotPeriodo.length === 1 ? "" : "s"}`}
+          value={formatCLP(r.totalCotizado)}
+          sub={`${r.conteos.cotizaciones} ${plural(r.conteos.cotizaciones, "emitida")}`}
           icon={FileText}
           tint="bg-brand-soft text-brand"
         />
         <Kpi
           label="Por facturar"
-          value={formatCLP(pendienteFacturar)}
-          sub={`${pendientes.length} viaje${pendientes.length === 1 ? "" : "s"} realizado${pendientes.length === 1 ? "" : "s"}`}
+          value={formatCLP(r.pendienteFacturar)}
+          sub={`${r.conteos.porFacturar} ${plural(r.conteos.porFacturar, "viaje")} ${plural(r.conteos.porFacturar, "realizado")}`}
           icon={Clock}
           tint="bg-info-bg text-info"
         />
         <Kpi
           label="Por cobrar"
-          value={formatCLP(porCobrar)}
+          value={formatCLP(r.porCobrar)}
           valueClass="text-warn"
-          sub={`${porCobrarArr.length} factura${porCobrarArr.length === 1 ? "" : "s"} emitida${porCobrarArr.length === 1 ? "" : "s"}`}
+          sub={`${r.conteos.porCobrar} ${plural(r.conteos.porCobrar, "factura")} ${plural(r.conteos.porCobrar, "emitida")}`}
           icon={CircleDollarSign}
           tint="bg-warn-bg text-warn"
         />
         <Kpi
           label="Pagado"
-          value={formatCLP(ingresos)}
+          value={formatCLP(r.ingresos)}
           valueClass="text-ok"
           sub={etiquetaPeriodo(periodo).toLowerCase()}
           icon={CheckCircle2}
@@ -209,11 +110,11 @@ export default async function DashboardPage() {
       <div className="stagger-in mt-4 grid gap-4 sm:grid-cols-3">
         <Kpi
           label="Ingresos"
-          value={formatCLP(ingresos)}
+          value={formatCLP(r.ingresos)}
           sub={
             dIngresos !== null
               ? `${dIngresos >= 0 ? "+" : ""}${dIngresos}% vs. ${vs}`
-              : `${pagadasPeriodo.length} factura${pagadasPeriodo.length === 1 ? "" : "s"} pagada${pagadasPeriodo.length === 1 ? "" : "s"}`
+              : `${r.conteos.pagadas} ${plural(r.conteos.pagadas, "factura")} ${plural(r.conteos.pagadas, "pagada")}`
           }
           subClass={
             dIngresos !== null ? (dIngresos >= 0 ? "text-ok" : "text-danger") : "text-muted"
@@ -223,7 +124,7 @@ export default async function DashboardPage() {
         />
         <Kpi
           label="Costos"
-          value={formatCLP(costos)}
+          value={formatCLP(r.costos)}
           sub={
             dCostos !== null
               ? `${dCostos >= 0 ? "+" : ""}${dCostos}% vs. ${vs}`
@@ -234,18 +135,19 @@ export default async function DashboardPage() {
         />
         <Kpi
           label="Utilidad"
-          value={formatCLP(utilidad)}
-          valueClass={utilidad < 0 ? "text-danger" : "text-ok"}
-          sub={margen !== null ? `margen ${margen}%` : "Ingresos − costos"}
-          icon={utilidad < 0 ? TrendingDown : TrendingUp}
-          tint={utilidad < 0 ? "bg-danger-bg text-danger" : "bg-ok-bg text-ok"}
+          value={formatCLP(r.utilidad)}
+          valueClass={r.utilidad < 0 ? "text-danger" : "text-ok"}
+          sub={r.margen !== null ? `margen ${r.margen}%` : "Ingresos − costos"}
+          icon={r.utilidad < 0 ? TrendingDown : TrendingUp}
+          tint={r.utilidad < 0 ? "bg-danger-bg text-danger" : "bg-ok-bg text-ok"}
         />
       </div>
 
-      {/* Secciones financieras (ex página "Resumen"): gráfico de 6 meses,
-          egresos por vehículo/categoría e ingresos por cliente. */}
+      {/* Secciones financieras (ex página "Resumen"): tendencia mensual,
+          egresos por vehículo/categoría e ingresos por cliente. Reciben los
+          MISMOS datos que los KPI de arriba: una sola carga, una sola verdad. */}
       <div className="mt-6">
-        <FinanzasSecciones />
+        <FinanzasSecciones datos={datos} periodo={periodo} meses={meses} />
       </div>
     </div>
   );

@@ -5,8 +5,8 @@
 //   2. los imports sin extensión → .ts / .tsx / index.ts
 //
 // Además cambia por un doble los módulos que en una prueba no pueden ser los de
-// verdad: el cliente de Supabase (red) y next/headers (solo existe dentro del
-// servidor de Next).
+// verdad: el cliente de Supabase (red), next/headers (solo existe dentro del
+// servidor de Next) y server-only (lanza salvo que resuelva el bundler).
 import { statSync } from "node:fs";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
@@ -15,6 +15,8 @@ const SRC = fileURLToPath(new URL("../src/", import.meta.url));
 const DOBLES = {
   "@/lib/supabase/client": new URL("./dobles/supabase-client.mjs", import.meta.url).href,
   "next/headers": new URL("./dobles/next-headers.mjs", import.meta.url).href,
+  "next/navigation": new URL("./dobles/next-navigation.mjs", import.meta.url).href,
+  "server-only": new URL("./dobles/server-only.mjs", import.meta.url).href,
 };
 
 // Ojo: se comprueba que sea un ARCHIVO, no solo que exista. Con existsSync a

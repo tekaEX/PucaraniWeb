@@ -1,56 +1,32 @@
 "use server";
 
+import { puedeEditar, SIN_PERMISO } from "@/lib/auth";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { hoyChile } from "@/lib/format";
 import { s, sReq, bool } from "@/lib/form-helpers";
+import { calcularTotales } from "@/lib/totales";
+import {
+  avisoViajes,
+  estadoCotizacion,
+  parsearItems,
+  viajesDesdeCotizacion,
+  type ItemCotizacion,
+  type ResultadoViajes,
+} from "@/lib/cotizaciones";
 import type { CotizacionEstado } from "@/types/db";
 
 export type FormState = { error?: string; ok?: boolean };
 
-type ItemInput = {
-  descripcion: string;
-  fecha: string | null;
-  valor_unitario: number;
-};
+/** Lo que la pastilla de estado le devuelve al editor para avisar en pantalla. */
+export type EstadoState = { mensaje?: string; error?: string };
 
-const ESTADOS: CotizacionEstado[] = [
-  "borrador",
-  "enviada",
-  "aceptada",
-  "rechazada",
-];
-
-function parseItems(raw: string | null): ItemInput[] {
-  if (!raw) return [];
-  try {
-    const arr = JSON.parse(raw) as unknown[];
-    return arr
-      .map((it) => {
-        const o = it as Record<string, unknown>;
-        const fecha = String(o.fecha ?? "").trim();
-        return {
-          descripcion: String(o.descripcion ?? "").trim(),
-          fecha: fecha || null,
-          valor_unitario: Number(o.valor_unitario ?? 0) || 0,
-        };
-      })
-      .filter((it) => it.descripcion !== "" || it.valor_unitario !== 0);
-  } catch {
-    return [];
-  }
-}
-
-// Cada línea vale su valor_unitario (ya no hay cantidad).
-function calcTotales(items: ItemInput[], exento: boolean) {
-  const subtotal = items.reduce((acc, it) => acc + Math.round(it.valor_unitario), 0);
-  const iva = exento ? 0 : Math.round(subtotal * 0.19);
-  return { subtotal, iva, total: subtotal + iva };
-}
+// El cálculo vive en lib/totales.ts: lo comparten esta action y los dos
+// formularios, así que lo que se muestra y lo que se guarda es el mismo código.
 
 // Filas de cotizacion_items a insertar (sin cantidad; total = valor).
-function itemRows(items: ItemInput[], cotizacionId: string) {
+function itemRows(items: ItemCotizacion[], cotizacionId: string) {
   return items.map((it, i) => ({
     cotizacion_id: cotizacionId,
     orden: i,
@@ -69,43 +45,40 @@ function itemRows(items: ItemInput[], cotizacionId: string) {
 async function generarViajesDesdeCotizacion(
   supabase: Awaited<ReturnType<typeof createClient>>,
   cotizacionId: string,
-): Promise<string | null> {
+): Promise<ResultadoViajes> {
   const { count } = await supabase
     .from("viajes")
     .select("id", { count: "exact", head: true })
     .eq("cotizacion_id", cotizacionId);
-  if ((count ?? 0) > 0) return null;
+  if ((count ?? 0) > 0) return { tipo: "ya_estaban" };
 
   const { data: cot } = await supabase
     .from("cotizaciones")
     .select("id, cliente_id, items:cotizacion_items(descripcion, fecha, valor_unitario, orden)")
     .eq("id", cotizacionId)
     .maybeSingle();
-  if (!cot) return null;
+  if (!cot) return { tipo: "nada" };
   if (!cot.cliente_id) {
-    return "La cotización quedó aceptada, pero sin cliente no se pueden generar los viajes: asígnale un cliente y guarda de nuevo.";
+    return {
+      tipo: "error",
+      mensaje:
+        "La cotización quedó aceptada, pero sin cliente no se pueden generar los viajes: asígnale un cliente y guarda de nuevo.",
+    };
   }
 
-  // Cada línea es un viaje programado; su fecha es la de la línea (o hoy).
-  const hoy = hoyChile();
-  const filas = [...(cot.items ?? [])]
-    .sort((a, b) => a.orden - b.orden)
-    .map((it) => ({
-      cliente_id: cot.cliente_id,
-      cotizacion_id: cot.id,
-      descripcion: it.descripcion,
-      fecha_inicio: it.fecha ?? hoy,
-      estado: "programado" as const,
-      valor: Math.round(Number(it.valor_unitario)),
-    }));
-  if (filas.length === 0) return null;
+  // En qué se convierte cada línea lo decide lib/cotizaciones.ts; lo que se
+  // decide acá es CUÁNDO, porque eso necesita consultar la base.
+  const filas = viajesDesdeCotizacion(cot, hoyChile());
+  if (filas.length === 0) return { tipo: "nada" };
 
   const { error } = await supabase.from("viajes").insert(filas);
-  if (error) return `No se pudieron generar los viajes: ${error.message}`;
+  if (error) {
+    return { tipo: "error", mensaje: `No se pudieron generar los viajes: ${error.message}` };
+  }
 
   revalidatePath("/viajes");
   revalidatePath("/");
-  return null;
+  return { tipo: "creados", cantidad: filas.length };
 }
 
 function readHeader(formData: FormData) {
@@ -118,7 +91,7 @@ function readHeader(formData: FormData) {
     titulo: s(formData.get("titulo")),
     nota_pie: s(formData.get("nota_pie")),
     exento_iva: bool(formData.get("exento_iva")),
-    estado: ESTADOS.includes(estadoRaw) ? estadoRaw : "borrador",
+    estado: estadoCotizacion(estadoRaw),
   };
 }
 
@@ -126,12 +99,14 @@ export async function crearCotizacion(
   _prev: FormState,
   formData: FormData,
 ): Promise<FormState> {
+  if (!(await puedeEditar())) return { error: SIN_PERMISO };
+
   const header = readHeader(formData);
-  const items = parseItems(s(formData.get("itemsJson")));
+  const items = parsearItems(s(formData.get("itemsJson")));
   if (items.length === 0) {
     return { error: "Agrega al menos una línea de servicio." };
   }
-  const totales = calcTotales(items, header.exento_iva);
+  const totales = calcularTotales(items, header.exento_iva);
 
   const supabase = await createClient();
 
@@ -169,6 +144,8 @@ export async function actualizarCotizacion(
   _prev: FormState,
   formData: FormData,
 ): Promise<FormState> {
+  if (!(await puedeEditar())) return { error: SIN_PERMISO };
+
   const id = sReq(formData.get("id"));
   if (!id) return { error: "Falta el identificador de la cotización." };
 
@@ -177,11 +154,11 @@ export async function actualizarCotizacion(
   // ocurren casi a la vez.
   const { estado: _estado, ...header } = readHeader(formData);
   void _estado;
-  const items = parseItems(s(formData.get("itemsJson")));
+  const items = parsearItems(s(formData.get("itemsJson")));
   if (items.length === 0) {
     return { error: "Agrega al menos una línea de servicio." };
   }
-  const totales = calcTotales(items, header.exento_iva);
+  const totales = calcularTotales(items, header.exento_iva);
 
   const supabase = await createClient();
 
@@ -205,28 +182,42 @@ export async function actualizarCotizacion(
 
 // Cambia SOLO el estado (pastilla, autoguardado con acción dedicada — evita la
 // carrera con el autoguardado del documento). Aceptada ⇒ genera los viajes.
-export async function actualizarEstadoCotizacion(formData: FormData) {
+//
+// Devuelve un aviso en vez de `void`: los viajes se creaban de verdad, pero sin
+// que nada lo dijera (ver ResultadoViajes en lib/cotizaciones.ts), y un fallo
+// —una cotización sin cliente, un error de la base— se perdía del todo porque
+// nadie leía lo que esta función devolvía.
+export async function actualizarEstadoCotizacion(
+  formData: FormData,
+): Promise<EstadoState> {
+  if (!(await puedeEditar())) return { error: SIN_PERMISO };
+
   const id = sReq(formData.get("id"));
   const estadoRaw = sReq(formData.get("estado")) as CotizacionEstado;
-  const estado: CotizacionEstado = ESTADOS.includes(estadoRaw) ? estadoRaw : "borrador";
-  if (!id) return;
+  const estado: CotizacionEstado = estadoCotizacion(estadoRaw);
+  if (!id) return { error: "Falta el identificador de la cotización." };
 
   const supabase = await createClient();
-  await supabase.from("cotizaciones").update({ estado }).eq("id", id);
+  const { error } = await supabase.from("cotizaciones").update({ estado }).eq("id", id);
+  if (error) return { error: `No se pudo cambiar el estado: ${error.message}` };
 
+  let resultado: ResultadoViajes = { tipo: "nada" };
   if (estado === "aceptada") {
-    await generarViajesDesdeCotizacion(supabase, id);
+    resultado = await generarViajesDesdeCotizacion(supabase, id);
   }
 
   revalidatePath("/cotizaciones");
   revalidatePath("/viajes");
   revalidatePath("/");
+  return avisoViajes(resultado);
 }
 
 export async function eliminarCotizacion(
   _prev: FormState,
   formData: FormData,
 ): Promise<FormState> {
+  if (!(await puedeEditar())) return { error: SIN_PERMISO };
+
   const id = sReq(formData.get("id"));
   if (!id) return { error: "Falta el identificador." };
   const supabase = await createClient();

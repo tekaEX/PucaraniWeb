@@ -7,12 +7,14 @@ import { Input } from "@/components/ui/input";
 import { MoneyInput } from "@/components/ui/money-input";
 import { Select } from "@/components/ui/select";
 import { Field } from "@/components/ui/label";
-import { Trash2, Check, Loader2 } from "lucide-react";
+import { Trash2 } from "lucide-react";
 import { toInputDate } from "@/lib/format";
 import { buttonClass } from "@/components/ui/button";
+import { EstadoGuardado } from "@/components/ui/estado-guardado";
 import {
   TAXI_TIPOS,
   taxiNombreCliente,
+  taxiPideDescripcion,
   type ServicioTaxiConRelaciones,
   type TaxiTipo,
 } from "@/types/db";
@@ -52,9 +54,9 @@ export function TaxiPanel({
     // el default del tipo anterior (no pisa montos escritos a mano).
     const precarga = monto === "0" || monto === "" || monto === String(prevDefault ?? "");
     if (precarga && TAXI_TIPOS[nuevo].monto) setMonto(String(TAXI_TIPOS[nuevo].monto));
-    // Guardar al tiro, salvo que pase a "especial" sin descripción (el server
-    // la exige): ahí se espera al blur, cuando ya esté escrita.
-    if (nuevo !== "especial") {
+    // Guardar al tiro, salvo que pase a "Especial": ahí falta la descripción
+    // que el servidor exige, así que se espera al blur, cuando ya esté escrita.
+    if (!taxiPideDescripcion(nuevo)) {
       // setTimeout deja que React vuelque el estado nuevo al DOM antes del submit.
       setTimeout(autoguardar, 0);
     }
@@ -94,12 +96,15 @@ export function TaxiPanel({
           <Field label="Monto" className="mb-0">
             <MoneyInput name="monto" value={monto} onChange={setMonto} placeholder="0" />
           </Field>
-          {tipo === "especial" ? (
-            <Field label="Descripción del servicio" className="mb-0 sm:col-span-2 lg:col-span-3">
+          {taxiPideDescripcion(tipo) ? (
+            <Field
+              label="Descripción del servicio (Especial)"
+              className="mb-0 sm:col-span-2 lg:col-span-3"
+            >
               <Input
                 name="descripcion"
                 defaultValue={servicio.descripcion ?? ""}
-                placeholder="Tour Lauca medio día…"
+                placeholder="Ej: City tour, traslado a evento, viaje especial…"
                 required
               />
             </Field>
@@ -168,21 +173,7 @@ export function TaxiPanel({
               Eliminar
             </button>
           </ConfirmForm>
-          <span className="flex h-4 items-center gap-1.5 text-xs text-muted">
-            {pending ? (
-              <>
-                <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                Guardando…
-              </>
-            ) : state.ok ? (
-              <>
-                <Check className="h-3.5 w-3.5 text-ok" />
-                Guardado
-              </>
-            ) : (
-              ""
-            )}
-          </span>
+          <EstadoGuardado pending={pending} ok={state.ok} />
         </div>
       </div>
     </div>

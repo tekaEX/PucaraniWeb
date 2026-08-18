@@ -4,6 +4,7 @@ import { Fragment, useMemo, useState } from "react";
 import { ChevronDown } from "lucide-react";
 import { Badge, VencimientoBadge, type Tone } from "@/components/ui/badge";
 import { formatNumber, formatCLP } from "@/lib/format";
+import { DOCS_VEHICULO } from "@/lib/vencimientos";
 import { VehiculoPanel } from "./vehiculo-panel";
 import {
   VEHICULO_CATEGORIAS,
@@ -17,20 +18,20 @@ const categoriaTone: Record<VehiculoCategoria, Tone> = {
   taxis: "amber",
 };
 
-type Pestana = "todos" | VehiculoCategoria | "sin_categoria";
+// Patente, vehículo, categoría, capacidad + un documento cada uno + gastos y
+// la flecha. Derivado para que agregar un documento no descuadre las filas que
+// ocupan el ancho completo.
+const COLUMNAS = 6 + DOCS_VEHICULO.length;
 
-const PESTANAS: { value: Pestana; label: string }[] = [
-  { value: "todos", label: "Todos" },
-  { value: "operacion", label: VEHICULO_CATEGORIAS.operacion },
-  { value: "taxis", label: VEHICULO_CATEGORIAS.taxis },
-  { value: "sin_categoria", label: "Sin categoría" },
-];
-
-// La base todavía acepta 'encomiendas' en vehiculos_categoria_valida (migración
-// 0016) y puede haber filas con ese valor: la categoría se fue con Ares pero no
-// se tocó Postgres. Una fila así no tiene entrada en VEHICULO_CATEGORIAS, y
-// leerla a ciegas devolvería undefined y rompería el Badge al buscar el tono.
-// Se muestra el valor crudo en gris hasta que esos vehículos se reclasifiquen.
+// La categoría es una ETIQUETA, no un filtro (decisión del dueño): dice dónde
+// se ocupa el vehículo y nada más. Las pestañas Todos/Operación/Taxis/Sin
+// categoría que partían esta lista en cuatro se sacaron — con siete vehículos,
+// filtrarlos escondía flota sin ahorrar nada.
+//
+// Hasta que se corra la migración 0042 la base todavía acepta 'encomiendas'
+// (migración 0016) y hay una fila con ese valor: no tiene entrada en
+// VEHICULO_CATEGORIAS y leerla a ciegas rompería el Badge al buscar el tono.
+// Se muestra el valor crudo en gris.
 function esCategoriaConocida(c: string): c is VehiculoCategoria {
   return c in VEHICULO_CATEGORIAS;
 }
@@ -43,7 +44,6 @@ export function VehiculoAccordion({
   gastos: GastoVehiculo[];
 }) {
   const [openId, setOpenId] = useState<string | null>(null);
-  const [pestana, setPestana] = useState<Pestana>("todos");
 
   const porVehiculo = useMemo(() => {
     const m = new Map<string, GastoVehiculo[]>();
@@ -56,53 +56,30 @@ export function VehiculoAccordion({
     return m;
   }, [gastos]);
 
-  const visibles = useMemo(() => {
-    if (pestana === "todos") return vehiculos;
-    if (pestana === "sin_categoria") return vehiculos.filter((v) => !v.categoria);
-    return vehiculos.filter((v) => v.categoria === pestana);
-  }, [vehiculos, pestana]);
-
   return (
-    <div>
-      <div className="flex flex-wrap gap-1.5 border-b border-border bg-background px-4 py-2.5">
-        {PESTANAS.map((p) => (
-          <button
-            key={p.value}
-            type="button"
-            onClick={() => setPestana(p.value)}
-            className={`rounded-full px-3 py-1.5 text-xs font-medium transition-colors ${
-              pestana === p.value
-                ? "bg-brand text-brand-foreground"
-                : "bg-card text-muted hover:bg-background"
-            }`}
-          >
-            {p.label}
-          </button>
-        ))}
-      </div>
-      <table className="w-full text-sm">
+    <table className="w-full text-sm">
       <thead className="bg-background text-left text-xs uppercase tracking-wide text-muted">
         <tr>
           <th className="px-4 py-3 font-medium">Patente</th>
           <th className="px-4 py-3 font-medium">Vehículo</th>
           <th className="px-4 py-3 font-medium">Categoría</th>
           <th className="px-4 py-3 font-medium text-center">Cap.</th>
-          <th className="px-4 py-3 font-medium">Rev. técnica</th>
-          <th className="px-4 py-3 font-medium">SOAP</th>
-          <th className="px-4 py-3 font-medium">Permiso circ.</th>
+          {/* Una columna por documento, desde la lista de lib/vencimientos.ts:
+              agregar un papel obligatorio no debería ser editar cuatro
+              archivos hasta que todos coincidan. */}
+          {DOCS_VEHICULO.map((d) => (
+            <th key={d.campo} className="px-4 py-3 font-medium">
+              {d.corto}
+            </th>
+          ))}
           <th className="px-4 py-3 font-medium text-right">Gastos</th>
           <th className="px-4 py-3"></th>
         </tr>
       </thead>
+      {/* La lista vacía la resuelve la página con su tarjeta de "aún no hay
+          vehículos": acá ya no hay filtro que pueda dejarla en cero. */}
       <tbody className="divide-y divide-border">
-        {visibles.length === 0 ? (
-          <tr>
-            <td colSpan={9} className="px-4 py-10 text-center text-sm text-muted">
-              Ningún vehículo en esta categoría.
-            </td>
-          </tr>
-        ) : null}
-        {visibles.map((v) => {
+        {vehiculos.map((v) => {
           const open = openId === v.patente;
           const vGastos = porVehiculo.get(v.patente) ?? [];
           const total = vGastos.reduce((a, g) => a + Number(g.monto_total), 0);
@@ -137,15 +114,11 @@ export function VehiculoAccordion({
                   )}
                 </td>
                 <td className="px-4 py-3 text-center">{v.capacidad ?? "—"}</td>
-                <td className="px-4 py-3">
-                  <VencimientoBadge fecha={v.revision_tecnica_venc} />
-                </td>
-                <td className="px-4 py-3">
-                  <VencimientoBadge fecha={v.soap_venc} />
-                </td>
-                <td className="px-4 py-3">
-                  <VencimientoBadge fecha={v.permiso_circulacion_venc} />
-                </td>
+                {DOCS_VEHICULO.map((d) => (
+                  <td key={d.campo} className="px-4 py-3">
+                    <VencimientoBadge fecha={v[d.campo] as string | null} />
+                  </td>
+                ))}
                 <td className="px-4 py-3 text-right tabular-nums font-medium">
                   {total ? formatCLP(total) : "—"}
                 </td>
@@ -158,7 +131,7 @@ export function VehiculoAccordion({
 
               {open ? (
                 <tr>
-                  <td colSpan={9} className="bg-background px-4 py-5">
+                  <td colSpan={COLUMNAS} className="bg-background px-4 py-5">
                     <div className="animate-expand">
                       <VehiculoPanel vehiculo={v} gastos={vGastos} />
                     </div>
@@ -170,6 +143,5 @@ export function VehiculoAccordion({
         })}
       </tbody>
     </table>
-    </div>
   );
 }

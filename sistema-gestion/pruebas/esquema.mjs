@@ -62,10 +62,20 @@ const TABLAS = {
 // sección 4.
 const SIN_TIPO = ["chofer_categorias"];
 
-// Encomiendas se fue a Ares y la 0036 borró su rastro de esta base. Si alguna
-// de estas tablas reaparece, alguien restauró un respaldo viejo: además de
-// resucitar un negocio que ya no es de esta empresa, las tres primeras traen
-// datos personales de destinatarios que no deberían existir acá.
+// Encomiendas se fue a Ares. Las tres primeras ya no están en la base; las
+// otras seis SÍ SIGUEN AHÍ.
+//
+// El comentario anterior decía que "la 0036" había borrado su rastro. Esa
+// migración nunca existió: en el commit 3789f74 se borraron del repo los
+// archivos 0017–0035, pero ninguno de ellos dropeaba las tablas, y no se
+// escribió una que lo hiciera. Así que este chequeo no cubre solo el caso de
+// un respaldo viejo restaurado — hoy está fallando porque la limpieza quedó a
+// medias, con datos personales de destinatarios todavía guardados acá.
+//
+// La migración que las retira está escrita y sin correr: 0041. Es destructiva
+// sobre datos reales del sistema anterior (pagos e ingresos incluidos), así que
+// se corre cuando el dueño lo decida. Hasta entonces, estas 6 fallas son
+// ESPERADAS: no las confundas con una regresión nueva.
 const RETIRADAS = [
   "encomienda_pedidos",
   "encomienda_rutas",

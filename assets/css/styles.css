@@ -603,22 +603,28 @@ section,
 }
 
 /*
- * 📍 Imagen de fondo del hero (aricamap.png)
- *    object-position controla el encuadre:
+ * 📍 Imagen de fondo del hero (mapa-arica-parinacota-tacna.jpg)
+ *    Va aquí, en CSS, y no como <img> en el HTML, para que Google no la
+ *    elija como miniatura del resultado de búsqueda (ver comentario en el
+ *    hero de index.html). Si la cambias, cambia también el <link rel="preload">
+ *    del <head> de index.html.
+ *
+ *    background-position controla el encuadre:
  *      center center  → centrado (por defecto)
  *      center 30%     → desplaza hacia arriba (muestra más del norte del mapa)
  *      center 60%     → desplaza hacia abajo  (muestra más del sur)
- *    Cambia los valores hasta que el mapa quede donde quieras.
  */
 .hero-bg {
-  position:        absolute;
-  inset:           0;
-  display:         block;
-  width:           100%;
-  height:          100%;
-  object-fit:      cover;
-  object-position: center center;   /* ← CENTRADO DEL MAPA DEL HERO */
-  z-index:         1;
+  position:            absolute;
+  inset:               0;
+  display:             block;
+  width:               100%;
+  height:              100%;
+  background-image:    url("../img/mapa-arica-parinacota-tacna.jpg");
+  background-size:     cover;
+  background-position: center center;   /* ← CENTRADO DEL MAPA DEL HERO */
+  background-repeat:   no-repeat;
+  z-index:             1;
 }
 
 /* Overlay degradado — da contraste al texto sobre el mapa */

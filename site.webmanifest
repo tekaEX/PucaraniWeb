@@ -1,0 +1,16 @@
+{
+  "name": "Transportes Pucarani",
+  "short_name": "Pucarani",
+  "description": "Transporte de pasajeros en Arica: aeropuerto Chacalluta, taxi ejecutivo, traslados a Tacna y city tour.",
+  "lang": "es-CL",
+  "start_url": "/",
+  "scope": "/",
+  "display": "browser",
+  "background_color": "#ffffff",
+  "theme_color": "#0e1d34",
+  "icons": [
+    { "src": "/assets/img/favicon-192x192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "/assets/img/favicon-512x512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "/assets/img/favicon-512x512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

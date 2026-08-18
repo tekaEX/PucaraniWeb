@@ -10,7 +10,12 @@
 //
 // Cada chequeo dice qué habría que mirar si falla, no solo que falló.
 import { createClient } from "@supabase/supabase-js";
-import { facturaEstadoDerivado, costoTotalViaje } from "@/types/db";
+import {
+  facturaEstadoDerivado,
+  costoTotalViaje,
+  TAXI_TIPOS,
+  VEHICULO_CATEGORIAS,
+} from "@/types/db";
 import { formatearPatente } from "@/lib/patentes";
 
 const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -45,7 +50,7 @@ const [
   { data: asignaciones },
 ] = await Promise.all([
   db.from("clientes").select("id, nombre"),
-  db.from("vehiculos").select("patente, activo"),
+  db.from("vehiculos").select("patente, activo, categoria"),
   db.from("choferes").select("id, nombre"),
   db.from("cotizaciones").select("*"),
   db.from("cotizacion_items").select("*"),
@@ -196,6 +201,11 @@ const ENUMS = [
   ["cotizaciones.estado", cotizaciones, "estado", ["borrador", "enviada", "aceptada", "rechazada"]],
   ["viajes.estado", viajes, "estado", ["pendiente", "en_curso", "realizado", "facturado", "cancelado"]],
   ["facturas.estado", facturas, "estado", ["borrador", "emitida", "anulada"]],
+  // Los tipos de taxi y la categoría del vehículo se recortaron (migración
+  // 0042): acá se ve si quedó alguna fila con un valor que la app ya no sabe
+  // nombrar. Las listas salen de types/db.ts, no escritas a mano.
+  ["servicios_taxi.tipo", taxis, "tipo", Object.keys(TAXI_TIPOS)],
+  ["vehiculos.categoria", vehiculos, "categoria", Object.keys(VEHICULO_CATEGORIAS)],
 ];
 let fuera = 0;
 for (const [nombre, filas, campo, permitidos] of ENUMS) {

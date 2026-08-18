@@ -1,10 +1,11 @@
 "use server";
 
+import { exigirPanel, puedeEditar, SIN_PERMISO } from "@/lib/auth";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { sesionActual } from "@/lib/auth";
 import { s, sReq, bool } from "@/lib/form-helpers";
+import { clasesLicencia, validarLicencia } from "@/lib/flota";
 
 export type FormState = { error?: string; ok?: boolean };
 
@@ -13,17 +14,16 @@ export type FormState = { error?: string; ok?: boolean };
 // sistema. La tuvo mientras existió la app de reparto (/conductor), que se fue
 // a Ares con encomiendas; era el único lugar donde un chofer iniciaba sesión.
 //
-// Quién puede administrar la ficha. Coincide con la policy
-// choferes_write_admin_op (migración 0006): RLS ya frena a los demás roles.
-async function puedeAdministrarChoferes(): Promise<boolean> {
-  const sesion = await sesionActual();
-  return sesion?.rol === "admin" || sesion?.rol === "operador";
-}
+// El chequeo de permiso que vivía acá (puedeAdministrarChoferes) era idéntico a
+// puedeEditar() de lib/auth.ts, así que se unificó: coincide con la policy
+// choferes_write_admin_op de la migración 0006.
 
 export async function guardarChofer(
   _prev: FormState,
   formData: FormData,
 ): Promise<FormState> {
+  if (!(await puedeEditar())) return { error: SIN_PERMISO };
+
   const id = s(formData.get("id"));
   const nombre = sReq(formData.get("nombre"));
   if (!nombre) return { error: "El nombre del chofer es obligatorio." };
@@ -51,6 +51,36 @@ export async function guardarChofer(
   return { ok: true };
 }
 
+/**
+ * Alta rápida de un chofer con solo el nombre, sin salir de la pantalla.
+ *
+ * Mismo motivo que `crearClienteRapido`: en el sistema anterior el chofer se
+ * agregaba desde un cuadro con un campo mientras se cargaba el servicio. La
+ * licencia y sus fechas se completan después en la ficha (y hasta que eso
+ * pase, sus papeles aparecen como "sin cargar", que es la verdad).
+ */
+export async function crearChoferRapido(
+  nombre: string,
+): Promise<{ id: string; nombre: string } | { error: string }> {
+  if (!(await puedeEditar())) return { error: SIN_PERMISO };
+
+  const limpio = nombre.trim();
+  if (!limpio) return { error: "Escribe el nombre del chofer." };
+
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("choferes")
+    .insert({ nombre: limpio })
+    .select("id, nombre")
+    .single();
+
+  if (error) return { error: `No se pudo crear: ${error.message}` };
+
+  revalidatePath("/choferes");
+  revalidatePath("/taxis");
+  return { id: data.id as string, nombre: data.nombre as string };
+}
+
 // Borrado total: elimina al chofer; sus asignaciones de viaje quedan sin
 // chofer (o desaparecen si esa fila era solo de este chofer — ver migración
 // 0015). Para "ya no trabaja aquí" sin perder historial, usar desactivarChofer.
@@ -58,16 +88,10 @@ export async function eliminarChofer(
   _prev: FormState,
   formData: FormData,
 ): Promise<FormState> {
+  if (!(await puedeEditar())) return { error: SIN_PERMISO };
+
   const id = sReq(formData.get("id"));
   if (!id) return { error: "Falta el identificador." };
-
-  // Guardia explícita, no decorativa: RLS frena el DELETE de la fila EN
-  // SILENCIO (0 filas afectadas, sin error), así que sin este chequeo la
-  // acción respondía "eliminado" a cualquier usuario con sesión. Las Server
-  // Actions son endpoints POST de la ruta donde se usan; el proxy no las mira.
-  if (!(await puedeAdministrarChoferes())) {
-    return { error: "No tienes permiso para eliminar choferes." };
-  }
 
   const supabase = await createClient();
 
@@ -84,6 +108,8 @@ export async function desactivarChofer(
   _prev: FormState,
   formData: FormData,
 ): Promise<FormState> {
+  if (!(await puedeEditar())) return { error: SIN_PERMISO };
+
   const id = sReq(formData.get("id"));
   if (!id) return { error: "Falta el identificador." };
   const supabase = await createClient();
@@ -95,8 +121,11 @@ export async function desactivarChofer(
 }
 
 // Antes de eliminar, se consulta al vuelo si el chofer tiene historial de
-// viajes para decidir qué advertencia mostrar en el diálogo.
+// viajes para decidir qué advertencia mostrar en el diálogo. Guardia por el
+// mismo motivo que tieneHistorialVehiculo: sin sesión, RLS haría que devolviera
+// "no tiene historial" en vez de rechazar.
 export async function tieneHistorialChofer(id: string): Promise<boolean> {
+  await exigirPanel();
   const supabase = await createClient();
   const { count } = await supabase
     .from("viaje_asignaciones")
@@ -110,13 +139,24 @@ export async function actualizarLicencia(
   _prev: FormState,
   formData: FormData,
 ): Promise<FormState> {
+  if (!(await puedeEditar())) return { error: SIN_PERMISO };
+
   const id = sReq(formData.get("id"));
   if (!id) return { error: "Falta el chofer." };
 
+  // La licencia es lo que habilita a manejar: una clase escrita a mano que no
+  // existe ("clase Z") no deja saber si el chofer puede llevar un bus, y una
+  // fecha ilegible se leería como documento vigente.
+  const clases = clasesLicencia(s(formData.get("licencia_clase")));
+  if ("error" in clases) return { error: clases.error };
+  const licencia_vencimiento = s(formData.get("licencia_vencimiento"));
+  const problema = validarLicencia(licencia_vencimiento);
+  if (problema) return { error: problema };
+
   const values = {
     licencia_numero: s(formData.get("licencia_numero")),
-    licencia_clase: s(formData.get("licencia_clase")),
-    licencia_vencimiento: s(formData.get("licencia_vencimiento")),
+    licencia_clase: clases.clases,
+    licencia_vencimiento,
   };
 
   const supabase = await createClient();
@@ -130,6 +170,8 @@ export async function actualizarLicencia(
 
 // Guarda la URL de la foto de perfil del chofer (subida desde el navegador).
 export async function actualizarFotoChofer(formData: FormData) {
+  if (!(await puedeEditar())) return;
+
   const id = sReq(formData.get("id"));
   const foto_url = s(formData.get("foto_url"));
   if (!id) return;
@@ -147,6 +189,8 @@ export async function guardarCategoriasChofer(
   _prev: FormState,
   formData: FormData,
 ): Promise<FormState> {
+  if (!(await puedeEditar())) return { error: SIN_PERMISO };
+
   const id = sReq(formData.get("id"));
   if (!id) return { error: "Falta el chofer." };
 

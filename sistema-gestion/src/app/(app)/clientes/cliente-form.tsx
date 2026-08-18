@@ -1,11 +1,10 @@
 "use client";
 
 import { useActionState } from "react";
-import Link from "next/link";
 import { guardarCliente, type FormState } from "./actions";
 import { Input } from "@/components/ui/input";
 import { Field } from "@/components/ui/label";
-import { Button, buttonClass } from "@/components/ui/button";
+import { Button } from "@/components/ui/button";
 import { Card, CardBody } from "@/components/ui/card";
 import { Save } from "lucide-react";
 import type { Cliente } from "@/types/db";
@@ -88,14 +87,11 @@ export function ClienteForm({ cliente }: { cliente?: Cliente }) {
         </CardBody>
       </Card>
 
-      <div className="mt-4 flex items-center gap-2">
+      <div className="mt-4 flex items-center justify-end">
         <Button type="submit" disabled={pending}>
           <Save className="h-4 w-4" />
           {pending ? "Guardando…" : "Guardar cliente"}
         </Button>
-        <Link href="/clientes" className={buttonClass({ variant: "outline" })}>
-          Cancelar
-        </Link>
       </div>
     </form>
   );

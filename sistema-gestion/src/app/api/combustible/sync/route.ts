@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
+import { rechazoSiNoPanel } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { decrypt } from "@/lib/crypto";
+import { hoyChile } from "@/lib/format";
 import { extraerPatente, normalizar } from "@/lib/patentes";
 
 // Las llamadas al SII vía SimpleAPI pueden tardar: subimos el límite (techo del
@@ -19,26 +21,30 @@ const RUTS_COMBUSTIBLE = new Set<string>([
 ]);
 
 export async function POST(req: Request) {
+  const rechazo = await rechazoSiNoPanel();
+  if (rechazo) return rechazo;
+
   let body: { dia?: number; mes?: number; anio?: number } = {};
   try {
     body = await req.json();
   } catch {
     body = {};
   }
-  const ahora = new Date();
-  const dia = body.dia ?? ahora.getDate();
-  const mes = body.mes ?? ahora.getMonth() + 1;
-  const anio = body.anio ?? ahora.getFullYear();
+  // Por defecto, el día de HOY EN CHILE. Con el reloj del servidor (UTC), una
+  // sincronización lanzada de noche pedía las compras de MAÑANA —un día que en
+  // el SII todavía no existe— y volvía vacía sin decir por qué.
+  const [hoyAnio, hoyMes, hoyDia] = hoyChile().split("-").map(Number);
+  const dia = body.dia ?? hoyDia;
+  const mes = body.mes ?? hoyMes;
+  const anio = body.anio ?? hoyAnio;
   const dd = String(dia).padStart(2, "0");
   const mm = String(mes).padStart(2, "0");
   const urlCompras = `${SIMPLEAPI_BASE}/${dd}/${mm}/${anio}`;
 
+  // El chequeo de sesión que había acá suelto lo hace ahora rechazoSiNoPanel()
+  // arriba: la Constitución §II pide que el control de acceso salga de
+  // lib/auth.ts y no de lógica escrita a mano en cada endpoint.
   const supabase = await createClient();
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) return NextResponse.json({ error: "No autorizado" }, { status: 401 });
 
   // Empresa centralizada (única fila). A futuro: derivar de la membresía del usuario.
   const { data: empresa } = await supabase

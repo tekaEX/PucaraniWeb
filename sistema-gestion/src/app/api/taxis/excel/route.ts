@@ -1,8 +1,10 @@
 import ExcelJS from "exceljs";
+import { rechazoSiNoPanel } from "@/lib/auth";
 import { cargarServiciosExport } from "@/lib/taxis-export";
-import { formatDate, hoyChile } from "@/lib/format";
+import { formatDate, hoyChile, nombreArchivo } from "@/lib/format";
 import {
-  TAXI_TIPOS,
+  taxiTipoLabel,
+  taxiPideDescripcion,
   taxiNombreCliente,
   taxiNombreChofer,
   type ServicioTaxiConRelaciones,
@@ -56,10 +58,11 @@ function armarHoja(
 
   let total = 0;
   for (const s of servicios) {
+    // El "Especial" se informa con lo que fue: su nombre solo no dice nada.
     const tipo =
-      s.tipo === "especial" && s.descripcion
+      taxiPideDescripcion(s.tipo) && s.descripcion
         ? `Especial: ${s.descripcion}`
-        : TAXI_TIPOS[s.tipo].label;
+        : taxiTipoLabel(s.tipo);
     ws.getCell(r, 1).value = formatDate(s.fecha);
     ws.getCell(r, 2).value = tipo;
     ws.getCell(r, 3).value = taxiNombreCliente(s) ?? "";
@@ -81,6 +84,9 @@ function armarHoja(
 }
 
 export async function GET(req: Request) {
+  const rechazo = await rechazoSiNoPanel();
+  if (rechazo) return rechazo;
+
   const url = new URL(req.url);
   const cliente = url.searchParams.get("cliente");
 
@@ -118,10 +124,9 @@ export async function GET(req: Request) {
   }
 
   const buffer = await wb.xlsx.writeBuffer();
-  const nombre = `Informe_Taxis_${periodo.anio}${periodo.mes ? `_${MESES[periodo.mes - 1]}` : ""}${cliente ? `_${cliente}` : ""}`
-    .normalize("NFD")
-    .replace(/[̀-ͯ]/g, "")
-    .replace(/[^A-Za-z0-9_-]+/g, "_");
+  const nombre = nombreArchivo(
+    `Informe_Taxis_${periodo.anio}${periodo.mes ? `_${MESES[periodo.mes - 1]}` : ""}${cliente ? `_${cliente}` : ""}`,
+  );
 
   return new Response(buffer as unknown as BodyInit, {
     headers: {

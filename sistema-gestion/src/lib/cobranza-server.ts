@@ -1,5 +1,6 @@
 // Agregación del estado de cuenta por cliente. Depende del periodo global
 // (lib/periodo usa next/headers), así que es solo-servidor.
+import "server-only";
 import { facturaEstadoDerivado, type FacturaConRelaciones } from "@/types/db";
 import { enRango, type Periodo } from "@/lib/periodo";
 import {

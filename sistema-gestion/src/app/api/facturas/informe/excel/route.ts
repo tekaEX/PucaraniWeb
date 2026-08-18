@@ -1,7 +1,8 @@
 import ExcelJS from "exceljs";
+import { rechazoSiNoPanel } from "@/lib/auth";
 import { getViajesInforme } from "@/lib/queries";
 import { loadLogo } from "@/lib/logo";
-import { formatDate } from "@/lib/format";
+import { formatDate, nombreArchivo } from "@/lib/format";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -9,6 +10,9 @@ export const dynamic = "force-dynamic";
 const BRAND = "FF1D4E89";
 
 export async function GET(req: Request) {
+  const rechazo = await rechazoSiNoPanel();
+  if (rechazo) return rechazo;
+
   const url = new URL(req.url);
   const data = await getViajesInforme({
     estado: url.searchParams.get("estado") ?? undefined,
@@ -85,7 +89,7 @@ export async function GET(req: Request) {
   ws.getCell(r, 7).font = { bold: true };
 
   const buf = await wb.xlsx.writeBuffer();
-  const slug = (url.searchParams.get("mes") ?? "servicios").replace(/[^\w-]/g, "");
+  const slug = nombreArchivo(url.searchParams.get("mes") ?? "servicios", "servicios");
 
   return new Response(buf as unknown as BodyInit, {
     headers: {

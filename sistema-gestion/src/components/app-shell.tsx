@@ -1,6 +1,9 @@
 "use client";
 
 import { useState } from "react";
+// "Route" ya lo ocupa el icono de lucide (el de Viajes), así que el tipo de
+// ruta de Next entra con otro nombre.
+import type { Route as Ruta } from "next";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
@@ -25,7 +28,9 @@ import { Notificaciones } from "@/components/notificaciones";
 import type { Alerta } from "@/lib/vencimientos";
 
 type NavItem = {
-  href: string;
+  // Con typedRoutes, cada literal de `grupos` se valida acá abajo: una ruta que
+  // no existe deja de compilar en vez de dar 404 en producción.
+  href: Ruta;
   label: string;
   icon: typeof LayoutDashboard;
   exact?: boolean;
@@ -41,6 +46,14 @@ const grupos: { label?: string; items: NavItem[] }[] = [
       { href: "/facturas", label: "Facturas", icon: Receipt },
     ],
   },
+  // NO va acá un grupo "Finanzas". Se agregó uno y era menú de más: sus dos
+  // entradas apuntaban a rutas que ya no son pantallas —/finanzas redirige al
+  // Dashboard y /cobranzas a Clientes— porque su contenido se fusionó ahí. Eran
+  // dos ítems que llevaban a otros dos ítems del mismo menú.
+  //
+  // El resumen financiero ESTÁ en el Dashboard, y el estado de cuenta de cada
+  // cliente está en su acordeón dentro de Clientes. Las dos rutas se conservan
+  // como redirección para los enlaces guardados, no como sección.
   {
     label: "Taxis",
     items: [{ href: "/taxis", label: "Gestión de taxis", icon: Car }],
@@ -120,7 +133,21 @@ export function AppShell({
         ))}
       </nav>
 
+      {/* Pie del menú, en el orden en que se lee: primero DE QUIÉN es la sesión,
+          después cómo salir de ella, y al final Configuración. */}
       <div className="space-y-1 border-t border-white/10 px-3 py-3">
+        <div className="px-2 py-1 text-xs text-white/60 truncate" title={userEmail}>
+          {userEmail}
+        </div>
+        <form action={logout}>
+          <button
+            type="submit"
+            className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium text-white/60 transition-colors hover:bg-white/[0.06] hover:text-white"
+          >
+            <LogOut className="h-4 w-4" />
+            Cerrar sesión
+          </button>
+        </form>
         <Link
           href="/configuracion"
           onClick={() => setOpen(false)}
@@ -134,18 +161,6 @@ export function AppShell({
           <Settings className="h-4 w-4" />
           Configuración
         </Link>
-        <div className="px-2 py-1 text-xs text-white/60 truncate" title={userEmail}>
-          {userEmail}
-        </div>
-        <form action={logout}>
-          <button
-            type="submit"
-            className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium text-white/60 transition-colors hover:bg-white/[0.06] hover:text-white"
-          >
-            <LogOut className="h-4 w-4" />
-            Cerrar sesión
-          </button>
-        </form>
       </div>
     </div>
   );

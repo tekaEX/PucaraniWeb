@@ -1,4 +1,5 @@
 import ExcelJS from "exceljs";
+import { rechazoSiNoPanel } from "@/lib/auth";
 import { getCotizacionParaDocumento } from "@/lib/queries";
 import { loadLogo } from "@/lib/logo";
 import { formatDate } from "@/lib/format";
@@ -12,6 +13,9 @@ export async function GET(
   _req: Request,
   ctx: { params: Promise<{ id: string }> },
 ) {
+  const rechazo = await rechazoSiNoPanel();
+  if (rechazo) return rechazo;
+
   const { id } = await ctx.params;
   const data = await getCotizacionParaDocumento(id);
   if (!data) return new Response("Cotización no encontrada", { status: 404 });

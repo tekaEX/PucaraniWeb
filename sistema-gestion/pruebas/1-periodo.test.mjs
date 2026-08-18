@@ -3,7 +3,15 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { rangoPeriodo, enRango, etiquetaPeriodo } from "@/lib/periodo";
-import { hoyChile, sumarDias, formatDate, formatDistancia, formatCLP, formatNumber } from "@/lib/format";
+import {
+  hoyChile,
+  todayInput,
+  sumarDias,
+  formatDate,
+  formatDistancia,
+  formatCLP,
+  formatNumber,
+} from "@/lib/format";
 
 test("rangoPeriodo cubre el mes completo, incluidos los de 28/29/30/31 días", () => {
   assert.deepEqual(rangoPeriodo({ anio: 2026, mes: 2 }), { desde: "2026-02-01", hasta: "2026-02-28" });
@@ -71,4 +79,17 @@ test("formatos de plata y distancia toleran null/NaN sin escupir 'NaN' en pantal
 test("etiquetaPeriodo", () => {
   assert.equal(etiquetaPeriodo({ anio: 2026, mes: 8 }), "agosto 2026");
   assert.equal(etiquetaPeriodo({ anio: 2026, mes: null }), "Año 2026");
+});
+
+// ---------------------------------------------------------------------------
+// El "hoy" de los formularios (T048)
+// ---------------------------------------------------------------------------
+
+test("el valor por defecto de una fecha es HOY EN CHILE, no el del servidor", () => {
+  // Los formularios son componentes de cliente, pero Next igual los renderiza
+  // primero en el servidor (UTC): pasadas las ~20:00 de Chile el campo traía
+  // mañana, y el último día del mes eso mete el registro en el periodo
+  // siguiente.
+  assert.equal(todayInput(), hoyChile());
+  assert.match(todayInput(), /^\d{4}-\d{2}-\d{2}$/);
 });

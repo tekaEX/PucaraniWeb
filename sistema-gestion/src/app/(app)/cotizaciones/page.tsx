@@ -1,11 +1,13 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
+import { empresaActual } from "@/lib/empresa-server";
 import { PageHeader } from "@/components/page-header";
 import { Card } from "@/components/ui/card";
 import { buttonClass } from "@/components/ui/button";
 import { Plus, FileText } from "lucide-react";
-import { getPeriodo, rangoPeriodo, etiquetaPeriodo } from "@/lib/periodo";
-import type { Empresa, Viaje } from "@/types/db";
+import { rangoPeriodo, etiquetaPeriodo } from "@/lib/periodo";
+import { getPeriodo } from "@/lib/periodo-server";
+import type { Viaje } from "@/types/db";
 import { datosNuevaCotizacion } from "./nueva/datos";
 import { CotizacionAccordion, type CotRow } from "./cotizacion-accordion";
 
@@ -18,22 +20,17 @@ export default async function CotizacionesPage() {
   const { desde, hasta } = rangoPeriodo(periodo);
 
   const supabase = await createClient();
-  const [{ data: cData }, { data: emp }] = await Promise.all([
+  const [{ data: cData }, emp] = await Promise.all([
     supabase
       .from("cotizaciones")
       .select("*, cliente:clientes(id,nombre,codigo), items:cotizacion_items(*)")
       .gte("fecha", desde)
       .lte("fecha", hasta)
       .order("numero", { ascending: false }),
-    supabase
-      .from("empresa")
-      .select("*")
-      .order("created_at", { ascending: true })
-      .limit(1)
-      .maybeSingle(),
+    empresaActual(),
   ]);
   const cotizaciones = (cData ?? []) as CotRow[];
-  const empresa = (emp as Empresa) ?? null;
+  const empresa = emp;
 
   // Solo los viajes de las cotizaciones visibles (no toda la tabla).
   let viajes: Viaje[] = [];

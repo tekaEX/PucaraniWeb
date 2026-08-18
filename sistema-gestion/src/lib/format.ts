@@ -77,8 +77,14 @@ export function toInputDate(d: string | Date | null | undefined): string {
   return `${y}-${m}-${day}`;
 }
 
+// Valor "hoy" para un <input type="date">. Sale de hoyChile() y no del reloj
+// del proceso: estos formularios son componentes de cliente, pero Next igual
+// los renderiza primero en el servidor (UTC), así que pasadas las ~20:00 de
+// Chile el campo aparecía con la fecha de MAÑANA. Un viaje o un servicio de
+// taxi cargados de noche quedaban con fecha del día siguiente —y, el último día
+// del mes, en el periodo equivocado.
 export function todayInput(): string {
-  return toInputDate(new Date());
+  return hoyChile();
 }
 
 // Suma (o resta, con negativo) días a una fecha "YYYY-MM-DD" y devuelve el
@@ -100,4 +106,29 @@ export function hoyChile(): string {
     month: "2-digit",
     day: "2-digit",
   }).format(new Date());
+}
+
+/**
+ * Nombre seguro para un archivo que se descarga.
+ *
+ * Va en la cabecera `Content-Disposition: attachment; filename="…"`, así que
+ * una comilla o un salto de línea en el nombre de un cliente no solo rompen el
+ * nombre: rompen la cabecera. Y los acentos, mandados crudos, llegan como
+ * caracteres raros según el navegador.
+ *
+ * Estaba resuelto de tres formas distintas en los cinco endpoints de
+ * exportación. La que menos servía era `replace(/[^\w-]/g, "")`, que borra las
+ * letras acentuadas en vez de reemplazarlas: "Ñuñoa" quedaba en "uoa".
+ *
+ * Acá se descompone primero (NFD separa la letra de su tilde), se sacan los
+ * diacríticos y recién después se filtra: "Ñuñoa" queda "Nunoa", que se lee.
+ */
+export function nombreArchivo(base: string, fallback = "documento"): string {
+  const limpio = base
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^A-Za-z0-9_-]+/g, "_")
+    .replace(/_+/g, "_")
+    .replace(/^_|_$/g, "");
+  return limpio || fallback;
 }

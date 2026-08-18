@@ -1,66 +1,52 @@
 "use server";
 
+import { puedeEditar, SIN_PERMISO } from "@/lib/auth";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { hoyChile } from "@/lib/format";
 import { s, sReq, num, intNull } from "@/lib/form-helpers";
-import type { FacturaEstado } from "@/types/db";
+import {
+  estadoFactura,
+  mensajeErrorFactura,
+  montosFactura,
+  parsearViajeIds,
+  tipoDte as tipoDteValido,
+  validarFactura,
+} from "@/lib/facturas";
 
 export type FormState = { error?: string; ok?: boolean };
-
-const ESTADOS: FacturaEstado[] = ["borrador", "emitida", "anulada"];
-const TIPOS_DTE = [33, 34, 56, 61];
-
-function parseViajeIds(raw: string | null): string[] {
-  if (!raw) return [];
-  try {
-    const arr = JSON.parse(raw);
-    return Array.isArray(arr) ? arr.filter((x) => typeof x === "string" && x !== "") : [];
-  } catch {
-    return [];
-  }
-}
-
-// Traduce los errores de las restricciones de la BD a mensajes entendibles.
-function mensajeError(msg: string): string {
-  if (msg.includes("facturas_folio_unico")) {
-    return "Ya existe una factura con ese folio y tipo de documento.";
-  }
-  if (msg.includes("estado") && msg.includes("emitida")) {
-    return "Una factura emitida necesita folio y fecha de emisión.";
-  }
-  return msg;
-}
 
 export async function guardarFactura(
   _prev: FormState,
   formData: FormData,
 ): Promise<FormState> {
+  if (!(await puedeEditar())) return { error: SIN_PERMISO };
+
   const id = s(formData.get("id"));
 
   const cliente_id = s(formData.get("cliente_id"));
-  if (!cliente_id) return { error: "La factura debe tener un cliente (receptor)." };
-
-  const estadoRaw = sReq(formData.get("estado")) as FacturaEstado;
-  const estado: FacturaEstado = ESTADOS.includes(estadoRaw) ? estadoRaw : "borrador";
-
-  const tipoRaw = intNull(formData.get("tipo_dte")) ?? 34;
-  const tipo_dte = TIPOS_DTE.includes(tipoRaw) ? tipoRaw : 34;
-
+  const estado = estadoFactura(sReq(formData.get("estado")));
+  const tipo_dte = tipoDteValido(intNull(formData.get("tipo_dte")));
   const folio = intNull(formData.get("folio"));
   const fecha_emision = s(formData.get("fecha_emision"));
-  if (estado === "emitida" && (!folio || !fecha_emision)) {
-    return { error: "Para marcarla como emitida indica el folio y la fecha de emisión." };
-  }
 
   let fecha_pago = s(formData.get("fecha_pago"));
-  if (fecha_pago && estado === "borrador") {
-    return { error: "Un borrador no puede tener fecha de pago: emite la factura primero." };
-  }
   if (formData.get("marcar_pagada") === "1" && !fecha_pago) {
     fecha_pago = hoyChile();
   }
+
+  const problema = validarFactura({ cliente_id, estado, folio, fecha_emision, fecha_pago });
+  if (problema) return { error: problema };
+
+  // El desglose se RECALCULA acá, no se toma del formulario. Los campos
+  // ocultos `neto` e `iva` que manda el navegador sirven para mostrar; lo que
+  // se guarda sale de montosFactura(), sobre el total y el tipo de documento,
+  // que sí son entrada del usuario.
+  const { subtotal: neto, iva, total } = montosFactura(
+    num(formData.get("total")),
+    tipo_dte,
+  );
 
   const values = {
     cliente_id,
@@ -68,15 +54,15 @@ export async function guardarFactura(
     folio,
     fecha_emision,
     estado,
-    neto: num(formData.get("neto")),
-    iva: num(formData.get("iva")),
-    total: num(formData.get("total")),
+    neto,
+    iva,
+    total,
     fecha_pago,
     archivo_path: s(formData.get("archivo_path")),
     notas: s(formData.get("notas")),
   };
 
-  const viajeIds = parseViajeIds(s(formData.get("viajes")));
+  const viajeIds = parsearViajeIds(s(formData.get("viajes")));
 
   const supabase = await createClient();
   const result = id
@@ -84,7 +70,7 @@ export async function guardarFactura(
     : await supabase.from("facturas").insert(values).select("id").single();
 
   if (result.error) {
-    return { error: `No se pudo guardar: ${mensajeError(result.error.message)}` };
+    return { error: `No se pudo guardar: ${mensajeErrorFactura(result.error.message)}` };
   }
 
   const facturaId = result.data.id as string;
@@ -119,6 +105,8 @@ export async function guardarFactura(
 
 // Registra el pago de hoy desde la lista (acción rápida).
 export async function marcarPagada(formData: FormData) {
+  if (!(await puedeEditar())) return;
+
   const id = sReq(formData.get("id"));
   if (!id) return;
 
@@ -141,6 +129,8 @@ export async function marcarPagada(formData: FormData) {
 //   anulada    → estado=anulada
 // El cliente ya bloquea emitir/pagar sin folio; esto es la red de seguridad.
 export async function actualizarEstadoFactura(formData: FormData) {
+  if (!(await puedeEditar())) return;
+
   const id = sReq(formData.get("id"));
   const nuevo = sReq(formData.get("estado"));
   if (!id) return;
@@ -177,6 +167,8 @@ export async function eliminarFactura(
   _prev: FormState,
   formData: FormData,
 ): Promise<FormState> {
+  if (!(await puedeEditar())) return { error: SIN_PERMISO };
+
   const id = sReq(formData.get("id"));
   if (!id) return { error: "Falta el identificador." };
   const supabase = await createClient();

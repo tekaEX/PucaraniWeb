@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { PageHeader } from "@/components/page-header";
 import { ViajeForm } from "../viaje-form";
+import { COLUMNAS_CHOFER_OPT, COLUMNAS_VEHICULO_OPT } from "../nueva/datos";
 import { eliminarViaje } from "../actions";
 import { ConfirmForm } from "@/components/ui/confirm-form";
 import { Trash2, ArrowLeft } from "lucide-react";
@@ -33,8 +34,8 @@ export default async function ViajeDetallePage({
         .from("cotizaciones")
         .select("id,numero,cliente_id,total")
         .order("numero", { ascending: false }),
-      supabase.from("choferes").select("id,nombre").order("nombre"),
-      supabase.from("vehiculos").select("patente").order("patente"),
+      supabase.from("choferes").select(COLUMNAS_CHOFER_OPT).order("nombre"),
+      supabase.from("vehiculos").select(COLUMNAS_VEHICULO_OPT).order("patente"),
     ]);
   const viaje = (via as ViajeConRelaciones) ?? null;
   const clientes = cl ?? [];

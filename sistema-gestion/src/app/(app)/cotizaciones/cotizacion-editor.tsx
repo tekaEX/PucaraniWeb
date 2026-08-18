@@ -1,7 +1,7 @@
 "use client";
 
 import { useActionState, useRef, useState, useTransition } from "react";
-import { Plus, Trash2, Check, Loader2 } from "lucide-react";
+import { Plus, Trash2 } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { EstadoSelector, type EstadoOpcion } from "@/components/ui/estado-selector";
 import {
@@ -9,10 +9,13 @@ import {
   actualizarEstadoCotizacion,
   type FormState,
 } from "./actions";
+import { useToast } from "@/components/ui/toast";
 import { formatCLP, toInputDate } from "@/lib/format";
 import { formatMiles } from "@/components/ui/money-input";
 import type { Empresa } from "@/types/db";
 import type { CotRow } from "./cotizacion-accordion";
+import { calcularTotales } from "@/lib/totales";
+import { EstadoGuardado } from "@/components/ui/estado-guardado";
 
 // Documento editable: la misma apariencia que la vista previa del PDF
 // (cotizacion-preview.tsx), pero cada texto se edita en el lugar y se
@@ -51,6 +54,7 @@ export function CotizacionEditor({
   );
   const formRef = useRef<HTMLFormElement>(null);
   const [estadoPending, startEstado] = useTransition();
+  const toast = useToast();
 
   const [items, setItems] = useState<ItemRow[]>(() =>
     [...(cot.items ?? [])]
@@ -72,19 +76,26 @@ export function CotizacionEditor({
   }
   // El estado se guarda con acción dedicada (no el autoguardado del documento),
   // para que no compitan y el estado no se revierta.
+  //
+  // Al pasar a "aceptada" la action genera un viaje por cada línea; el aviso es
+  // la única señal de que eso ocurrió, porque los viajes nacen `programado` y
+  // se ven recién al entrar a Viajes.
   function cambiarEstado(nuevo: string) {
     const fd = new FormData();
     fd.set("id", cot.id);
     fd.set("estado", nuevo);
-    startEstado(() => actualizarEstadoCotizacion(fd));
+    startEstado(async () => {
+      const r = await actualizarEstadoCotizacion(fd);
+      if (r.error) toast(r.error, "error");
+      else if (r.mensaje) toast(r.mensaje);
+    });
   }
   function setItem(i: number, patch: Partial<ItemRow>) {
     setItems((rows) => rows.map((r, idx) => (idx === i ? { ...r, ...patch } : r)));
   }
 
-  const subtotal = items.reduce((a, it) => a + Math.round(it.valor_unitario), 0);
-  const iva = exento ? 0 : Math.round(subtotal * 0.19);
-  const total = subtotal + iva;
+  // Mismo cálculo que usa la Server Action al guardar (lib/totales.ts).
+  const { subtotal, iva, total } = calcularTotales(items, exento);
 
   const logo = empresa?.logo_url || "/logo.png";
   const empresaLine = [empresa?.direccion, empresa?.ciudad]
@@ -115,21 +126,11 @@ export function CotizacionEditor({
           onCambio={cambiarEstado}
           pending={estadoPending}
         />
-        <span className="flex h-4 items-center gap-1.5 text-xs text-muted">
-          {pending ? (
-            <>
-              <Loader2 className="h-3.5 w-3.5 animate-spin" />
-              Guardando…
-            </>
-          ) : state.ok ? (
-            <>
-              <Check className="h-3.5 w-3.5 text-ok" />
-              Guardado
-            </>
-          ) : (
-            "Edita directo sobre el documento"
-          )}
-        </span>
+        <EstadoGuardado
+          pending={pending}
+          ok={state.ok}
+          reposo="Edita directo sobre el documento"
+        />
       </div>
 
       {/* ——— El documento (mismo aspecto que el PDF) ——— */}

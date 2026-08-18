@@ -1,0 +1,59 @@
+# Gates de validación del sistema de gestión (Constitución §VI).
+#
+# Ojo con dos cosas si se toca este archivo:
+#
+#   1. El repo tiene la web estática en la raíz y la app en sistema-gestion/.
+#      Los workflows solo se leen desde la raíz, por eso este archivo vive acá
+#      y no dentro de sistema-gestion/. De ahí el working-directory.
+#   2. Node 24 no es capricho: las pruebas importan los .ts de src/ directo y
+#      dependen de que Node les quite los tipos solo. En 22 no corre ninguna.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+# Si llegan dos pushes seguidos a la misma rama, corre solo el último.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  gates:
+    name: lint · typecheck · test · build
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: sistema-gestion
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: sistema-gestion/package-lock.json
+
+      - run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Pruebas
+        run: npm test
+
+      # El build compila y vuelve a verificar tipos, ahora con las rutas
+      # tipadas (typedRoutes). Todas las páginas son dinámicas, así que no se
+      # consulta Supabase en build: alcanzan valores de relleno para que la
+      # librería no proteste al construir sus clientes. No hay secretos acá.
+      - name: Build
+        run: npm run build
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: https://relleno.supabase.co
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: relleno-solo-para-el-build
