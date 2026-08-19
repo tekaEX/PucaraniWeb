@@ -26,7 +26,7 @@ There are no build, lint, or test commands.
 Each `.html` file is self-contained. Pages share identical `<head>` (vendor CSS + `assets/css/styles.css`) and `<body>` endings (vendor JS + `assets/js/main.js`). There is no templating engine — shared markup (header, footer, floating WhatsApp button) must be duplicated across pages when changed.
 
 Pages:
-- `index.html` — home (hero, nosotros, servicios, por qué elegirnos, cobertura, `#traslados`, testimonios, FAQ, CTA)
+- `index.html` — home (hero, nosotros, servicios, por qué elegirnos, cobertura, testimonios, FAQ, CTA)
 - 7 service landing pages, one per service, linked from the nav dropdown, the 6 service cards and the footer:
   `traslado-aeropuerto-chacalluta.html`, `taxi-ejecutivo-arica.html`, `traslado-arica-tacna.html`,
   `city-tour-arica.html`, `city-tour-tacna.html`, `traslado-puerto-arica.html`,
@@ -47,7 +47,7 @@ Every page carries: unique `<title>` + meta description, `<link rel="canonical">
 Los temas nuevos que se quieren posicionar (`traslado arica`, `transporte arica`, `transfer`, `taxi 24 horas`, `turismo arica`, `tour arica`, `cómo ir de arica a tacna`, `ir de compras a tacna`, `transporte con factura`) **se cubren reforzando las 9 páginas existentes: no se crean landings nuevas ni servicios nuevos**. El refuerzo va en `<title>`, meta description, H2, texto de cuerpo y preguntas frecuentes; el `<meta name="keywords">` se mantiene solo por orden, Google lo ignora.
 
 Vehículos de cada tema:
-- `index.html` → sección `#traslados` (texto + lista con enlaces internos a las 7 páginas de servicio) y 7 preguntas frecuentes.
+- `index.html` → las 7 preguntas frecuentes de la home (la sección `#traslados` que también cubría estos temas fue eliminada por decisión del dueño el 19-08-2026: no reintroducirla).
 - Cada landing → un H2 nuevo orientado a su búsqueda principal (`Cómo ir de Arica a Tacna`, `Qué hacer en Arica si tienes medio día`, `Ir de compras a Tacna por el día`, `Desde qué sectores de Arica salimos`, `Eventos, festivales y delegaciones`, `También a los terminales de la ciudad`, `Un taxi reservado…`) más 2-4 preguntas frecuentes.
 
 Cada pregunta frecuente vive **dos veces**: en el HTML (`.faq-item`) y en `mainEntity` del `FAQPage` del JSON-LD. Al agregar o editar una hay que tocar las dos; el conteo debe coincidir.

@@ -21,6 +21,26 @@ export async function updateSession(request: NextRequest) {
     return NextResponse.redirect(url);
   }
 
+  // El enlace del correo llega bien, pero a la ruta equivocada. Pasa por lo
+  // mismo que arriba: cuando el redirect_to no está en las Redirect URLs de
+  // Supabase, el enlace aterriza en el Site URL —o sea en "/"— con el `code`
+  // colgando. El canje vive en /auth/confirm, así que ahí no lo espera nadie: el
+  // proxy lo toma por una visita sin sesión, redirige al login y el código se
+  // pierde sin usarse.
+  //
+  // Se rescata en vez de depender de la configuración de Supabase porque el
+  // enlace es de un solo uso: perderlo obliga a pedir otro, y el límite de
+  // envíos por hora hace que reintentar tampoco sea gratis.
+  const params = request.nextUrl.searchParams;
+  const traeCanje =
+    params.has("code") || (params.has("token_hash") && params.has("type"));
+
+  if (traeCanje && request.nextUrl.pathname !== "/auth/confirm") {
+    const url = request.nextUrl.clone();
+    url.pathname = "/auth/confirm";
+    return NextResponse.redirect(url);
+  }
+
   let supabaseResponse = NextResponse.next({ request });
 
   // Va ANTES del try/catch de abajo a propósito: ese catch existe para que
