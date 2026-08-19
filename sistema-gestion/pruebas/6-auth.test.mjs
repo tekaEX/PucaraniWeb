@@ -70,8 +70,24 @@ test("el mensaje de rechazo es uno solo para todo el sistema", () => {
 
 import { readdirSync, readFileSync } from "node:fs";
 
-// Las dos únicas que no pueden llevar guardia: son la entrada y la salida.
-const SIN_GUARDIA_A_PROPOSITO = new Set(["login", "logout"]);
+// Las únicas que no pueden llevar guardia, porque corren ANTES de que exista la
+// sesión que la guardia comprobaría: la entrada, la salida y las dos de
+// recuperar la contraseña.
+//
+// Que estén en esta lista no significa que estén abiertas:
+//   · enviarRecuperacion() es pública a propósito (quien perdió la contraseña no
+//     tiene con qué autenticarse). Lo que la protege es que no distingue una
+//     cuenta que existe de una que no, más el límite de envíos de Supabase.
+//   · actualizarContrasena() SÍ verifica: exige la sesión que abrió
+//     /auth/confirm al canjear el enlace del correo, con getUser(). No usa
+//     ninguno de los helpers de abajo porque el rechazo no es "no tenés
+//     permiso" sino "el enlace ya no sirve".
+const SIN_GUARDIA_A_PROPOSITO = new Set([
+  "login",
+  "logout",
+  "enviarRecuperacion",
+  "actualizarContrasena",
+]);
 // esAdmin() es más estricta que puedeEditar(): la usan las acciones que tocan
 // credenciales del SII y folios CAF, que un operador no puede manipular.
 const GUARDIAS = /\b(puedeEditar|esAdmin|exigirPanel|exigirSesion|sesionActual)\(\)/;

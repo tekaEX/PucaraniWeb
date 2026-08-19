@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { LoginForm } from "./login-form";
+import { AvisoEnlaceVencido } from "./aviso-enlace";
 import { logout } from "./actions";
 import { PantallaAuth } from "@/components/pantalla-auth";
 
@@ -17,6 +18,8 @@ export default async function LoginPage({
 
   return (
     <PantallaAuth titulo="Iniciar sesión">
+      <AvisoEnlaceVencido />
+
       {/* Llega acá quien tiene la sesión abierta pero ningún rol de panel:
           las cuentas de chofer que quedaron con la cookie puesta en el
           teléfono desde antes de que encomiendas se fuera a Ares. El botón
