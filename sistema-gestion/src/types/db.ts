@@ -56,7 +56,11 @@ export interface Empresa {
   rut: string | null;
   direccion: string | null;
   ciudad: string | null;
+  /** El SII distingue comuna de ciudad. Si falta, se cae a `ciudad`. */
+  comuna: string | null;
   giro: string | null;
+  /** Códigos de actividad económica del SII. Sin al menos uno no se puede emitir. */
+  actividad_economica: number[];
   telefono: string | null;
   email: string | null;
   logo_url: string | null;
@@ -73,6 +77,9 @@ export interface Cliente {
   codigo: string | null;
   rut: string | null;
   direccion: string | null;
+  /** Obligatorios para facturarle electrónicamente. */
+  giro: string | null;
+  comuna: string | null;
   contacto_nombre: string | null;
   contacto_email: string | null;
   contacto_telefono: string | null;

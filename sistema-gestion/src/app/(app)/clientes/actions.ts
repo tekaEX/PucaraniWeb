@@ -26,6 +26,8 @@ export async function guardarCliente(
     codigo: s(formData.get("codigo")),
     rut: s(formData.get("rut")),
     direccion: s(formData.get("direccion")),
+    giro: s(formData.get("giro")),
+    comuna: s(formData.get("comuna")),
     contacto_nombre: s(formData.get("contacto_nombre")),
     contacto_email: s(formData.get("contacto_email")),
     contacto_telefono: s(formData.get("contacto_telefono")),
@@ -42,7 +44,7 @@ export async function guardarCliente(
 
   revalidatePath("/clientes");
   // Al crear, vuelve a la lista; al editar inline, se queda en el acordeón.
-  if (!id) redirect("/clientes");
+  if (!id) redirect("/clientes?guardado=Cliente+agregado");
   return { ok: true };
 }
 

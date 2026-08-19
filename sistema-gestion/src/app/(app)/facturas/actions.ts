@@ -100,7 +100,7 @@ export async function guardarFactura(
   revalidatePath("/");
   // Edición inline (autoguardado): no redirige, mantiene abierto el acordeón.
   if (id) return { ok: true };
-  redirect("/facturas");
+  redirect("/facturas?guardado=Factura+registrada");
 }
 
 // Registra el pago de hoy desde la lista (acción rápida).

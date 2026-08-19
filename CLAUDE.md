@@ -26,7 +26,7 @@ There are no build, lint, or test commands.
 Each `.html` file is self-contained. Pages share identical `<head>` (vendor CSS + `assets/css/styles.css`) and `<body>` endings (vendor JS + `assets/js/main.js`). There is no templating engine — shared markup (header, footer, floating WhatsApp button) must be duplicated across pages when changed.
 
 Pages:
-- `index.html` — home (hero, nosotros, servicios, por qué elegirnos, cobertura, testimonios, FAQ, CTA)
+- `index.html` — home (hero, nosotros, servicios, por qué elegirnos, cobertura, `#traslados`, testimonios, FAQ, CTA)
 - 7 service landing pages, one per service, linked from the nav dropdown, the 6 service cards and the footer:
   `traslado-aeropuerto-chacalluta.html`, `taxi-ejecutivo-arica.html`, `traslado-arica-tacna.html`,
   `city-tour-arica.html`, `city-tour-tacna.html`, `traslado-puerto-arica.html`,
@@ -42,6 +42,17 @@ All custom styles live in `assets/css/styles.css` (there is no `main.css`). The 
 
 ### SEO
 Every page carries: unique `<title>` + meta description, `<link rel="canonical">`, Open Graph/Twitter tags, geo meta, and JSON-LD. The home page declares `LocalBusiness`/`TaxiService` (`@id` = `https://transportespucarani.cl/#empresa`) plus `WebSite` and `WebPage`+`FAQPage`; landing pages declare `Service` (referencing that provider `@id`), `WebPage`+`FAQPage` and `BreadcrumbList`. When the phone, email or address changes, update it in the visible HTML **and** in the JSON-LD of every page.
+
+### Temas de búsqueda (decisión del dueño, 19-08-2026)
+Los temas nuevos que se quieren posicionar (`traslado arica`, `transporte arica`, `transfer`, `taxi 24 horas`, `turismo arica`, `tour arica`, `cómo ir de arica a tacna`, `ir de compras a tacna`, `transporte con factura`) **se cubren reforzando las 9 páginas existentes: no se crean landings nuevas ni servicios nuevos**. El refuerzo va en `<title>`, meta description, H2, texto de cuerpo y preguntas frecuentes; el `<meta name="keywords">` se mantiene solo por orden, Google lo ignora.
+
+Vehículos de cada tema:
+- `index.html` → sección `#traslados` (texto + lista con enlaces internos a las 7 páginas de servicio) y 7 preguntas frecuentes.
+- Cada landing → un H2 nuevo orientado a su búsqueda principal (`Cómo ir de Arica a Tacna`, `Qué hacer en Arica si tienes medio día`, `Ir de compras a Tacna por el día`, `Desde qué sectores de Arica salimos`, `Eventos, festivales y delegaciones`, `También a los terminales de la ciudad`, `Un taxi reservado…`) más 2-4 preguntas frecuentes.
+
+Cada pregunta frecuente vive **dos veces**: en el HTML (`.faq-item`) y en `mainEntity` del `FAQPage` del JSON-LD. Al agregar o editar una hay que tocar las dos; el conteo debe coincidir.
+
+Servicios que **no** se ofrecen y por lo tanto no deben aparecer: matrimonios y eventos sociales, arriendo de van/minibús sin más contexto, delegaciones deportivas o escolares como servicio propio, y traslado médico a Tacna como servicio aparte (las clínicas de Tacna son solo un destino del traslado Arica–Tacna que ya existe).
 
 ### JavaScript (`assets/js/main.js`)
 A single IIFE handles all interactivity: scroll-based header/scroll-top behavior, mobile nav toggle, AOS animation init, PureCounter (animated stats), GLightbox (video/image overlays), Swiper sliders (testimonials), and FAQ accordion. Swiper instances are configured via inline `<script type="application/json" class="swiper-config">` blocks in the HTML — no separate config file.
@@ -61,7 +72,9 @@ There is no contact form and no PHP. The conversion paths are the green **Cotiza
 ### Alcance del servicio (importante al escribir contenido)
 La empresa **no presta servicios al interior de la comuna ni al altiplano** (Azapa, Lluta, Poconchile, Putre, Parque Nacional Lauca, Lago Chungará, Codpa, Socoroma, etc.) y **no atiende pasajeros de cruceros**. La cobertura es: la ciudad de Arica (incluidos aeropuerto Chacalluta, Puerto de Arica y terminales de buses) y Tacna, Perú, cruzando la frontera. No reintroducir esos destinos ni los cruceros en textos, alt de imágenes, palabras clave ni datos estructurados.
 
-Servicios eliminados del listado por decisión del dueño: **turismo al altiplano** (reemplazado por City Tour Tacna) y **transporte de personal para empresas** (su página se borró; quedan mencionadas la facturación y las cuentas mensuales en los textos, pendiente de confirmar si el servicio sigue existiendo).
+Servicios eliminados del listado por decisión del dueño: **turismo al altiplano** (reemplazado por City Tour Tacna).
+
+El **transporte de personal para empresas sigue vigente**, pero por decisión del dueño (19-08-2026) **no se nombra como servicio propio**: no lleva página, ni tarjeta, ni aparece en el hero ni en el `hasOfferCatalog`. Que una empresa pueda contratar queda implícito en los servicios que sí se listan, más las menciones de **factura y cuenta mensual** repartidas en los textos y en la pregunta frecuente «¿Emiten factura? ¿Puede contratarlos una empresa?» de la home.
 
 ## Key customization points
 

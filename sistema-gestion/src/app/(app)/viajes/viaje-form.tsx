@@ -267,13 +267,26 @@ export function ViajeForm({
               ))}
             </Select>
           </Field>
-          <Field label="Cotización asociada" htmlFor="cotizacion_select">
+          <Field
+            label="Cotización asociada"
+            htmlFor="cotizacion_select"
+            hint="Solo las del periodo activo."
+          >
             <Select
               id="cotizacion_select"
               value={cotizacionId}
               onChange={(e) => onCotizacionChange(e.target.value)}
             >
               <option value="">— Sin cotización —</option>
+              {/* La cotización ya asociada puede ser de otro mes y quedar fuera
+                  de la lista del periodo. Sin esta opción el selector se vería
+                  vacío —como si el viaje no tuviera cotización— y el primer
+                  cambio de cualquier otro campo la borraría de verdad. */}
+              {cotizacionId && !cotizaciones.some((c) => c.id === cotizacionId) ? (
+                <option value={cotizacionId}>
+                  {viaje?.cotizacion?.numero ?? "Cotización de otro periodo"}
+                </option>
+              ) : null}
               {cotizaciones.map((c) => (
                 <option key={c.id} value={c.id}>
                   {c.numero}

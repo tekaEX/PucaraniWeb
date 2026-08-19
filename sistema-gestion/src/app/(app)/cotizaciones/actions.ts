@@ -137,7 +137,7 @@ export async function crearCotizacion(
 
   revalidatePath("/cotizaciones");
   // Siempre de vuelta a la lista: el detalle/edición vive en el acordeón.
-  redirect("/cotizaciones");
+  redirect("/cotizaciones?guardado=Cotización+creada");
 }
 
 export async function actualizarCotizacion(

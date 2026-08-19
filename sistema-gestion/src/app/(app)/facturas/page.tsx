@@ -70,6 +70,38 @@ export default async function FacturasPage({
   // los propios de cada factura dentro del acordeón).
   const { viajesDisponibles: porFacturar } = await datosNuevaFactura();
 
+  // Estado de la emisión electrónica. Se resuelve acá, una vez, y no dentro de
+  // cada fila: el botón de emitir necesita saber contra qué ambiente va a
+  // trabajar y si falta algo, y preguntarlo por factura serían N consultas
+  // iguales. Si falta un dato, el botón lo dice en vez de fallar al apretarlo.
+  const [{ data: credSii }, { data: cafs }] = await Promise.all([
+    supabase
+      .from("sii_credenciales")
+      .select("cert_path, rut_certificado, numero_resolucion, fecha_resolucion, ambiente")
+      .maybeSingle(),
+    // "Con folios libres" es folio_siguiente <= folio_hasta, y eso compara dos
+    // columnas entre sí: PostgREST no lo expresa en un filtro. Son pocas filas
+    // (un puñado de rangos por empresa), así que se resuelve acá.
+    supabase.from("sii_caf").select("folio_siguiente, folio_hasta"),
+  ]);
+  const cafsDisponibles = (cafs ?? []).some((c) => c.folio_siguiente <= c.folio_hasta);
+
+  const faltaSii = !credSii?.cert_path
+    ? "Falta cargar el certificado digital en Configuración."
+    : !credSii.rut_certificado
+      ? "Falta el RUT del titular del certificado."
+      : credSii.numero_resolucion === null || !credSii.fecha_resolucion
+        ? "Falta la resolución del SII que autoriza a emitir."
+        : !cafsDisponibles
+          ? "No hay folios (CAF) cargados."
+          : undefined;
+
+  const sii = {
+    ambiente: (credSii?.ambiente ?? "certificacion") as "certificacion" | "produccion",
+    listo: !faltaSii,
+    motivo: faltaSii,
+  };
+
   const informeParams = new URLSearchParams();
   if (sp.cliente) informeParams.set("cliente", sp.cliente);
   if (periodo.mes !== null) {
@@ -161,6 +193,7 @@ export default async function FacturasPage({
               facturas={facturas}
               clientes={clientes}
               porFacturar={porFacturar}
+              sii={sii}
             />
           </div>
         </Card>

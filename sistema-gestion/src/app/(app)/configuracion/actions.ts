@@ -21,7 +21,15 @@ export async function guardarEmpresa(
     rut: s(formData.get("rut")),
     direccion: s(formData.get("direccion")),
     ciudad: s(formData.get("ciudad")),
+    comuna: s(formData.get("comuna")),
     giro: s(formData.get("giro")),
+    // Se escriben separados por coma porque son uno o dos códigos, no una
+    // lista larga. Lo que no sea un número se descarta en vez de guardarse:
+    // un "492300 (transporte)" tipeado entero rompería el DTE al emitir.
+    actividad_economica: (s(formData.get("actividad_economica")) ?? "")
+      .split(/[,;\s]+/)
+      .map((c) => Number(c.trim()))
+      .filter((n) => Number.isInteger(n) && n > 0),
     telefono: s(formData.get("telefono")),
     email: s(formData.get("email")),
     representante: s(formData.get("representante")),

@@ -56,6 +56,25 @@ export function ClienteForm({ cliente }: { cliente?: Cliente }) {
               defaultValue={cliente?.direccion ?? ""}
             />
           </Field>
+          {/* Giro y comuna son obligatorios en una factura electrónica. Se
+              piden acá, con el cliente adelante, y no en el momento de emitir,
+              que es cuando ya no está para preguntarle. */}
+          <Field label="Giro" htmlFor="giro" hint="Obligatorio para facturarle electrónicamente.">
+            <Input
+              id="giro"
+              name="giro"
+              defaultValue={cliente?.giro ?? ""}
+              placeholder="Servicios de ingeniería"
+            />
+          </Field>
+          <Field label="Comuna" htmlFor="comuna" hint="Obligatoria en la factura electrónica.">
+            <Input
+              id="comuna"
+              name="comuna"
+              defaultValue={cliente?.comuna ?? ""}
+              placeholder="Arica"
+            />
+          </Field>
           <Field label="Contacto (nombre)" htmlFor="contacto_nombre">
             <Input
               id="contacto_nombre"

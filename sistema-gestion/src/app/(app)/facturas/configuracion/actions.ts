@@ -22,8 +22,25 @@ export async function guardarCredencialesSii(
   const rut = sReq(formData.get("rut"));
   const password = sReq(formData.get("password"));
   const cert = formData.get("certificado");
+  const rutCertificado = sReq(formData.get("rut_certificado"));
+  const numeroResolucionRaw = sReq(formData.get("numero_resolucion"));
+  const fechaResolucion = sReq(formData.get("fecha_resolucion"));
 
   if (!rut) return { error: "El RUT es obligatorio." };
+
+  // Los tres datos de abajo se cargan cuando el SII responde, que es después de
+  // tener el certificado: por eso son opcionales acá y se exigen recién al
+  // emitir. Lo que no se acepta es un número de resolución que no sea número.
+  let numeroResolucion: number | null = null;
+  if (numeroResolucionRaw) {
+    numeroResolucion = Number(numeroResolucionRaw);
+    if (!Number.isInteger(numeroResolucion) || numeroResolucion < 0) {
+      return { error: "El número de resolución tiene que ser un entero (en certificación es 0)." };
+    }
+  }
+  if (fechaResolucion && !/^\d{4}-\d{2}-\d{2}$/.test(fechaResolucion)) {
+    return { error: "La fecha de la resolución no es válida." };
+  }
 
   const supabase = await createClient();
   const {
@@ -76,6 +93,9 @@ export async function guardarCredencialesSii(
     {
       empresa_id: empresaId,
       rut,
+      rut_certificado: rutCertificado || null,
+      numero_resolucion: numeroResolucion,
+      fecha_resolucion: fechaResolucion || null,
       cert_path,
       cert_password_enc,
       updated_at: new Date().toISOString(),

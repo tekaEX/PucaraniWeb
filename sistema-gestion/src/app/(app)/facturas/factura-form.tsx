@@ -37,11 +37,14 @@ export function FacturaForm({
   clientes,
   viajesDisponibles,
   factura,
+  foliosSugeridos,
 }: {
   clientes: ClienteOpt[];
   /** Viajes por facturar (más los ya incluidos en esta factura, si edita). */
   viajesDisponibles: ViajeOpt[];
   factura?: FacturaConRelaciones;
+  /** Próximo folio por tipo de documento: { "33": 471, "34": 1290 }. */
+  foliosSugeridos?: Record<string, number>;
 }) {
   const [state, formAction, pending] = useActionState<FormState, FormData>(
     guardarFactura,
@@ -53,6 +56,25 @@ export function FacturaForm({
     factura?.viajes.map((v) => v.id) ?? [],
   );
   const [tipoDte, setTipoDte] = useState(String(factura?.tipo_dte ?? 34));
+
+  // El folio se propone solo: es el que sigue al último emitido de ESE tipo.
+  // Nadie se acuerda de memoria en qué número va cada talonario, y el dato ya
+  // está en la base. Se propone, no se impone: sigue siendo un campo editable,
+  // porque una factura vieja que se carga tarde lleva el folio que le tocó.
+  //
+  // Los folios corren por tipo de documento, así que cambiar el tipo cambia la
+  // sugerencia, salvo que ya se haya escrito un folio a mano.
+  const [folio, setFolio] = useState<string>(
+    factura?.folio
+      ? String(factura.folio)
+      : String(foliosSugeridos?.[String(factura?.tipo_dte ?? 34)] ?? ""),
+  );
+  const [folioTocado, setFolioTocado] = useState(false);
+
+  function onTipoDteChange(value: string) {
+    setTipoDte(value);
+    if (!factura && !folioTocado) setFolio(String(foliosSugeridos?.[value] ?? ""));
+  }
   const [estado, setEstado] = useState<FacturaEstado>(factura?.estado ?? "borrador");
   const [fechaPago, setFechaPago] = useState(
     factura?.fecha_pago ? toInputDate(factura.fecha_pago) : "",
@@ -206,7 +228,7 @@ export function FacturaForm({
               id="tipo_dte"
               name="tipo_dte"
               value={tipoDte}
-              onChange={(e) => setTipoDte(e.target.value)}
+              onChange={(e) => onTipoDteChange(e.target.value)}
             >
               {Object.entries(TIPOS_DTE).map(([value, label]) => (
                 <option key={value} value={value}>
@@ -235,12 +257,24 @@ export function FacturaForm({
                 {factura ? <option value="anulada">Anulada</option> : null}
               </Select>
             </Field>
-            <Field label="Folio (N°)" htmlFor="folio">
+            <Field
+              label="Folio (N°)"
+              htmlFor="folio"
+              hint={
+                !factura && !folioTocado && folio
+                  ? "Sigue al último emitido de este tipo."
+                  : undefined
+              }
+            >
               <Input
                 id="folio"
                 name="folio"
                 inputMode="numeric"
-                defaultValue={factura?.folio ?? ""}
+                value={folio}
+                onChange={(e) => {
+                  setFolio(e.target.value);
+                  setFolioTocado(true);
+                }}
                 placeholder="465"
                 required={estado === "emitida"}
               />

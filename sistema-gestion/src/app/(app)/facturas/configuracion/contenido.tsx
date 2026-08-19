@@ -28,6 +28,9 @@ type Caf = {
 
 export async function ConfiguracionSii() {
   let rut = "";
+  let rutCertificado = "";
+  let numeroResolucion = "";
+  let fechaResolucion = "";
   let tieneCert = false;
   let ambiente = "certificacion";
   let cafs: Caf[] = [];
@@ -39,7 +42,7 @@ export async function ConfiguracionSii() {
     const [{ data: cred }, { data: cafData }] = await Promise.all([
       supabase
         .from("sii_credenciales")
-        .select("rut, cert_path, ambiente")
+        .select("rut, rut_certificado, numero_resolucion, fecha_resolucion, cert_path, ambiente")
         .eq("empresa_id", empresa.id)
         .maybeSingle(),
       supabase
@@ -52,6 +55,9 @@ export async function ConfiguracionSii() {
     if (cred) {
       tieneCert = Boolean(cred.cert_path);
       rut = cred.rut ?? rut;
+      rutCertificado = cred.rut_certificado ?? "";
+      numeroResolucion = cred.numero_resolucion === null ? "" : String(cred.numero_resolucion);
+      fechaResolucion = cred.fecha_resolucion ?? "";
       ambiente = cred.ambiente ?? "certificacion";
     }
     cafs = (cafData ?? []) as Caf[];
@@ -63,6 +69,8 @@ export async function ConfiguracionSii() {
   const faltantes = [
     !tieneCert ? "el certificado digital" : null,
     cafs.length === 0 ? "un CAF con folios autorizados" : null,
+    !rutCertificado ? "el RUT del titular del certificado" : null,
+    !numeroResolucion || !fechaResolucion ? "la resolución del SII que autoriza a emitir" : null,
   ].filter(Boolean);
 
   return (
@@ -112,7 +120,13 @@ export async function ConfiguracionSii() {
           <CardTitle>Certificado digital</CardTitle>
         </CardHeader>
         <CardBody>
-          <CredForm rut={rut} tieneCert={tieneCert} />
+          <CredForm
+            rut={rut}
+            rutCertificado={rutCertificado}
+            numeroResolucion={numeroResolucion}
+            fechaResolucion={fechaResolucion}
+            tieneCert={tieneCert}
+          />
           <p className="mt-4 text-xs text-muted">
             El certificado se guarda en un bucket privado y su clave se cifra con
             AES-256-GCM. Solo se desencripta en memoria al firmar.

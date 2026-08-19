@@ -1,6 +1,8 @@
+import { Suspense } from "react";
 import { createClient } from "@/lib/supabase/server";
 import { AppShell } from "@/components/app-shell";
 import { ToastProvider } from "@/components/ui/toast";
+import { AvisoGuardado } from "@/components/ui/aviso-guardado";
 import { exigirPanel } from "@/lib/auth";
 import { getPeriodo } from "@/lib/periodo-server";
 import { construirAlertas } from "@/lib/vencimientos";
@@ -47,6 +49,12 @@ export default async function AppLayout({
           acordarse de ponerlo, y olvidarlo no rompe nada visible hasta que
           alguien llama a useToast() y revienta en el navegador. */}
       <ToastProvider>
+        {/* Lee ?guardado=… y lo convierte en aviso. En Suspense porque
+            useSearchParams() lo exige, y no devuelve nada visible: no hay
+            fallback que mostrar. */}
+        <Suspense fallback={null}>
+          <AvisoGuardado />
+        </Suspense>
         {children}
         {modal}
       </ToastProvider>

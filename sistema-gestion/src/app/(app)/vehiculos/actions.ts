@@ -54,7 +54,7 @@ export async function guardarVehiculo(
   revalidatePath("/vehiculos");
   revalidatePath("/");
   // Al crear vuelve a la lista; al editar inline se queda en el acordeón.
-  if (!patenteOriginal) redirect("/vehiculos");
+  if (!patenteOriginal) redirect("/vehiculos?guardado=Vehículo+agregado");
   return { ok: true };
 }
 

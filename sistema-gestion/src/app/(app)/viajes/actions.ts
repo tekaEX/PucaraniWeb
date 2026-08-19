@@ -73,7 +73,7 @@ export async function guardarViaje(
   revalidatePath("/");
   // Edición inline (autoguardado): no redirige, mantiene abierto el acordeón.
   if (id) return { ok: true };
-  redirect("/viajes");
+  redirect("/viajes?guardado=Viaje+registrado");
 }
 
 // Cambio rápido de estado desde la lista.

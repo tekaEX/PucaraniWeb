@@ -81,6 +81,23 @@ export function EmpresaForm({ empresa }: { empresa?: Empresa }) {
           <Field label="Ciudad" htmlFor="ciudad">
             <Input id="ciudad" name="ciudad" defaultValue={empresa?.ciudad ?? ""} />
           </Field>
+          {/* Los dos campos siguientes son para la factura electrónica: el SII
+              los exige en la cabecera de todo DTE y no se pueden deducir. */}
+          <Field label="Comuna" htmlFor="comuna" hint="La que va en el DTE. Si se deja vacía se usa la ciudad.">
+            <Input id="comuna" name="comuna" defaultValue={empresa?.comuna ?? ""} placeholder="Arica" />
+          </Field>
+          <Field
+            label="Actividad económica"
+            htmlFor="actividad_economica"
+            hint="Códigos que asignó el SII, separados por coma (ej. 492300)."
+          >
+            <Input
+              id="actividad_economica"
+              name="actividad_economica"
+              defaultValue={(empresa?.actividad_economica ?? []).join(", ")}
+              placeholder="492300"
+            />
+          </Field>
           <Field label="Teléfono" htmlFor="telefono">
             <Input id="telefono" name="telefono" defaultValue={empresa?.telefono ?? ""} />
           </Field>

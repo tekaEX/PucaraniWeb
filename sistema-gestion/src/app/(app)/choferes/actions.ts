@@ -47,7 +47,7 @@ export async function guardarChofer(
   revalidatePath("/choferes");
   revalidatePath("/");
   // Al crear, vuelve a la lista; al editar inline, se queda en el acordeón.
-  if (!id) redirect("/choferes");
+  if (!id) redirect("/choferes?guardado=Chofer+agregado");
   return { ok: true };
 }
 

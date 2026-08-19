@@ -14,6 +14,7 @@ import {
 } from "@/types/db";
 import { actualizarEstadoFactura, eliminarFactura } from "./actions";
 import { FacturaForm, type ViajeOpt } from "./factura-form";
+import { EmitirBoton } from "./emitir-boton";
 import { buttonClass } from "@/components/ui/button";
 
 const ESTADOS_FACTURA: EstadoOpcion[] = [
@@ -62,14 +63,24 @@ function rowTone(derivado: FacturaEstadoDerivado) {
   return "";
 }
 
+/** Lo que hace falta para que el botón de emitir sirva de algo. */
+export type ConfigSii = {
+  ambiente: "certificacion" | "produccion";
+  /** false si falta el certificado, el CAF o la resolución del SII. */
+  listo: boolean;
+  motivo?: string;
+};
+
 export function FacturaAccordion({
   facturas,
   clientes,
   porFacturar,
+  sii,
 }: {
   facturas: FacturaConRelaciones[];
   clientes: { id: string; nombre: string; codigo: string | null }[];
   porFacturar: ViajeOpt[];
+  sii: ConfigSii;
 }) {
   const [openId, setOpenId] = useState<string | null>(null);
 
@@ -141,6 +152,16 @@ export function FacturaAccordion({
                     <div className="animate-expand">
                     <div className="mb-4 flex flex-wrap items-center gap-2">
                       <FacturaEstadoControl factura={f} />
+                      {/* Emitir solo tiene sentido en un borrador sin folio:
+                          una vez emitida, el folio ya salió al SII. */}
+                      {f.estado === "borrador" && !f.folio ? (
+                        <EmitirBoton
+                          facturaId={f.id}
+                          ambiente={sii.ambiente}
+                          listo={sii.listo}
+                          motivo={sii.motivo}
+                        />
+                      ) : null}
                       <ConfirmForm
                         action={eliminarFactura}
                         mensaje={`¿Eliminar la factura ${f.folio ? `N° ${f.folio}` : "en borrador"}? Sus viajes quedarán como "por facturar". Esta acción no se puede deshacer.`}

@@ -3,7 +3,11 @@ import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { PageHeader } from "@/components/page-header";
 import { ViajeForm } from "../viaje-form";
-import { COLUMNAS_CHOFER_OPT, COLUMNAS_VEHICULO_OPT } from "../nueva/datos";
+import {
+  COLUMNAS_CHOFER_OPT,
+  COLUMNAS_VEHICULO_OPT,
+  cotizacionesDelPeriodo,
+} from "../nueva/datos";
 import { eliminarViaje } from "../actions";
 import { ConfirmForm } from "@/components/ui/confirm-form";
 import { Trash2, ArrowLeft } from "lucide-react";
@@ -20,7 +24,7 @@ export default async function ViajeDetallePage({
   const { id } = await params;
 
   const supabase = await createClient();
-  const [{ data: via }, { data: cl }, { data: cot }, { data: cho }, { data: veh }] =
+  const [{ data: via }, { data: cl }, { data: cho }, { data: veh }] =
     await Promise.all([
       supabase
         .from("viajes")
@@ -30,16 +34,14 @@ export default async function ViajeDetallePage({
         .eq("id", id)
         .maybeSingle(),
       supabase.from("clientes").select("id,nombre,codigo").order("nombre"),
-      supabase
-        .from("cotizaciones")
-        .select("id,numero,cliente_id,total")
-        .order("numero", { ascending: false }),
       supabase.from("choferes").select(COLUMNAS_CHOFER_OPT).order("nombre"),
       supabase.from("vehiculos").select(COLUMNAS_VEHICULO_OPT).order("patente"),
     ]);
   const viaje = (via as ViajeConRelaciones) ?? null;
   const clientes = cl ?? [];
-  const cotizaciones = cot ?? [];
+  // Las del periodo activo más la que este viaje ya tiene asociada, que puede
+  // ser de otro mes: sin ella, guardar borraría la asociación.
+  const cotizaciones = await cotizacionesDelPeriodo(viaje?.cotizacion_id);
   const choferes = cho ?? [];
   const vehiculos = veh ?? [];
 
