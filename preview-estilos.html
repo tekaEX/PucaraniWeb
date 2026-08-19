@@ -1,0 +1,367 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>Pucarani — comparador de estilos (temporal)</title>
+<link href="https://fonts.googleapis.com" rel="preconnect">
+<link href="https://fonts.gstatic.com" rel="preconnect" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@300..800&family=Inter:wght@300..800&family=IBM+Plex+Sans:wght@300;400;500;600;700&family=Source+Sans+3:wght@300..800&family=Roboto:wght@300;400;500;700&family=Poppins:wght@400;600;700;800&display=swap" rel="stylesheet">
+<style>
+/* ── Tokens tomados TAL CUAL de sistema-gestion/src/app/globals.css ── */
+:root{
+  --brand:#0c3f9b; --brand-dark:#072c6e; --brand-soft:#e8eefa; --brand-foreground:#fff;
+  --accent:#fbc412; --accent-ink:#6b4a00; --accent-soft:#fff3cf;
+  --background:#eff1f5; --foreground:#0f1626; --card:#fff;
+  --border:#ced5e0; --divider:#e7ebf2; --muted:#5c667a;
+  --shadow-soft:0 0 0 1px var(--border);
+  --shadow-card:0 1px 2px rgba(15,22,38,.06), 0 10px 30px rgba(15,22,38,.1);
+  --ease:cubic-bezier(.16,1,.3,1);
+  /* Web actual, para comparar */
+  --web-accent:#0d42ff; --web-heading:#001973;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--background);color:var(--foreground);
+  font-family:"Inter",ui-sans-serif,system-ui,sans-serif;-webkit-font-smoothing:antialiased;line-height:1.6}
+.wrap{max-width:1060px;margin:0 auto;padding:48px 24px 100px}
+h1{font-size:1.9rem;letter-spacing:-.015em;margin:0 0 6px}
+h2{font-size:1.35rem;letter-spacing:-.015em;margin:0 0 4px}
+.rotulo{text-transform:uppercase;letter-spacing:.09em;font-weight:600;font-size:11px;color:var(--muted);margin:0 0 6px}
+.barra{display:block;width:26px;height:3px;border-radius:999px;background:var(--accent);margin:12px 0 22px}
+.sec{margin-top:64px}
+.lead{color:var(--muted);margin:0 0 4px;max-width:70ch}
+.card{background:var(--card);border-radius:18px;box-shadow:var(--shadow-soft);padding:26px 28px;margin-bottom:16px}
+.card h3{margin:0 0 2px;font-size:1rem;letter-spacing:-.01em}
+.tag{display:inline-block;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.08em;
+  background:var(--brand-soft);color:var(--brand-dark);border-radius:999px;padding:3px 10px;margin-left:8px;vertical-align:2px}
+.tag.rec{background:var(--accent-soft);color:var(--accent-ink)}
+.note{font-size:13px;color:var(--muted);margin:10px 0 0}
+.demo{margin-top:14px;font-size:16px;line-height:1.8;max-width:66ch}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+@media(max-width:800px){.grid2{grid-template-columns:1fr}}
+
+/* ══════════ OPCIONES DE ENLACE ══════════ */
+
+/* HOY — azul plano, sin subrayado nunca */
+.k-hoy a{color:var(--web-accent);text-decoration:none;transition:.3s}
+.k-hoy a:hover{color:color-mix(in srgb,var(--web-accent),transparent 25%)}
+
+/* A — discreto: color marca, subrayado solo al pasar */
+.k-a a{color:var(--brand);text-decoration:none;font-weight:500}
+.k-a a:hover{text-decoration:underline;text-underline-offset:3px}
+
+/* B — editorial: tinta normal + subrayado fino separado; azul al pasar */
+.k-b a{color:inherit;text-decoration:underline;text-decoration-color:rgba(12,63,155,.35);
+  text-decoration-thickness:1px;text-underline-offset:3px;
+  transition:color .18s var(--ease),text-decoration-color .18s var(--ease)}
+.k-b a:hover{color:var(--brand);text-decoration-color:var(--brand);text-decoration-thickness:1.5px}
+
+/* C — peso: misma tinta, semibold, subrayado tenue */
+.k-c a{color:inherit;font-weight:600;text-decoration:underline;
+  text-decoration-color:rgba(15,22,38,.22);text-decoration-thickness:1px;text-underline-offset:3px;
+  transition:color .18s var(--ease),text-decoration-color .18s var(--ease)}
+.k-c a:hover{color:var(--brand);text-decoration-color:var(--brand)}
+
+/* D — línea que crece al pasar (sin subrayado en reposo) */
+.k-d a{color:var(--brand);text-decoration:none;font-weight:500;position:relative}
+.k-d a::after{content:"";position:absolute;left:0;right:0;bottom:-2px;height:1.5px;
+  background:var(--brand);transform:scaleX(0);transform-origin:left;transition:transform .28s var(--ease)}
+.k-d a:hover::after{transform:scaleX(1)}
+
+/* E — marcador dorado detrás (guiño al acento del sistema) */
+.k-e a{color:var(--foreground);text-decoration:none;font-weight:500;
+  background-image:linear-gradient(var(--accent-soft),var(--accent-soft));
+  background-size:100% .32em;background-position:0 88%;background-repeat:no-repeat;
+  box-shadow:inset 0 -1px 0 rgba(107,74,0,.25);transition:background-size .25s var(--ease),color .2s}
+.k-e a:hover{background-size:100% 100%;color:var(--accent-ink);box-shadow:none;border-radius:3px}
+
+/* F — pastilla (solo para listas de enlaces, NO dentro de un párrafo) */
+.k-f{display:flex;flex-wrap:wrap;gap:8px;margin-top:14px}
+.k-f a{display:inline-flex;align-items:center;gap:7px;background:var(--brand-soft);color:var(--brand-dark);
+  text-decoration:none;font-weight:600;font-size:14px;border-radius:999px;padding:7px 15px;
+  transition:background .18s var(--ease),transform .18s var(--ease)}
+.k-f a:hover{background:#d7e2f7;transform:translateY(-1px)}
+.k-f a::after{content:"→";font-weight:400;opacity:.6}
+
+/* ══════════ FUENTES ══════════ */
+.f-geist{font-family:"Geist",ui-sans-serif,system-ui,sans-serif}
+.f-inter{font-family:"Inter",ui-sans-serif,system-ui,sans-serif}
+.f-plex{font-family:"IBM Plex Sans",ui-sans-serif,system-ui,sans-serif}
+.f-source{font-family:"Source Sans 3",ui-sans-serif,system-ui,sans-serif}
+.f-roboto{font-family:"Roboto",system-ui,sans-serif}
+.muestra{font-size:16px;line-height:1.75;max-width:62ch;margin:12px 0 0;color:#2b3446}
+.muestra .t{display:block;font-size:1.45rem;font-weight:700;letter-spacing:-.015em;color:var(--foreground);margin-bottom:8px;line-height:1.2}
+.muestra .n{font-variant-numeric:tabular-nums;color:var(--muted);font-size:14px;display:block;margin-top:10px}
+
+/* ══════════ CAJAS: antes / después ══════════ */
+.old-lp{background:#fff;padding:0}
+.old-lp ul{list-style:none;padding:0;margin:0 0 18px}
+.old-lp li{display:flex;gap:9px;padding:7px 0;font-size:16px;color:#4a5160}
+.old-lp li i{color:var(--web-accent);font-style:normal}
+.old-lp p{font-size:16px;line-height:1.8;color:#4a5160}
+
+.new-lp{background:var(--card);border-radius:18px;box-shadow:var(--shadow-soft);padding:34px 36px}
+.new-lp p{font-size:16.5px;line-height:1.8;color:#2b3446;margin:0 0 18px}
+.new-lp ul{list-style:none;padding:0;margin:0 0 20px;display:grid;gap:2px}
+.new-lp li{display:flex;gap:12px;padding:11px 0;font-size:16px;color:#2b3446;border-bottom:1px solid var(--divider)}
+.new-lp li:last-child{border-bottom:none}
+.new-lp li i{flex:0 0 auto;font-style:normal;color:var(--brand);font-weight:700;line-height:1.55}
+.new-lp strong{color:var(--foreground)}
+
+.old-feat li{display:flex;background:#f3f6ff;border-left:4px solid var(--web-accent);border-radius:0 10px 10px 0;
+  padding:20px 22px;margin-bottom:16px;list-style:none}
+.old-feat ul{padding:0;margin:0}
+.old-feat h4{margin:0 0 6px;font-size:17px;color:var(--web-heading)}
+.old-feat p{margin:0;font-size:15px;color:#4a5160}
+.old-feat .ic{font-size:24px;color:var(--web-accent);margin-right:16px;font-style:normal}
+
+.new-feat ul{padding:0;margin:0;display:grid;gap:14px}
+.new-feat li{display:flex;gap:16px;background:var(--card);border-radius:16px;box-shadow:var(--shadow-soft);
+  padding:22px 24px;list-style:none;transition:box-shadow .25s var(--ease),transform .25s var(--ease)}
+.new-feat li:hover{box-shadow:var(--shadow-card);transform:translateY(-2px)}
+.new-feat .ic{flex:0 0 auto;width:40px;height:40px;border-radius:12px;background:var(--brand-soft);color:var(--brand);
+  display:grid;place-items:center;font-size:19px;font-style:normal}
+.new-feat h4{margin:0 0 4px;font-size:16.5px;letter-spacing:-.01em}
+.new-feat p{margin:0;font-size:15px;color:var(--muted);line-height:1.65}
+
+/* paleta */
+.sw{display:flex;flex-wrap:wrap;gap:10px;margin-top:14px}
+.sw div{width:120px;font-size:11px;color:var(--muted)}
+.sw i{display:block;height:52px;border-radius:12px;box-shadow:inset 0 0 0 1px rgba(0,0,0,.06);margin-bottom:5px}
+code{font-family:ui-monospace,monospace;font-size:12.5px;background:#eef1f6;padding:1px 5px;border-radius:4px}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <p class="rotulo">Transportes Pucarani · documento temporal, no se publica</p>
+  <h1>Comparador de estilos</h1>
+  <p class="lead">Todo lo de esta página usa los colores y medidas reales de <strong>sistema-gestion</strong>
+     (<code>globals.css</code>): azul <code>#0c3f9b</code>, dorado <code>#fbc412</code>, esquinas de 18px y el
+     contorno de 1px en vez de sombra difusa. Elige una opción de cada bloque y lo aplico a las 9 páginas.</p>
+  <span class="barra"></span>
+
+  <!-- ═════════ 1. ENLACES ═════════ -->
+  <section class="sec">
+    <p class="rotulo">Bloque 1</p>
+    <h2>Cómo se ven los enlaces dentro del texto</h2>
+    <p class="lead">Pasa el cursor por encima de cada uno: la mitad de la decisión está en el estado normal,
+       la otra mitad en el hover.</p>
+    <span class="barra"></span>
+
+    <div class="card k-hoy">
+      <h3>Hoy <span class="tag">actual</span></h3>
+      <p class="note">Azul saturado, sin subrayado nunca. Se lee como texto pintado, no como enlace.</p>
+      <p class="demo">Viajes a Tacna: <a href="#">traslado privado de Arica a Tacna</a> puerta a puerta, con el
+         cruce de frontera coordinado, y también <a href="#">city tour por Arica</a> con itinerario flexible.</p>
+    </div>
+
+    <div class="card k-a">
+      <h3>A · Discreto <span class="tag">idéntico al sistema</span></h3>
+      <p class="note">Azul de marca, sin subrayado; el subrayado aparece al pasar. Es literalmente lo que usa
+         sistema-gestion (<code>text-brand hover:underline</code>). Máxima coherencia entre los dos productos.</p>
+      <p class="demo">Viajes a Tacna: <a href="#">traslado privado de Arica a Tacna</a> puerta a puerta, con el
+         cruce de frontera coordinado, y también <a href="#">city tour por Arica</a> con itinerario flexible.</p>
+    </div>
+
+    <div class="card k-b">
+      <h3>B · Editorial <span class="tag rec">recomendada</span></h3>
+      <p class="note">El texto conserva su color de tinta y lleva un subrayado fino, separado de las letras.
+         El azul solo aparece al pasar el cursor. Es el estilo de un diario o un informe: se nota que es un
+         enlace, pero el párrafo no queda salpicado de azul.</p>
+      <p class="demo">Viajes a Tacna: <a href="#">traslado privado de Arica a Tacna</a> puerta a puerta, con el
+         cruce de frontera coordinado, y también <a href="#">city tour por Arica</a> con itinerario flexible.</p>
+    </div>
+
+    <div class="card k-c">
+      <h3>C · Por peso</h3>
+      <p class="note">Misma tinta, semibold y subrayado gris muy tenue. El más sobrio de todos; el riesgo es
+         que algunos lectores no vean que se puede hacer clic.</p>
+      <p class="demo">Viajes a Tacna: <a href="#">traslado privado de Arica a Tacna</a> puerta a puerta, con el
+         cruce de frontera coordinado, y también <a href="#">city tour por Arica</a> con itinerario flexible.</p>
+    </div>
+
+    <div class="card k-d">
+      <h3>D · Línea que crece</h3>
+      <p class="note">Azul sin subrayado, y al pasar el cursor una línea crece de izquierda a derecha.
+         Más "landing moderna". Se ve bien, pero es un gesto que sistema-gestion no tiene.</p>
+      <p class="demo">Viajes a Tacna: <a href="#">traslado privado de Arica a Tacna</a> puerta a puerta, con el
+         cruce de frontera coordinado, y también <a href="#">city tour por Arica</a> con itinerario flexible.</p>
+    </div>
+
+    <div class="card k-e">
+      <h3>E · Marcador dorado</h3>
+      <p class="note">Usa el dorado <code>#fbc412</code> del sistema como fondo bajo del enlace, que se
+         rellena al pasar. Distinto y memorable; con muchos enlaces seguidos puede cargarse.</p>
+      <p class="demo">Viajes a Tacna: <a href="#">traslado privado de Arica a Tacna</a> puerta a puerta, con el
+         cruce de frontera coordinado, y también <a href="#">city tour por Arica</a> con itinerario flexible.</p>
+    </div>
+
+    <div class="card">
+      <h3>F · Pastillas <span class="tag">complemento</span></h3>
+      <p class="note">Esto no compite con las anteriores: es para los bloques de "otros servicios" del pie de
+         cada página, donde hoy hay tarjetas grandes. Dentro de un párrafo no se usa.</p>
+      <div class="k-f">
+        <a href="#">Aeropuerto Chacalluta</a><a href="#">Taxi ejecutivo</a><a href="#">Arica – Tacna</a>
+        <a href="#">City tour Arica</a><a href="#">Puerto de Arica</a>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═════════ 2. FUENTES ═════════ -->
+  <section class="sec">
+    <p class="rotulo">Bloque 2</p>
+    <h2>Fuente del cuerpo</h2>
+    <p class="lead">Hoy el sitio usa <strong>Roboto</strong> para el texto y <strong>Poppins</strong> para los
+       títulos. Poppins es geométrica y redonda: se lee simpática, no seria. Estas son las candidatas.</p>
+    <span class="barra"></span>
+
+    <div class="card f-geist">
+      <h3 style="font-family:Inter">Geist <span class="tag rec">la del sistema</span></h3>
+      <p class="note" style="font-family:Inter">Es la fuente que declara sistema-gestion en su <code>layout.tsx</code>.
+         Neutra, moderna, hecha para producto. Si la eliges, los dos productos comparten literalmente la misma letra.</p>
+      <p class="muestra"><span class="t">Los que se comprometen con tu traslado</span>
+        Traslados al aeropuerto Chacalluta, taxi ejecutivo, transfer al Puerto de Arica, viajes a Tacna y city
+        tour por la ciudad. Transporte privado de pasajeros, puntual y confiable, disponible las 24 horas.
+        <span class="n">300 clientes · 1.000 viajes · 10 vehículos · +56 9 9162 2929</span></p>
+    </div>
+
+    <div class="card f-inter">
+      <h3>Inter</h3>
+      <p class="note">La más usada en interfaces serias. Prácticamente hermana de Geist, con una "a" y una "g"
+         un poco más clásicas. Rendimiento de lectura excelente en párrafos largos y en móvil.</p>
+      <p class="muestra"><span class="t">Los que se comprometen con tu traslado</span>
+        Traslados al aeropuerto Chacalluta, taxi ejecutivo, transfer al Puerto de Arica, viajes a Tacna y city
+        tour por la ciudad. Transporte privado de pasajeros, puntual y confiable, disponible las 24 horas.
+        <span class="n">300 clientes · 1.000 viajes · 10 vehículos · +56 9 9162 2929</span></p>
+    </div>
+
+    <div class="card f-plex">
+      <h3 style="font-family:Inter">IBM Plex Sans</h3>
+      <p class="note" style="font-family:Inter">La más "empresa formal" de las tres. Tiene un aire técnico e
+         institucional que transmite confianza; algo menos neutra, se nota que es una decisión.</p>
+      <p class="muestra"><span class="t">Los que se comprometen con tu traslado</span>
+        Traslados al aeropuerto Chacalluta, taxi ejecutivo, transfer al Puerto de Arica, viajes a Tacna y city
+        tour por la ciudad. Transporte privado de pasajeros, puntual y confiable, disponible las 24 horas.
+        <span class="n">300 clientes · 1.000 viajes · 10 vehículos · +56 9 9162 2929</span></p>
+    </div>
+
+    <div class="card f-source">
+      <h3 style="font-family:Inter">Source Sans 3</h3>
+      <p class="note" style="font-family:Inter">Humanista: letras algo más abiertas y cálidas. Es la más
+         cómoda de leer en textos largos, pero se aleja del look de app del sistema.</p>
+      <p class="muestra"><span class="t">Los que se comprometen con tu traslado</span>
+        Traslados al aeropuerto Chacalluta, taxi ejecutivo, transfer al Puerto de Arica, viajes a Tacna y city
+        tour por la ciudad. Transporte privado de pasajeros, puntual y confiable, disponible las 24 horas.
+        <span class="n">300 clientes · 1.000 viajes · 10 vehículos · +56 9 9162 2929</span></p>
+    </div>
+
+    <div class="card f-roboto">
+      <h3 style="font-family:Inter">Roboto + Poppins <span class="tag">actual</span></h3>
+      <p class="note" style="font-family:Inter">Para comparar. El título va en Poppins, como hoy.</p>
+      <p class="muestra"><span class="t" style="font-family:Poppins;font-weight:800;letter-spacing:0">Los que se comprometen con tu traslado</span>
+        Traslados al aeropuerto Chacalluta, taxi ejecutivo, transfer al Puerto de Arica, viajes a Tacna y city
+        tour por la ciudad. Transporte privado de pasajeros, puntual y confiable, disponible las 24 horas.
+        <span class="n">300 clientes · 1.000 viajes · 10 vehículos · +56 9 9162 2929</span></p>
+    </div>
+  </section>
+
+  <!-- ═════════ 3. CAJAS ═════════ -->
+  <section class="sec">
+    <p class="rotulo">Bloque 3</p>
+    <h2>Las cajas de texto</h2>
+    <p class="lead">Dos ejemplos de la portada. La idea es la misma en los dos: menos adornos, más aire,
+       ancho aprovechado y el contorno de 1px del sistema en lugar de sombras difusas.</p>
+    <span class="barra"></span>
+
+    <p class="rotulo" style="margin-top:26px">Sección "Traslados en Arica"</p>
+    <div class="grid2">
+      <div class="card">
+        <h3>Antes</h3>
+        <p class="note">El bloque flota sobre el blanco sin caja. La lista se apretuja y el texto no llena
+           el ancho, así que el conjunto no se lee como un cuadro.</p>
+        <div class="old-lp k-hoy" style="margin-top:14px">
+          <p style="margin-top:0">Casi todas las llamadas que recibimos son por lo mismo: alguien necesita moverse en Arica a una hora en la que no quiere depender de encontrar un taxi en la calle.</p>
+          <ul>
+            <li><i>✓</i><span><strong>Traslados al aeropuerto:</strong> salidas y llegadas al <a href="#">Aeropuerto Chacalluta</a>.</span></li>
+            <li><i>✓</i><span><strong>Viajes a Tacna:</strong> <a href="#">traslado privado de Arica a Tacna</a> puerta a puerta.</span></li>
+            <li><i>✓</i><span><strong>Turismo y paseos:</strong> <a href="#">city tour por Arica</a>, privado y flexible.</span></li>
+          </ul>
+        </div>
+      </div>
+      <div class="card" style="background:transparent;box-shadow:none;padding:0">
+        <div style="padding:0 0 10px 2px"><h3>Después</h3>
+        <p class="note">Caja blanca con contorno de 1px y esquinas de 18px, más aire interno, la lista
+           separada por líneas finas y el texto ocupando el ancho completo.</p></div>
+        <div class="new-lp k-b">
+          <p>Casi todas las llamadas que recibimos son por lo mismo: alguien necesita moverse en Arica a una hora en la que no quiere depender de encontrar un taxi en la calle.</p>
+          <ul>
+            <li><i>✓</i><span><strong>Traslados al aeropuerto:</strong> salidas y llegadas al <a href="#">Aeropuerto Chacalluta</a>.</span></li>
+            <li><i>✓</i><span><strong>Viajes a Tacna:</strong> <a href="#">traslado privado de Arica a Tacna</a> puerta a puerta.</span></li>
+            <li><i>✓</i><span><strong>Turismo y paseos:</strong> <a href="#">city tour por Arica</a>, privado y flexible.</span></li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <p class="rotulo" style="margin-top:34px">Recuadros de "Quiénes somos"</p>
+    <div class="grid2">
+      <div class="card">
+        <h3>Antes</h3>
+        <p class="note">Fondo celeste, barra azul a la izquierda y esquinas mitad rectas mitad redondas.
+           Es el adorno del template, no el lenguaje del sistema.</p>
+        <div class="old-feat" style="margin-top:14px"><ul>
+          <li><i class="ic">🕘</i><div><h4>Puntualidad garantizada</h4><p>Nuestros conductores llegan a tiempo para que no pierdas ningún vuelo ni compromiso.</p></div></li>
+          <li><i class="ic">🛡</i><div><h4>Seguridad en cada viaje</h4><p>Vehículos con revisión técnica al día y conductores certificados.</p></div></li>
+        </ul></div>
+      </div>
+      <div class="card" style="background:transparent;box-shadow:none;padding:0">
+        <div style="padding:0 0 10px 2px"><h3>Después</h3>
+        <p class="note">Tarjeta blanca con contorno de 1px, icono dentro de un cuadrito azul suave
+           (<code>--brand-soft</code>) y sombra solo al pasar el cursor.</p></div>
+        <div class="new-feat"><ul>
+          <li><i class="ic">🕘</i><div><h4>Puntualidad garantizada</h4><p>Nuestros conductores llegan a tiempo para que no pierdas ningún vuelo ni compromiso.</p></div></li>
+          <li><i class="ic">🛡</i><div><h4>Seguridad en cada viaje</h4><p>Vehículos con revisión técnica al día y conductores certificados.</p></div></li>
+        </ul></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═════════ 4. PALETA ═════════ -->
+  <section class="sec">
+    <p class="rotulo">Bloque 4</p>
+    <h2>El color: hasta dónde llevamos el cambio</h2>
+    <p class="lead">Este es el punto que más decide si los dos productos se sienten uno solo.</p>
+    <span class="barra"></span>
+
+    <div class="card">
+      <h3>Web pública, hoy</h3>
+      <div class="sw">
+        <div><i style="background:#0d42ff"></i>acento #0d42ff</div>
+        <div><i style="background:#001973"></i>títulos #001973</div>
+        <div><i style="background:#f7f9fc"></i>fondo #f7f9fc</div>
+        <div><i style="background:#0e1d34"></i>oscuro #0e1d34</div>
+      </div>
+      <p class="note">El azul es más eléctrico y saturado que el del sistema; puestos lado a lado no parecen
+         la misma empresa.</p>
+    </div>
+
+    <div class="card">
+      <h3>sistema-gestion</h3>
+      <div class="sw">
+        <div><i style="background:#0c3f9b"></i>marca #0c3f9b</div>
+        <div><i style="background:#072c6e"></i>marca oscura #072c6e</div>
+        <div><i style="background:#e8eefa"></i>azul suave #e8eefa</div>
+        <div><i style="background:#fbc412"></i>dorado #fbc412</div>
+        <div><i style="background:#eff1f5"></i>fondo #eff1f5</div>
+        <div><i style="background:#0f1626"></i>tinta #0f1626</div>
+      </div>
+      <p class="note">Azul más profundo y sobrio, con el dorado reservado para acentos chicos
+         (la barrita bajo los títulos, un borde, un detalle). Es lo que da el aire de empresa formal.</p>
+    </div>
+  </section>
+
+</div>
+</body>
+</html>

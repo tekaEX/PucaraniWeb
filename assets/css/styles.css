@@ -43,7 +43,11 @@
 /* ─── Variables Globales ──────────────────────────────────────── */
 
 :root {
-  --default-font:  "Roboto", system-ui, -apple-system, "Segoe UI", sans-serif;
+  /* Cuerpo del texto: Inter (antes Roboto). Se eligió por legibilidad en
+     párrafos largos y en móvil. Los títulos y el menú siguen en Poppins.
+     ⚠ El <link> de Google Fonts está duplicado en las 9 páginas: si cambias
+       una fuente aquí, hay que cambiarlo también en los 9 <head>. */
+  --default-font:  "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
   --heading-font:  "Poppins", sans-serif;
   --nav-font:      "Poppins", sans-serif;
 }
@@ -100,6 +104,42 @@ a {
 a:hover {
   color:           color-mix(in srgb, var(--accent-color), transparent 25%);
   text-decoration: none;
+}
+
+/*
+ * ── ENLACES DENTRO DE TEXTO CORRIDO ("estilo editorial") ──────────
+ *
+ * El enlace conserva el color de la tinta del párrafo y lleva un subrayado
+ * fino, separado de las letras. El azul aparece solo al pasar el cursor.
+ * Así se nota que es un enlace sin que el párrafo quede salpicado de azul.
+ *
+ * Se aplica SOLO al cuerpo de texto: .lp-body (el texto de las páginas de
+ * servicio y de la sección #traslados de la portada) y las respuestas del
+ * acordeón. La navegación, el pie de página, las tarjetas de servicio, los
+ * botones y las migas de pan siguen con la regla `a` de más arriba: son
+ * controles de interfaz, no palabras dentro de una frase.
+ *
+ * 🎨 Para que la línea se note más o menos en reposo, mueve el porcentaje de
+ *    transparent en text-decoration-color (62% = tenue, 40% = más marcada).
+ */
+.lp-body p a,
+.lp-body li a,
+.faq-content a {
+  color:                     inherit;
+  text-decoration:           underline;
+  text-decoration-color:     color-mix(in srgb, var(--accent-color), transparent 62%);
+  text-decoration-thickness: 1px;
+  text-underline-offset:     3px;
+  transition: color 0.18s ease,
+              text-decoration-color 0.18s ease,
+              text-decoration-thickness 0.18s ease;
+}
+.lp-body p a:hover,
+.lp-body li a:hover,
+.faq-content a:hover {
+  color:                     var(--accent-color);
+  text-decoration-color:     var(--accent-color);
+  text-decoration-thickness: 1.5px;
 }
 
 h1, h2, h3, h4, h5, h6 {
@@ -591,12 +631,41 @@ section,
  *    Usa vh (% de pantalla) o px.
  *    Ejemplo: min-height: 80vh; o min-height: 600px;
  */
+/*
+ * El hero ocupa casi toda la pantalla, menos una franja: la portada se ve
+ * entera y al mismo tiempo asoma un borde blanco de la sección siguiente,
+ * que es la señal de que hay que seguir bajando. Antes eran 60vh y en
+ * pantallas grandes se veía media sección de más.
+ *
+ * 📐 --hero-asoma es el alto de esa franja blanca. Súbelo para que se vea
+ *    más de la sección siguiente, bájalo a 0px para que el hero ocupe la
+ *    pantalla completa.
+ *
+ *    ⚠ Va emparejado con el padding-top de #about (la regla de más abajo):
+ *      la franja tiene que caber dentro de ese aire, o empieza a asomar el
+ *      título "Quiénes Somos" cortado por la mitad. Si subes la franja,
+ *      sube también ese padding.
+ *
+ * 📐 100svh = alto real de la pantalla en el móvil, sin contar la barra de
+ *    direcciones que aparece y desaparece al hacer scroll. El 100vh de la
+ *    línea de arriba es el respaldo para navegadores que no entienden svh.
+ *
+ * display:flex + align-items:center centra el contenido en ese alto; sin
+ * eso el texto quedaría arriba y todo el espacio sobrante caería al pie.
+ * El fondo (.hero-bg) y el degradado (.hero::before) van en position:
+ * absolute, así que no entran en el reparto del flex.
+ */
 .hero {
-  width:      100%;
-  min-height: 60vh;          /* ← ALTO DEL HERO */
-  position:   relative;
-  padding:    148px 0 72px 0;
-  overflow:   hidden;
+  --hero-asoma: 110px;        /* ← FRANJA BLANCA QUE ASOMA AL PIE */
+
+  width:       100%;
+  min-height:  calc(100vh  - var(--hero-asoma));
+  min-height:  calc(100svh - var(--hero-asoma));   /* ← ALTO DEL HERO */
+  display:     flex;
+  align-items: center;
+  position:    relative;
+  padding:     148px 0 72px 0;
+  overflow:    hidden;
 }
 @media (max-width: 991px) {
   .hero { padding: 130px 0 60px 0; }
@@ -646,6 +715,10 @@ section,
 .hero .container {
   position: relative;
   z-index:  4 !important;
+  /* El contenedor es el único hijo en flujo del hero, que ahora es flex.
+     width:100% lo obliga a ocupar todo el ancho disponible antes de que su
+     propio max-width lo recorte y los márgenes automáticos lo centren. */
+  width:    100%;
 }
 
 .hero h1,
@@ -656,11 +729,17 @@ section,
   line-height:   1.2;
   text-shadow:   0 2px 22px rgba(0,0,0,0.45);
 }
+/* 📐 Ancho del párrafo del hero.
+      Estaba cortado en 490px, bastante por debajo del ancho de su columna
+      (col-lg-6 ≈ 545-635px según la pantalla), así que el texto terminaba
+      antes que la caja y el bloque se veía descuadrado. 36em ≈ 60-65
+      caracteres por línea: llena la columna sin pasarse del largo cómodo
+      de lectura. */
 .hero p {
   font-size:   1.05rem;
   font-weight: 400;
   line-height: 1.78;
-  max-width:   490px;
+  max-width:   36em;         /* ← ANCHO DEL PÁRRAFO DEL HERO */
   margin-bottom: 40px;
 }
 
@@ -754,6 +833,12 @@ section,
 
 /* ─── ABOUT ───────────────────────────────────────────────────── */
 
+/* Aire extra arriba, más que los 60px del resto de las secciones. Es la
+   franja blanca que asoma al pie de la portada y avisa que hay que seguir
+   bajando (--hero-asoma en la regla .hero). Los dos valores van juntos:
+   este tiene que ser mayor, o el título asomaría cortado por la mitad. */
+#about { padding-top: 130px; }   /* ← AIRE ARRIBA DE "QUIÉNES SOMOS" */
+
 .about .content > h2 {
   font-size:      2rem;
   font-weight:    700;
@@ -773,6 +858,12 @@ section,
   border-radius: 2px;
 }
 
+/* Mismo gris que el cuerpo de texto de las páginas de servicio y de la
+   sección "Traslados en Arica" (.lp-body p), para que todo el texto largo
+   del sitio tenga el mismo tono. El negro pleno queda para los títulos. */
+.about .content p {
+  color: color-mix(in srgb, var(--default-color), transparent 20%);
+}
 .about .content p:last-child { margin-bottom: 0; }
 
 /*
@@ -787,12 +878,24 @@ section,
   height:          100%;
   display:         flex;
   flex-direction:  column;
-  justify-content: center;
   gap:             16px;            /* ← SEPARACIÓN ENTRE RECUADROS */
 }
+/*
+ * flex: 1 → los tres recuadros se reparten en partes iguales el alto de la
+ * columna, que gracias al align-items-stretch de la fila (index.html) es el
+ * mismo que el del texto de la izquierda. Así el bloque de "Quiénes Somos"
+ * empieza y termina exactamente a la altura del primer y del último recuadro,
+ * en vez de quedar centrado con aire suelto arriba y abajo.
+ *
+ * 📐 Si prefieres que los recuadros vuelvan a ser del alto de su contenido y
+ *    queden centrados, borra "flex: 1" de aquí abajo y vuelve a poner
+ *    justify-content: center en .about-features (y align-items-center en la
+ *    fila del HTML).
+ */
 .about .about-features li {
+  flex:          1;
   display:       flex;
-  align-items:   flex-start;
+  align-items:   center;
   background:    #f3f6ff;
   border-left:   4px solid var(--accent-color);
   border-radius: 0 10px 10px 0;
@@ -803,13 +906,15 @@ section,
   transform:  translateX(6px);
   box-shadow: 5px 4px 22px rgba(13,66,255,0.10);
 }
+/* line-height 1 y sin margin-top: el icono ocupa una caja de alto real para
+   poder centrarse contra el texto. Con line-height 0 su caja medía 0px y el
+   centrado quedaba desplazado hacia abajo. */
 .about .about-features i {
   flex-shrink:  0;
   font-size:    28px;
   color:        var(--accent-color);
   margin-right: 18px;
-  margin-top:   3px;
-  line-height:  0;
+  line-height:  1;
 }
 .about .about-features h3 {
   font-size:     18px;
@@ -1320,9 +1425,12 @@ section,
    de todas las tarjetas, aunque los textos tengan largos distintos */
 .services .card p { padding-bottom: 10px; flex-grow: 1; }
 
-/* "Ver servicio →" al pie de cada tarjeta */
+/* "Ver servicio →" al pie de cada tarjeta, pegado al borde DERECHO.
+   La tarjeta es una columna flex, así que align-self mueve el enlace en el
+   eje horizontal: flex-end lo lleva a la derecha, flex-start a la izquierda. */
 .services .card .card-link {
   display:        inline-flex;
+  align-self:     flex-end;         /* ← LADO DEL "Ver servicio" */
   align-items:    center;
   gap:            7px;
   margin:         0 22px 22px;
