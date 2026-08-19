@@ -3,6 +3,7 @@
 import { Fragment, useMemo, useState } from "react";
 import { Car, ChevronDown, FileText, Sheet, Trash2 } from "lucide-react";
 import { Select } from "@/components/ui/select";
+import { ChoferBadge } from "@/components/ui/badge";
 import { buttonClass } from "@/components/ui/button";
 import { TaxiPanel } from "./taxi-panel";
 import { eliminarServicioTaxi } from "./actions";
@@ -134,7 +135,13 @@ export function TaxisTabla({
                     <td className="px-4 py-3 text-muted">
                       {taxiNombreCliente(s) ?? "—"}
                     </td>
-                    <td className="px-4 py-3 text-muted">{taxiNombreChofer(s) ?? "—"}</td>
+                    <td className="px-4 py-3">
+                      {taxiNombreChofer(s) ? (
+                        <ChoferBadge>{taxiNombreChofer(s)}</ChoferBadge>
+                      ) : (
+                        <span className="text-muted">—</span>
+                      )}
+                    </td>
                     <td className="px-4 py-3 text-muted">{s.pasajero ?? "—"}</td>
                     <td className="px-4 py-3 text-right font-semibold tabular-nums">
                       {formatCLP(Number(s.monto))}

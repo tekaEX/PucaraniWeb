@@ -138,13 +138,17 @@ function EliminarChoferDialog({
           <p className="mt-3 text-sm text-danger">{eliminarState.error}</p>
         ) : null}
 
-        <button
-          type="button"
-          onClick={onClose}
-          className="mt-4 text-sm text-muted hover:text-foreground"
-        >
-          Cancelar
-        </button>
+        {/* Cerrar el cuadro es la acción final: va a la derecha, igual que en
+            el resto de los diálogos. */}
+        <div className="mt-4 flex justify-end">
+          <button
+            type="button"
+            onClick={onClose}
+            className="text-sm text-muted hover:text-foreground"
+          >
+            Cancelar
+          </button>
+        </div>
       </div>
     </div>,
     document.body,

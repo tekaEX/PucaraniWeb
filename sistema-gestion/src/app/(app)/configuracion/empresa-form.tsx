@@ -184,7 +184,8 @@ export function EmpresaForm({ empresa }: { empresa?: Empresa }) {
         </p>
       ) : null}
 
-      <div>
+      {/* Acción final a la derecha, como en el resto de los formularios. */}
+      <div className="flex items-center justify-end">
         <Button type="submit" disabled={pending || uploading}>
           <Save className="h-4 w-4" />
           {pending ? "Guardando…" : "Guardar configuración"}

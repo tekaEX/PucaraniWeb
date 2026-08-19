@@ -155,6 +155,18 @@
   animation: fade-in 0.18s ease-out both;
 }
 
+/* Centrado del contenido del panel (la clase va en (app)/template.tsx, que es
+   el div que envuelve a cada página).
+   Las pantallas anchas —listados, tablas— no ponen ancho máximo y siguen
+   ocupando todo, así que esto no las toca. Las angostas (una factura, un
+   formulario, Configuración) llevan max-w-* y quedaban pegadas al borde
+   izquierdo con un vacío enorme a la derecha. Se centra acá, en el contenedor,
+   y no con mx-auto página por página: así vale también para las pantallas que
+   se agreguen después, sin tener que acordarse. */
+.contenido-centrado > * {
+  margin-inline: auto;
+}
+
 * {
   border-color: var(--border);
 }

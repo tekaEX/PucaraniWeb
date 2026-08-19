@@ -110,6 +110,7 @@ export function ViajeForm({
   vehiculos,
   viaje,
   defaults,
+  volverA,
 }: {
   clientes: ClienteOpt[];
   cotizaciones: CotizacionOpt[];
@@ -122,6 +123,8 @@ export function ViajeForm({
     valor?: number;
     descripcion?: string;
   };
+  /** Ruta a la que volver después de crear (la cotización de la que se vino). */
+  volverA?: string;
 }) {
   const [state, formAction, pending] = useActionState<FormState, FormData>(
     guardarViaje,
@@ -220,6 +223,9 @@ export function ViajeForm({
       className="space-y-4"
     >
       {viaje ? <input type="hidden" name="id" value={viaje.id} /> : null}
+      {!viaje && volverA ? (
+        <input type="hidden" name="volver_a" value={volverA} />
+      ) : null}
       <input type="hidden" name="cotizacion_id" value={cotizacionId} />
       <input type="hidden" name="cliente_id" value={clienteId} />
       <input type="hidden" name="asignaciones" value={asignacionesJson} />

@@ -28,7 +28,7 @@ export default async function ConfigSiiPage() {
 
       <ConfiguracionSii />
 
-      <div className="mt-6">
+      <div className="mt-6 flex justify-end">
         <Link href="/facturas" className={buttonClass({ variant: "ghost", size: "sm" })}>
           Volver
         </Link>

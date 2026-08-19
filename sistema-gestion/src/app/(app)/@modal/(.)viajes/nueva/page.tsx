@@ -10,7 +10,7 @@ export default async function NuevoViajeModal({
   searchParams: Promise<{ cotizacion?: string }>;
 }) {
   const { cotizacion } = await searchParams;
-  const { clientes, cotizaciones, choferes, vehiculos, defaults } =
+  const { clientes, cotizaciones, choferes, vehiculos, defaults, volverA } =
     await datosNuevoViaje(cotizacion);
 
   return (
@@ -21,6 +21,7 @@ export default async function NuevoViajeModal({
         choferes={choferes}
         vehiculos={vehiculos}
         defaults={defaults}
+        volverA={volverA}
       />
     </Modal>
   );

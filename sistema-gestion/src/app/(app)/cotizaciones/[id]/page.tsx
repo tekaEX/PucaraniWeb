@@ -12,7 +12,7 @@ import {
   Pencil,
   FileDown,
   Sheet,
-  Route,
+  Plus,
   Trash2,
   ArrowLeft,
 } from "lucide-react";
@@ -64,6 +64,13 @@ export default async function CotizacionDetallePage({
 
   if (!cot) notFound();
   const items = [...(cot.items ?? [])].sort((a, b) => a.orden - b.orden);
+
+  // Una cotización se puede cumplir con varios viajes (ida y vuelta, un
+  // servicio por día, un bus por grupo). Por eso se muestra cuánto del total
+  // cotizado ya está registrado y cuánto falta.
+  const cotizado = Number(cot.total);
+  const registrado = viajes.reduce((acc, v) => acc + Number(v.valor), 0);
+  const falta = cotizado - registrado;
 
   return (
     <div className="max-w-4xl">
@@ -128,14 +135,16 @@ export default async function CotizacionDetallePage({
             href={`/viajes/nueva?cotizacion=${cot.id}`}
             className={buttonClass({ size: "sm" })}
           >
-            <Route className="h-4 w-4" />
-            Registrar viaje
+            <Plus className="h-4 w-4" />
+            {viajes.length === 0 ? "Agregar viaje" : "Agregar otro viaje"}
           </Link>
         </CardHeader>
         <CardBody>
           {viajes.length === 0 ? (
             <p className="text-sm text-muted">
-              Aún no hay viajes asociados a esta cotización.
+              Aún no hay viajes asociados a esta cotización. Puedes agregar
+              varios: el monto que se propone es lo que falta por cubrir del
+              total cotizado.
             </p>
           ) : (
             <ul className="divide-y divide-border">
@@ -155,12 +164,28 @@ export default async function CotizacionDetallePage({
               ))}
             </ul>
           )}
+
+          {viajes.length > 0 ? (
+            <p className="mt-3 border-t border-divider pt-3 text-sm text-muted">
+              {viajes.length} {viajes.length === 1 ? "viaje" : "viajes"} ·{" "}
+              <span className="tabular-nums">{formatCLP(registrado)}</span> de{" "}
+              <span className="tabular-nums">{formatCLP(cotizado)}</span> cotizados
+              {falta > 0 ? (
+                <>
+                  {" "}
+                  · falta por registrar{" "}
+                  <span className="tabular-nums">{formatCLP(falta)}</span>
+                </>
+              ) : null}
+            </p>
+          ) : null}
         </CardBody>
       </Card>
 
       <ConfirmForm
         action={eliminarCotizacion}
         mensaje={`¿Eliminar la cotización N° ${cot.numero}? Esta acción no se puede deshacer.`}
+        className="flex justify-end"
       >
         <input type="hidden" name="id" value={cot.id} />
         <button

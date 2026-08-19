@@ -65,18 +65,37 @@ export async function datosNuevoViaje(cotizacionParam?: string) {
     valor?: number;
     descripcion?: string;
   } = {};
+  // A dónde vuelve el formulario al guardar. Sin esto, agregar un viaje desde
+  // una cotización terminaba en la lista de Viajes: había que volver a la
+  // cotización a mano para ver si el viaje quedó asociado, y otra vez para
+  // agregar el siguiente.
+  let volverA: string | undefined;
 
   if (cotizacionParam) {
     const cot = cotizaciones.find((c) => c.id === cotizacionParam);
     if (cot) {
+      // Una cotización puede cubrirse con varios viajes, así que el monto que
+      // se propone es lo que FALTA, no el total: al agregar el segundo viaje,
+      // proponer de nuevo el total completo duplicaba el valor cotizado.
+      const { data: yaHechos } = await supabase
+        .from("viajes")
+        .select("valor")
+        .eq("cotizacion_id", cot.id);
+      const cubierto = (yaHechos ?? []).reduce(
+        (acc, v) => acc + Number(v.valor ?? 0),
+        0,
+      );
+      const restante = Number(cot.total) - cubierto;
+
       defaults = {
         cotizacion_id: cot.id,
         cliente_id: cot.cliente_id ?? undefined,
-        valor: Number(cot.total) || undefined,
+        valor: restante > 0 ? restante : undefined,
         descripcion: cot.titulo ?? undefined,
       };
+      volverA = `/cotizaciones/${cot.id}`;
     }
   }
 
-  return { clientes, cotizaciones, choferes, vehiculos, defaults };
+  return { clientes, cotizaciones, choferes, vehiculos, defaults, volverA };
 }

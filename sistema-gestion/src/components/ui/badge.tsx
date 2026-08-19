@@ -97,3 +97,47 @@ export function VencimientoBadge({ fecha }: { fecha: string | null }) {
     );
   return <Badge tone="green">Vigente · {formatDate(fecha)}</Badge>;
 }
+
+// Volante de auto. Unicode no tiene un emoji de volante (🛞 es un neumático y
+// lucide solo trae el timón de barco), así que va dibujado: aro, centro y los
+// tres rayos. Usa currentColor, así queda del mismo azul que la pastilla.
+function VolanteIcon() {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      className="h-3.5 w-3.5 shrink-0"
+      aria-hidden
+    >
+      <circle cx="12" cy="12" r="9" />
+      <circle cx="12" cy="12" r="2.5" />
+      <path d="M3 12h6.5M14.5 12H21M12 14.5V21" />
+    </svg>
+  );
+}
+
+// Etiqueta de conductor. El nombre del chofer se muestra igual en Taxis que en
+// Viajes: pastilla azul con volante, para reconocerlo de un vistazo entre las
+// otras columnas (decisión del dueño, 19-08-2026).
+export function ChoferBadge({
+  children,
+  className,
+}: {
+  children: React.ReactNode;
+  className?: string;
+}) {
+  return (
+    <span
+      className={cn(
+        "inline-flex items-center gap-1 rounded-full bg-info-bg px-2 py-0.5 text-xs font-medium whitespace-nowrap text-info",
+        className,
+      )}
+    >
+      <VolanteIcon />
+      {children}
+    </span>
+  );
+}

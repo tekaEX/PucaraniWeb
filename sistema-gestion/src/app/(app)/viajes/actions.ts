@@ -1,5 +1,6 @@
 "use server";
 
+import type { Route } from "next";
 import { puedeEditar, SIN_PERMISO } from "@/lib/auth";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
@@ -9,6 +10,15 @@ import { s, sReq, num } from "@/lib/form-helpers";
 import { estadoViaje, parsearAsignaciones } from "@/lib/viajes";
 
 export type FormState = { error?: string; ok?: boolean };
+
+// Un viaje se puede crear desde la ficha de una cotización, y en ese caso hay
+// que volver ahí y no a la lista de Viajes. El destino llega en el formulario,
+// así que se valida contra la única forma que puede tener: el redirect() de una
+// server action con un valor libre es una redirección abierta.
+function destinoDeVuelta(valor: string | null): string | null {
+  if (!valor) return null;
+  return /^\/cotizaciones\/[0-9a-fA-F-]{36}$/.test(valor) ? valor : null;
+}
 
 export async function guardarViaje(
   _prev: FormState,
@@ -71,8 +81,18 @@ export async function guardarViaje(
 
   revalidatePath("/viajes");
   revalidatePath("/");
+  // La ficha de la cotización lista sus viajes: si no se revalida, el viaje
+  // recién creado no aparece ahí (y al editarlo, el monto queda viejo).
+  if (values.cotizacion_id) revalidatePath(`/cotizaciones/${values.cotizacion_id}`);
   // Edición inline (autoguardado): no redirige, mantiene abierto el acordeón.
   if (id) return { ok: true };
+  const volver = destinoDeVuelta(s(formData.get("volver_a")));
+  if (volver) {
+    // El destino se armó en tiempo de ejecución, así que typedRoutes no lo puede
+    // verificar; lo que sostiene el cast es destinoDeVuelta(), no el string.
+    const aviso = encodeURIComponent("Viaje agregado a la cotización");
+    redirect(`${volver}?guardado=${aviso}` as Route);
+  }
   redirect("/viajes?guardado=Viaje+registrado");
 }
 

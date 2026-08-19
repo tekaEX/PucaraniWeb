@@ -11,7 +11,7 @@ export default async function NuevoViajePage({
   searchParams: Promise<{ cotizacion?: string }>;
 }) {
   const { cotizacion } = await searchParams;
-  const { clientes, cotizaciones, choferes, vehiculos, defaults } =
+  const { clientes, cotizaciones, choferes, vehiculos, defaults, volverA } =
     await datosNuevoViaje(cotizacion);
 
   return (
@@ -26,6 +26,7 @@ export default async function NuevoViajePage({
         choferes={choferes}
         vehiculos={vehiculos}
         defaults={defaults}
+        volverA={volverA}
       />
     </div>
   );

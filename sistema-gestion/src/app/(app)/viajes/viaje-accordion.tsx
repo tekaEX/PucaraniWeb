@@ -3,7 +3,7 @@
 import { Fragment, useState, useTransition } from "react";
 import Link from "next/link";
 import { ChevronDown, Trash2 } from "lucide-react";
-import { ViajeBadge } from "@/components/ui/badge";
+import { ChoferBadge, ViajeBadge } from "@/components/ui/badge";
 import { ConfirmForm } from "@/components/ui/confirm-form";
 import { EstadoSelector, type EstadoOpcion } from "@/components/ui/estado-selector";
 import {
@@ -114,12 +114,9 @@ export function ViajeAccordion({
                   ) : (
                     <div className="flex flex-wrap gap-1">
                       {v.asignaciones.map((a) => (
-                        <span
-                          key={a.id}
-                          className="rounded-full bg-[#ececef] px-2 py-0.5 text-xs text-[#6e6e73]"
-                        >
+                        <ChoferBadge key={a.id}>
                           {[a.chofer?.nombre, a.vehiculo?.patente].filter(Boolean).join(" · ")}
-                        </span>
+                        </ChoferBadge>
                       ))}
                     </div>
                   )}
