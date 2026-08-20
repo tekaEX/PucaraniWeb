@@ -111,6 +111,28 @@ function mensajeDeError(status: number, cuerpo: string): string {
     return "Demasiadas consultas seguidas a SimpleAPI (máximo 3 por segundo). Probá de nuevo.";
   }
 
+  // Cuota mensual agotada. Es distinto del 429 y hay que decirlo distinto: el
+  // 429 se arregla esperando unos segundos, esto NO se arregla esperando —el
+  // tope se reinicia el día 1 y no se acumula—. Confundirlos hace que alguien
+  // reintente toda la tarde un envío que no va a salir.
+  //
+  // Se detecta por texto además de por status porque la API no usa un código
+  // dedicado de forma consistente; lo que sí es estable es la palabra.
+  const cuota = /quota|cuota|l[íi]mite\s+(mensual|de\s+plan)|excedid|agotad/i.test(cuerpo);
+  if (cuota && status !== 429) {
+    return (
+      "Se agotó la cuota mensual de SimpleAPI para emitir documentos. " +
+      "El tope se reinicia el día 1 y no se acumula: hay que ampliar el plan o esperar al mes siguiente. " +
+      "Podés ver cuánto queda en Facturas › Configuración SII › Probar conexión."
+    );
+  }
+  if (status === 402 || status === 403) {
+    return (
+      `SimpleAPI rechazó la operación (${status}). Suele ser la cuota del plan o un servicio no contratado. ` +
+      "Revisá el consumo en Facturas › Configuración SII › Probar conexión."
+    );
+  }
+
   try {
     const j = JSON.parse(cuerpo) as Record<string, unknown>;
     const partes = [j.responseXml, j.glosa, j.mensaje, j.message, j.title]

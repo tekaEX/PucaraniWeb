@@ -106,8 +106,8 @@ export function parsearCaf(xml: string): { datos: DatosCaf } | { error: string }
   };
 }
 
-/** Compara dos RUT ignorando puntos, guion y mayúsculas de la K. */
-export function mismoRut(a: string, b: string): boolean {
-  const limpiar = (r: string) => r.replace(/[.\-\s]/g, "").toUpperCase();
-  return limpiar(a) === limpiar(b);
-}
+// `mismoRut` vivía acá cuando comparar RUT era cosa solo del CAF. Ahora el RUT
+// se valida en cinco lugares (empresa, cliente, titular del certificado, emisor
+// y receptor del DTE) y toda su lógica vive en @/lib/rut. Se re-exporta para no
+// romper a quien lo importa desde este módulo.
+export { mismoRut } from "@/lib/rut";

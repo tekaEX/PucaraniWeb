@@ -53,6 +53,8 @@ export type DatosFactura = {
   total: number;
 };
 
+import { errorRut } from "@/lib/rut";
+
 export type Documento = Record<string, unknown>;
 
 /** Tope del SII: un DTE admite hasta 60 líneas de detalle. */
@@ -89,7 +91,12 @@ export function construirDocumento(args: {
   const { factura, emisor, receptor, lineas } = args;
 
   // --- Emisor: lo que el SII exige sí o sí en la cabecera -------------------
-  if (!limpio(emisor.rut)) return { error: "Falta el RUT de la empresa emisora." };
+  //
+  // El RUT se valida con dígito verificador, no solo por no estar vacío. Un
+  // dígito equivocado no lo detecta nadie hasta que el SII rechaza el
+  // documento, y para entonces el folio ya se consumió.
+  const errEmisor = errorRut(emisor.rut, "El RUT de la empresa emisora");
+  if (errEmisor) return { error: errEmisor };
   if (!limpio(emisor.razonSocial)) return { error: "Falta la razón social de la empresa." };
   if (!limpio(emisor.giro)) return { error: "Falta el giro de la empresa." };
   if (!limpio(emisor.direccion)) return { error: "Falta la dirección de la empresa." };
@@ -102,6 +109,11 @@ export function construirDocumento(args: {
   if (!limpio(receptor.rut)) {
     return { error: `El cliente "${receptor.razonSocial || "sin nombre"}" no tiene RUT cargado.` };
   }
+  const errReceptor = errorRut(
+    receptor.rut,
+    `El RUT del cliente "${receptor.razonSocial || "sin nombre"}"`,
+  );
+  if (errReceptor) return { error: errReceptor };
   if (!limpio(receptor.razonSocial)) return { error: "El cliente no tiene razón social." };
   if (!limpio(receptor.giro)) {
     return {

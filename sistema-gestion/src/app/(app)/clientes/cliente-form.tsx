@@ -46,7 +46,7 @@ export function ClienteForm({ cliente }: { cliente?: Cliente }) {
               id="rut"
               name="rut"
               defaultValue={cliente?.rut ?? ""}
-              placeholder="76.123.456-7"
+              placeholder="76.123.456-0"
             />
           </Field>
           <Field label="Dirección" htmlFor="direccion" className="sm:col-span-2">

@@ -23,13 +23,13 @@ import { empresaActual } from "@/lib/empresa-server";
 import { decrypt } from "@/lib/crypto";
 import { hoyChile } from "@/lib/format";
 import { construirDocumento, type TipoDteEmitible } from "@/lib/sii/documento";
+import { configSii } from "./config-sii";
 import {
   enviarAlSii,
   generarDte,
   generarPdf,
   generarSobre,
   RUT_SII,
-  type Ambiente,
   type Certificado,
 } from "@/lib/sii/simpleapi";
 
@@ -96,15 +96,29 @@ export async function emitirFactura(facturaId: string): Promise<ResultadoEmision
   const empresa = await empresaActual();
   if (!empresa) return { error: "No hay empresa configurada." };
 
-  const { data: cred } = await supabase
+  // El ambiente lo decide la EMPRESA, no la credencial. Desde la 0053 puede
+  // haber una credencial por ambiente, y desde la 0054 la empresa dice cuál está
+  // activo; `configSii()` resuelve las dos cosas y cae a certificación si la
+  // 0054 todavía no se corrió. Preguntárselo a la credencial sería circular: con
+  // dos filas, no hay forma de que ella misma diga cuál manda.
+  const config = await configSii();
+  const ambiente = config.ambiente;
+
+  const { data: creds } = await supabase
     .from("sii_credenciales")
     .select(
       "rut, rut_certificado, cert_path, cert_password_enc, ambiente, numero_resolucion, fecha_resolucion",
     )
     .eq("empresa_id", empresa.id)
-    .maybeSingle();
+    .eq("ambiente", ambiente);
+
+  // Lista y no `.maybeSingle()`: con dos filas por empresa, `maybeSingle`
+  // habría fallado la consulta entera en vez de traer la que corresponde.
+  const cred = creds?.[0] ?? null;
   if (!cred) {
-    return { error: "Faltan las credenciales del SII. Cargá el certificado en Facturas › Configuración." };
+    return {
+      error: `Faltan las credenciales del SII para ${ambiente}. Cargá el certificado de ese ambiente en Facturas › Configuración.`,
+    };
   }
   if (!cred.rut_certificado) {
     return {
@@ -119,7 +133,6 @@ export async function emitirFactura(facturaId: string): Promise<ResultadoEmision
     };
   }
 
-  const ambiente = (cred.ambiente ?? "certificacion") as Ambiente;
   const tipoDte = factura.tipo_dte as TipoDteEmitible;
   const fechaEmision = factura.fecha_emision ?? hoyChile();
 
@@ -172,12 +185,56 @@ export async function emitirFactura(facturaId: string): Promise<ResultadoEmision
     pfx: new Uint8Array(await certFile.arrayBuffer()),
   };
 
+  // --- Cerrojo contra doble emisión -----------------------------------------
+  //
+  // La guarda de arriba (`if (factura.folio)`) mira un valor que se leyó al
+  // principio de la acción, y entre esa lectura y `tomar_folio()` pasan varias
+  // llamadas. Dos pestañas apretando "Emitir" casi a la vez leían las dos
+  // `folio = null`, las dos pasaban, y se quemaban DOS folios para una sola
+  // factura.
+  //
+  // Se toma el cerrojo en la base: un UPDATE condicionado a que la factura siga
+  // siendo un borrador sin folio. Postgres serializa las dos escrituras, así que
+  // solo una ve `count = 1`; la otra ve 0 y se va sin haber tocado un folio.
+  // `estado_sii = 'emitiendo'` es además lo que la pantalla puede mostrar
+  // mientras la emisión corre.
+  const { data: cerrojo, error: errCerrojo } = await supabase
+    .from("facturas")
+    .update({ estado_sii: "emitiendo", updated_at: new Date().toISOString() })
+    .eq("id", facturaId)
+    .eq("estado", "borrador")
+    .is("folio", null)
+    // `estado_sii <> 'emitiendo'` es NULL cuando la columna es NULL, y en SQL
+    // eso NO es verdadero: un `.neq()` a secas dejaría afuera justamente a los
+    // borradores nuevos, que son los únicos que se emiten. De ahí el `or`.
+    //
+    // Esta condición es la que hace que el cerrojo funcione: el UPDATE cambia
+    // `estado_sii`, así que cuando la segunda pestaña despierta del lock y
+    // re-evalúa el WHERE contra la fila ya modificada, deja de calzar. Sin una
+    // columna que cambie, las dos pasarían.
+    .or("estado_sii.is.null,estado_sii.neq.emitiendo")
+    .select("id");
+  if (errCerrojo) return { error: `No se pudo iniciar la emisión: ${errCerrojo.message}` };
+  if (!cerrojo || cerrojo.length === 0) {
+    return {
+      error:
+        "Esta factura ya se está emitiendo (o se emitió recién) desde otra pantalla. Recargá la lista antes de volver a intentarlo.",
+    };
+  }
+
+  /** Suelta el cerrojo dejando la factura como estaba. */
+  const soltarCerrojo = async () => {
+    await supabase.from("facturas").update({ estado_sii: null }).eq("id", facturaId);
+  };
+
   // --- Desde acá el folio ya es irreversible --------------------------------
   const { data: folio, error: errFolio } = await supabase.rpc("tomar_folio", {
     p_tipo_dte: tipoDte,
     p_ambiente: ambiente,
   });
   if (errFolio || !folio) {
+    // No se consumió ningún folio: la factura vuelve a quedar disponible.
+    await soltarCerrojo();
     return {
       error:
         errFolio?.message ??
@@ -192,6 +249,23 @@ export async function emitirFactura(facturaId: string): Promise<ResultadoEmision
       .from("facturas")
       .update({ sii_glosa: mensaje, estado_sii: "error", updated_at: new Date().toISOString() })
       .eq("id", facturaId);
+
+    // El folio se gastó y hay que declararlo al SII. Antes el único rastro era
+    // el número escrito dentro del texto de la glosa, que sirve para leerlo en
+    // pantalla y para nada más: el trámite pide LA LISTA de folios a declarar, y
+    // sacarla obligaba a leer glosas de a una. Acá queda como fila consultable.
+    //
+    // El fallo de este insert no cambia lo que se le responde a quien emitió: el
+    // folio se perdió igual y el mensaje ya lo dice. Perder el registro es malo,
+    // pero taparlo con otro error sería peor.
+    await supabase.from("sii_folios_no_utilizados").insert({
+      tipo_dte: tipoDte,
+      ambiente,
+      folio: folioNum,
+      factura_id: facturaId,
+      motivo: mensaje,
+    });
+
     return {
       error: `${mensaje} El folio ${folioNum} quedó consumido: hay que declararlo al SII como folio no utilizado.`,
       folio: folioNum,

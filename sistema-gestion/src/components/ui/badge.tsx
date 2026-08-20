@@ -9,6 +9,7 @@ import {
   type FacturaEstadoDerivado,
   type Viaje,
 } from "@/types/db";
+import { ESTADOS_SII, type EstadoSii } from "@/lib/sii/estado";
 import { evaluarVenc } from "@/lib/vencimientos";
 import { formatDate } from "@/lib/format";
 
@@ -60,6 +61,27 @@ const facturaTone: Record<FacturaEstadoDerivado, Tone> = {
 
 export function FacturaBadge({ estado }: { estado: FacturaEstadoDerivado }) {
   return <Badge tone={facturaTone[estado]}>{FACTURA_ESTADOS_DERIVADOS[estado]}</Badge>;
+}
+
+// El estado ante el SII va en una pastilla APARTE de la de cobranza, y no
+// mezclado con ella, porque son dos preguntas distintas: una es "¿esto se
+// cobró?" y la otra "¿esto vale ante el SII?". Se pueden dar juntas y en la
+// combinación peligrosa —por cobrar + rechazada— hay que ver las dos, no una
+// sola etiqueta que las promedie.
+const siiTone: Record<EstadoSii, Tone> = {
+  sin_enviar: "gray",
+  emitiendo: "blue",
+  enviado: "blue",
+  en_proceso: "blue",
+  aceptado: "green",
+  reparos: "amber",
+  rechazado: "red",
+  error: "red",
+  sin_clasificar: "violet",
+};
+
+export function SiiBadge({ estado }: { estado: EstadoSii }) {
+  return <Badge tone={siiTone[estado]}>{ESTADOS_SII[estado]}</Badge>;
 }
 
 // El sub-estado de un viaje realizado se deriva de su factura.

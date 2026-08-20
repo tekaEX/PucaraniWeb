@@ -172,8 +172,18 @@ export interface Factura {
   total: number;
   /** Única fuente de verdad de la cobranza. */
   fecha_pago: string | null;
+  /** Código crudo de la última respuesta del SII, más los propios de la app
+   *  ('enviado', 'error'). Se traduce al leer, con clasificarEstadoSii(). */
   estado_sii: string | null;
   sii_track_id: string | null;
+  /** Ambiente contra el que se emitió. null = no pasó por el SII (carga manual). */
+  sii_ambiente: "certificacion" | "produccion" | null;
+  /** Lo que el SII explicó: aceptado, reparo, rechazo y su motivo. */
+  sii_glosa: string | null;
+  sii_enviado_at: string | null;
+  /** DTE timbrado y su representación impresa, en el bucket 'adjuntos'. */
+  sii_xml_path: string | null;
+  sii_pdf_path: string | null;
   /** Ruta en el bucket privado 'adjuntos' (usar URL firmada). */
   archivo_path: string | null;
   notas: string | null;

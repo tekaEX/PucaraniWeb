@@ -2,7 +2,7 @@
 
 import { Fragment, useState, useTransition } from "react";
 import { ChevronDown, Trash2 } from "lucide-react";
-import { FacturaBadge } from "@/components/ui/badge";
+import { FacturaBadge, SiiBadge } from "@/components/ui/badge";
 import { ConfirmForm } from "@/components/ui/confirm-form";
 import { EstadoSelector, type EstadoOpcion } from "@/components/ui/estado-selector";
 import { formatCLP, formatDate } from "@/lib/format";
@@ -12,9 +12,16 @@ import {
   type FacturaConRelaciones,
   type FacturaEstadoDerivado,
 } from "@/types/db";
+import {
+  clasificarEstadoSii,
+  necesitaAtencion,
+  type ConfigSii,
+  type EstadoSii,
+} from "@/lib/sii/estado";
 import { actualizarEstadoFactura, eliminarFactura } from "./actions";
 import { FacturaForm, type ViajeOpt } from "./factura-form";
 import { EmitirBoton } from "./emitir-boton";
+import { SiiPanel } from "./sii-panel";
 import { buttonClass } from "@/components/ui/button";
 
 const ESTADOS_FACTURA: EstadoOpcion[] = [
@@ -57,19 +64,16 @@ function FacturaEstadoControl({ factura }: { factura: FacturaConRelaciones }) {
 }
 
 // Tinte de fila sutil según estado (mismo criterio del sistema de diseño).
-function rowTone(derivado: FacturaEstadoDerivado) {
+//
+// Un problema del SII gana sobre el estado de cobranza: una factura rechazada
+// que se ve igual que el resto es exactamente la que se va a cobrar sin que
+// nadie note que ante el SII no existe.
+function rowTone(derivado: FacturaEstadoDerivado, sii: EstadoSii) {
+  if (necesitaAtencion(sii)) return "bg-danger-bg/30";
   if (derivado === "por_cobrar") return "bg-[#fffdf8]";
   if (derivado === "borrador") return "bg-[#fcfdff]";
   return "";
 }
-
-/** Lo que hace falta para que el botón de emitir sirva de algo. */
-export type ConfigSii = {
-  ambiente: "certificacion" | "produccion";
-  /** false si falta el certificado, el CAF o la resolución del SII. */
-  listo: boolean;
-  motivo?: string;
-};
 
 export function FacturaAccordion({
   facturas,
@@ -101,11 +105,12 @@ export function FacturaAccordion({
         {facturas.map((f) => {
           const open = openId === f.id;
           const derivado = facturaEstadoDerivado(f);
+          const estadoSii = clasificarEstadoSii(f.estado_sii, f.sii_glosa);
           return (
             <Fragment key={f.id}>
               <tr
                 onClick={() => setOpenId(open ? null : f.id)}
-                className={`cursor-pointer transition-colors hover:bg-brand-soft/50 ${open ? "bg-brand-soft/70" : rowTone(derivado)}`}
+                className={`cursor-pointer transition-colors hover:bg-brand-soft/50 ${open ? "bg-brand-soft/70" : rowTone(derivado, estadoSii)}`}
               >
                 <td className="whitespace-nowrap px-4 py-3">
                   <span className="font-semibold text-foreground">
@@ -136,8 +141,17 @@ export function FacturaAccordion({
                 <td className="whitespace-nowrap px-4 py-3 text-right tabular-nums font-medium">
                   {formatCLP(f.total)}
                 </td>
+                {/* Dos pastillas, no una: la de cobranza responde "¿esto se
+                    cobró?" y la del SII "¿esto vale?". La combinación que hay
+                    que poder ver de un vistazo es justamente la peligrosa —por
+                    cobrar + rechazada—, y una etiqueta sola la escondería.
+                    Las cargadas a mano no muestran la segunda: nunca pasaron
+                    por el SII y no tienen nada que informar. */}
                 <td className="whitespace-nowrap px-4 py-3">
-                  <FacturaBadge estado={derivado} />
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    <FacturaBadge estado={derivado} />
+                    {estadoSii !== "sin_enviar" ? <SiiBadge estado={estadoSii} /> : null}
+                  </div>
                 </td>
                 <td className="px-4 py-3 text-right">
                   <ChevronDown
@@ -176,6 +190,14 @@ export function FacturaAccordion({
                           Eliminar
                         </button>
                       </ConfirmForm>
+                    </div>
+
+                    {/* La vuelta del SII. Va arriba del formulario porque es lo
+                        primero que hay que mirar en una factura ya emitida: el
+                        formulario sirve para corregir datos, y si el SII la
+                        rechazó, corregir datos no es lo que corresponde. */}
+                    <div className="mb-4">
+                      <SiiPanel factura={f} />
                     </div>
 
                     {/* Edición completa inline: los viajes disponibles son los

@@ -4,6 +4,7 @@ import { puedeEditar, SIN_PERMISO } from "@/lib/auth";
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { s, sReq, intNull } from "@/lib/form-helpers";
+import { errorRut, normalizarRut } from "@/lib/rut";
 
 export type FormState = { error?: string; ok?: boolean };
 
@@ -15,10 +16,18 @@ export async function guardarEmpresa(
 
   const id = s(formData.get("id"));
 
+  // El RUT de la empresa es el que va como <RE> en el CAF y como emisor en cada
+  // DTE: si está mal escrito, el SII rechaza TODO lo que se emita.
+  const rutCrudo = s(formData.get("rut"));
+  if (rutCrudo) {
+    const err = errorRut(rutCrudo, "El RUT de la empresa");
+    if (err) return { error: err };
+  }
+
   const values = {
     nombre: sReq(formData.get("nombre")) || "Transportes Pucarani",
     razon_social: s(formData.get("razon_social")),
-    rut: s(formData.get("rut")),
+    rut: rutCrudo ? normalizarRut(rutCrudo) : null,
     direccion: s(formData.get("direccion")),
     ciudad: s(formData.get("ciudad")),
     comuna: s(formData.get("comuna")),

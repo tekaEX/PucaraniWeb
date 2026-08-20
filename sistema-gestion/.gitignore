@@ -43,3 +43,6 @@ next-env.d.ts
 
 # Datos de prueba generados (certificado autofirmado, CAF sintético, salidas)
 pruebas/fixtures/salida/
+
+# Respaldos de metadata del SII (pruebas/respaldo-sii.mjs)
+respaldos/

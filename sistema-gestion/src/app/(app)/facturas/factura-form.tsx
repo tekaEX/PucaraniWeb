@@ -38,6 +38,7 @@ export function FacturaForm({
   viajesDisponibles,
   factura,
   foliosSugeridos,
+  emisionElectronica = false,
 }: {
   clientes: ClienteOpt[];
   /** Viajes por facturar (más los ya incluidos en esta factura, si edita). */
@@ -45,6 +46,8 @@ export function FacturaForm({
   factura?: FacturaConRelaciones;
   /** Próximo folio por tipo de documento: { "33": 471, "34": 1290 }. */
   foliosSugeridos?: Record<string, number>;
+  /** true cuando el SII está configurado y el folio lo va a entregar el CAF. */
+  emisionElectronica?: boolean;
 }) {
   const [state, formAction, pending] = useActionState<FormState, FormData>(
     guardarFactura,
@@ -64,16 +67,26 @@ export function FacturaForm({
   //
   // Los folios corren por tipo de documento, así que cambiar el tipo cambia la
   // sugerencia, salvo que ya se haya escrito un folio a mano.
+  //
+  // PERO con el SII configurado la sugerencia deja de proponerse, y esa es la
+  // parte importante: el botón "Emitir" solo aparece en un borrador SIN folio,
+  // así que un folio pre-cargado apagaba la emisión electrónica sin decir nada
+  // —la factura nacía con número y el botón no salía nunca—. Además "el último
+  // + 1" es adivinar lo que tomar_folio() sabe con certeza: no conoce el rango
+  // del CAF, no tiene lock, y dos personas facturando a la vez reciben el
+  // mismo número. El campo sigue estando para cargar documentos ya emitidos
+  // fuera del sistema; lo que cambia es que ya no viene relleno.
+  const sugerido = (tipo: string) =>
+    emisionElectronica ? "" : String(foliosSugeridos?.[tipo] ?? "");
+
   const [folio, setFolio] = useState<string>(
-    factura?.folio
-      ? String(factura.folio)
-      : String(foliosSugeridos?.[String(factura?.tipo_dte ?? 34)] ?? ""),
+    factura?.folio ? String(factura.folio) : sugerido(String(factura?.tipo_dte ?? 34)),
   );
   const [folioTocado, setFolioTocado] = useState(false);
 
   function onTipoDteChange(value: string) {
     setTipoDte(value);
-    if (!factura && !folioTocado) setFolio(String(foliosSugeridos?.[value] ?? ""));
+    if (!factura && !folioTocado) setFolio(sugerido(value));
   }
   const [estado, setEstado] = useState<FacturaEstado>(factura?.estado ?? "borrador");
   const [fechaPago, setFechaPago] = useState(
@@ -263,7 +276,9 @@ export function FacturaForm({
               hint={
                 !factura && !folioTocado && folio
                   ? "Sigue al último emitido de este tipo."
-                  : undefined
+                  : emisionElectronica && !factura && !folio
+                    ? "Déjalo vacío: lo asigna el SII al emitir. Solo se escribe para cargar una factura ya emitida fuera del sistema."
+                    : undefined
               }
             >
               <Input

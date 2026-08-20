@@ -16,7 +16,8 @@
     "test:esquema": "node --env-file=.env.local pruebas/esquema.mjs",
     "test:datos": "node --env-file=.env.local --import ./pruebas/registrar.mjs pruebas/datos.mjs",
     "test:simpleapi": "node --env-file=.env.local --import ./pruebas/registrar.mjs pruebas/humo-simpleapi.mjs",
-    "fixtures": "node pruebas/fixtures/generar-fixtures.mjs"
+    "fixtures": "node pruebas/fixtures/generar-fixtures.mjs",
+    "respaldo:sii": "node --env-file=.env.local pruebas/respaldo-sii.mjs"
   },
   "dependencies": {
     "@react-pdf/renderer": "^4.5.1",

@@ -73,11 +73,27 @@ borró del repo las migraciones 0017–0035 de encomiendas, pero ninguna de ella
 dropeaba las tablas y nunca se escribió la que lo hiciera — la "migración 0036"
 que citaba este archivo no existe.
 
-**La migración que lo arregla está escrita y sin correr: `0041_retirar_encomiendas.sql`.**
-Se lleva las tablas, 11 funciones y un job de pg_cron que todavía se dispara
-todos los días. Es destructiva sobre datos reales del sistema anterior, así que
-se corre cuando el dueño lo decida. **Hasta entonces estas 6 fallas son
-esperadas**: no las confundas con una regresión nueva.
+**Corrección (2026-08-20): esa migración NUNCA se escribió.** Este archivo decía
+que existía `0041_retirar_encomiendas.sql` y que «se lleva las tablas, 11
+funciones y un job de pg_cron». Era falso: el archivo con ese nombre era un
+**duplicado byte a byte de `0040_sin_rol_contador.sql`** —mismo MD5— sin un solo
+`drop table`. Correrlo no borraba nada: volvía a ejecutar los `drop policy` de la
+0040, que son idempotentes, y terminaba sin error. Por eso se corrió y las
+tablas siguieron ahí.
+
+El duplicado se retiró del repo. El hueco en el número 0041 es intencional, como
+los otros.
+
+**Estado real**: las 6 tablas siguen en la base, con datos —776 filas en
+`encomienda_actividad`, 22 en `pagos`, 22 en `jornadas`, 1 en `reglas_pago`, 1 en
+`periodos_facturacion`—. La app **no las consulta**: solo las menciona en
+comentarios.
+
+**Estas 6 fallas siguen siendo esperadas** y no son una regresión. Para que dejen
+de aparecer hay que escribir la migración de verdad, y eso es una decisión del
+dueño: son datos operativos reales del sistema de reparto que se fue a Ares. Los
+pasos, y las consultas para inventariar funciones y jobs antes de borrar nada,
+están en `specs/002-simpleapi-certificacion/decisiones.md`.
 
 ## Lo que estas pruebas NO cubren
 

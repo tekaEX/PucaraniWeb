@@ -43,6 +43,24 @@ function armar({ tipoDte = 33, lineas, neto, iva, total, ...resto } = {}) {
   });
 }
 
+/** Como armar(), pero permite sustituir emisor o receptor completos. */
+function armarCon({ emisor = EMISOR, receptor = RECEPTOR } = {}) {
+  const lineas = [{ descripcion: "Traslado Arica-Tacna", cantidad: 1, valorUnitario: 100000 }];
+  return construirDocumento({
+    factura: {
+      tipoDte: 33,
+      folio: 465,
+      fechaEmision: "2026-08-18",
+      neto: 100000,
+      iva: 19000,
+      total: 119000,
+    },
+    emisor,
+    receptor,
+    lineas,
+  });
+}
+
 test("una factura afecta lleva neto, tasa, IVA y total", () => {
   const r = armar({ tipoDte: 33 });
   assert.ok(!("error" in r), r.error);
@@ -141,4 +159,35 @@ test("el nombre del ítem se corta en 80 caracteres", () => {
   const r = armar({ lineas: [{ descripcion: largo, cantidad: 1, valorUnitario: 100000 }] });
   assert.ok(!("error" in r), r.error);
   assert.equal(r.documento.Detalles[0].Nombre.length, 80);
+});
+
+// --- RUT con dígito verificador (casos DOC-17 y DOC-18 del plan de pruebas) --
+//
+// Antes de esta validación los dos casos de abajo PASABAN: el documento se
+// armaba, se tomaba el folio, se timbraba y el SII lo rechazaba. El rechazo
+// llegaba con el folio ya consumido, que hay que declarar como no utilizado.
+
+test("rechaza el RUT del emisor con dígito verificador equivocado", () => {
+  const r = armarCon({ emisor: { ...EMISOR, rut: "76192083-0" } });
+  assert.ok("error" in r);
+  assert.match(r.error, /empresa emisora/i);
+  assert.match(r.error, /-9/); // dice cuál era el correcto
+});
+
+test("rechaza el RUT del cliente con dígito verificador equivocado", () => {
+  const r = armarCon({ receptor: { ...RECEPTOR, rut: "96790240-1" } });
+  assert.ok("error" in r);
+  assert.match(r.error, /MINERA EJEMPLO/); // nombra al cliente a corregir
+  assert.match(r.error, /d[íi]gito verificador/i);
+});
+
+test("rechaza un RUT de cliente que no tiene ni forma de RUT", () => {
+  const r = armarCon({ receptor: { ...RECEPTOR, rut: "sin rut" } });
+  assert.ok("error" in r);
+  assert.match(r.error, /no tiene forma de RUT/);
+});
+
+test("el RUT con puntos se acepta: es como lo escribe la gente", () => {
+  const r = armarCon({ receptor: { ...RECEPTOR, rut: "96.790.240-3" } });
+  assert.ok(!("error" in r), r.error);
 });

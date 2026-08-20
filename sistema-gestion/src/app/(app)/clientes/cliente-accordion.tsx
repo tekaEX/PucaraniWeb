@@ -1,6 +1,7 @@
 "use client";
 
 import { Fragment, useState } from "react";
+import { formatearRut } from "@/lib/rut";
 import { ChevronDown } from "lucide-react";
 import { InitialsAvatar } from "@/components/ui/avatar";
 import { formatCLP } from "@/lib/format";
@@ -46,7 +47,13 @@ export function ClienteAccordion({
                   </div>
                 </td>
                 <td className="px-4 py-3 uppercase text-muted">{c.codigo ?? "—"}</td>
-                <td className="px-4 py-3 text-muted">{c.rut ?? "—"}</td>
+                {/* El RUT se GUARDA canónico ("61945700-5") para que el mismo cliente no
+                    quede escrito de dos formas, y se MUESTRA con puntos, que es como
+                    lo lee una persona. Las dos cosas a la vez: la base no se
+                    ensucia y la pantalla no se vuelve ilegible. */}
+                <td className="px-4 py-3 text-muted">
+                  {c.rut ? formatearRut(c.rut) : "—"}
+                </td>
                 <td className="px-4 py-3 text-muted">
                   {c.contacto_nombre ?? c.contacto_telefono ?? c.contacto_email ?? "—"}
                 </td>

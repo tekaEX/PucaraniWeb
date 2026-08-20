@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { s, sReq } from "@/lib/form-helpers";
+import { errorRut, normalizarRut } from "@/lib/rut";
 
 export type FormState = { error?: string; ok?: boolean };
 
@@ -21,10 +22,22 @@ export async function guardarCliente(
     return { error: "El nombre del cliente es obligatorio." };
   }
 
+  // El RUT es opcional en la ficha —un cliente se puede cargar antes de tener
+  // sus datos completos— pero si está escrito tiene que estar BIEN escrito. Un
+  // dígito verificador equivocado no lo detecta nadie hasta que el SII rechaza
+  // la factura, y para entonces el folio ya se consumió.
+  const rutCrudo = s(formData.get("rut"));
+  if (rutCrudo) {
+    const err = errorRut(rutCrudo, "El RUT del cliente");
+    if (err) return { error: err };
+  }
+
   const values = {
     nombre,
     codigo: s(formData.get("codigo")),
-    rut: s(formData.get("rut")),
+    // Se guarda canónico ("76192083-9") para que el mismo cliente no quede
+    // escrito de dos formas distintas en la base.
+    rut: rutCrudo ? normalizarRut(rutCrudo) : null,
     direccion: s(formData.get("direccion")),
     giro: s(formData.get("giro")),
     comuna: s(formData.get("comuna")),

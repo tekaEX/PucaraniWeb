@@ -30,9 +30,9 @@ export function CredForm({
       <Field
         label="RUT de la empresa"
         htmlFor="rut"
-        hint="RUT del contribuyente ante el SII (ej. 76.123.456-7)."
+        hint="RUT del contribuyente ante el SII (ej. 76.123.456-0)."
       >
-        <Input id="rut" name="rut" defaultValue={rut} placeholder="76.123.456-7" required />
+        <Input id="rut" name="rut" defaultValue={rut} placeholder="76.123.456-0" required />
       </Field>
 
       {/* Estos dos RUT casi nunca son el mismo, y confundirlos hace que el SII
@@ -46,7 +46,7 @@ export function CredForm({
           id="rut_certificado"
           name="rut_certificado"
           defaultValue={rutCertificado}
-          placeholder="12.345.678-9"
+          placeholder="12.345.678-5"
         />
       </Field>
 

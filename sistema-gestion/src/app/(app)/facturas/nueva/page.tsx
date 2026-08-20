@@ -1,12 +1,16 @@
 import { PageHeader } from "@/components/page-header";
 import { FacturaForm } from "../factura-form";
 import { datosNuevaFactura } from "./datos";
+import { configSii } from "../config-sii";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Nueva factura" };
 
 export default async function NuevaFacturaPage() {
-  const { clientes, viajesDisponibles, folios } = await datosNuevaFactura();
+  const [{ clientes, viajesDisponibles, folios }, sii] = await Promise.all([
+    datosNuevaFactura(),
+    configSii(),
+  ]);
 
   return (
     <div className="max-w-4xl">
@@ -18,6 +22,7 @@ export default async function NuevaFacturaPage() {
         clientes={clientes}
         viajesDisponibles={viajesDisponibles}
         foliosSugeridos={folios}
+        emisionElectronica={sii.listo}
       />
     </div>
   );

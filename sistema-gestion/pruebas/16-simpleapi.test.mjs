@@ -235,3 +235,53 @@ test("sin SIMPLEAPI_KEY avisa qué falta, en vez de fallar contra la red", async
     process.env.SIMPLEAPI_KEY = antes;
   }
 });
+
+// --- Cuota agotada (T032) -----------------------------------------------------
+//
+// El 429 y la cuota mensual se arreglan distinto: el 429 esperando unos
+// segundos, la cuota NO se arregla esperando —el tope se reinicia el día 1 y no
+// se acumula—. Un mensaje que los confunda hace que alguien reintente toda la
+// tarde un envío que no va a salir.
+
+test("la cuota mensual agotada NO se confunde con el rate limit", async () => {
+  const espia = interceptar(
+    () => new Response('{"message":"Monthly quota exceeded for this service"}', { status: 403 }),
+  );
+  try {
+    const r = await generarDte(DOCUMENTO, CERT, "<AUTORIZACION/>");
+    assert.ok("error" in r);
+    assert.match(r.error, /cuota mensual/i);
+    assert.match(r.error, /d[íi]a 1/); // dice cuándo se reinicia
+    assert.doesNotMatch(r.error, /3 por segundo/); // no es el mensaje del 429
+  } finally {
+    espia.restaurar();
+  }
+});
+
+test("el 429 sigue diciendo lo suyo aunque el cuerpo hable de quota", async () => {
+  // El texto del 429 real de esta API es "API calls quota exceeded! maximum
+  // admitted 3 per 1s": contiene la palabra "quota" y NO es la cuota mensual.
+  const espia = interceptar(
+    () =>
+      new Response("API calls quota exceeded! maximum admitted 3 per 1s", { status: 429 }),
+  );
+  try {
+    const r = await generarDte(DOCUMENTO, CERT, "<AUTORIZACION/>");
+    assert.ok("error" in r);
+    assert.match(r.error, /3 por segundo/);
+    assert.doesNotMatch(r.error, /cuota mensual/i);
+  } finally {
+    espia.restaurar();
+  }
+});
+
+test("un 402 sin texto reconocible igual orienta hacia el plan", async () => {
+  const espia = interceptar(() => new Response("", { status: 402 }));
+  try {
+    const r = await generarDte(DOCUMENTO, CERT, "<AUTORIZACION/>");
+    assert.ok("error" in r);
+    assert.match(r.error, /cuota del plan|servicio no contratado/i);
+  } finally {
+    espia.restaurar();
+  }
+});

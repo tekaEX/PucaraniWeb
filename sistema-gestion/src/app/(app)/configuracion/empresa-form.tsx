@@ -61,7 +61,7 @@ export function EmpresaForm({ empresa }: { empresa?: Empresa }) {
             <Input id="razon_social" name="razon_social" defaultValue={empresa?.razon_social ?? ""} />
           </Field>
           <Field label="RUT" htmlFor="rut">
-            <Input id="rut" name="rut" defaultValue={empresa?.rut ?? ""} placeholder="12.345.678-9" />
+            <Input id="rut" name="rut" defaultValue={empresa?.rut ?? ""} placeholder="12.345.678-5" />
           </Field>
           <Field label="Giro" htmlFor="giro">
             <Input id="giro" name="giro" defaultValue={empresa?.giro ?? ""} />

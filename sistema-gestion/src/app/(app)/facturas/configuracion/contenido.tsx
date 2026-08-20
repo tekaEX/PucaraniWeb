@@ -1,12 +1,14 @@
 import { createClient } from "@/lib/supabase/server";
 import { empresaActual } from "@/lib/empresa-server";
 import { Card, CardBody, CardHeader, CardTitle } from "@/components/ui/card";
-import { ShieldCheck, TriangleAlert } from "lucide-react";
+import { Check, ShieldCheck, TriangleAlert, X } from "lucide-react";
 import { CredForm } from "./cred-form";
 import { CafForm } from "./caf-form";
+import { AmbienteForm } from "./ambiente-form";
 import { EstadoSimpleApi } from "./estado-simpleapi";
 import { TIPOS_DTE } from "@/types/db";
 import { formatDate } from "@/lib/format";
+import { configSii } from "../config-sii";
 
 // El cuerpo de la configuración SII, sin encabezado ni enlaces de "volver".
 //
@@ -37,14 +39,23 @@ export async function ConfiguracionSii() {
 
   const supabase = await createClient();
   const empresa = await empresaActual();
+
+  // El diagnóstico manda: sabe cuál es el ambiente activo (migración 0054) y
+  // resuelve componente por componente qué falta para poder emitir.
+  const diagnostico = await configSii();
+  ambiente = diagnostico.ambiente;
+
   if (empresa) {
     rut = empresa.rut ?? "";
-    const [{ data: cred }, { data: cafData }] = await Promise.all([
+    const [{ data: creds }, { data: cafData }] = await Promise.all([
+      // Filtrado por ambiente y como LISTA: desde la 0053 una empresa puede
+      // tener dos credenciales, y `.maybeSingle()` habría fallado la consulta
+      // entera al aparecer la segunda en vez de traer la que corresponde.
       supabase
         .from("sii_credenciales")
         .select("rut, rut_certificado, numero_resolucion, fecha_resolucion, cert_path, ambiente")
         .eq("empresa_id", empresa.id)
-        .maybeSingle(),
+        .eq("ambiente", diagnostico.ambiente),
       supabase
         .from("sii_caf")
         .select("id, tipo_dte, ambiente, folio_desde, folio_hasta, folio_siguiente, fecha_autorizacion")
@@ -52,26 +63,17 @@ export async function ConfiguracionSii() {
         .order("tipo_dte")
         .order("folio_desde"),
     ]);
+    const cred = creds?.[0] ?? null;
     if (cred) {
       tieneCert = Boolean(cred.cert_path);
       rut = cred.rut ?? rut;
       rutCertificado = cred.rut_certificado ?? "";
       numeroResolucion = cred.numero_resolucion === null ? "" : String(cred.numero_resolucion);
       fechaResolucion = cred.fecha_resolucion ?? "";
-      ambiente = cred.ambiente ?? "certificacion";
     }
     cafs = (cafData ?? []) as Caf[];
   }
 
-  // Lo que falta para poder emitir. Se muestra arriba porque tener la conexión
-  // andando no significa poder facturar: son cuatro cosas distintas y sin las
-  // dos primeras no hay emisión posible.
-  const faltantes = [
-    !tieneCert ? "el certificado digital" : null,
-    cafs.length === 0 ? "un CAF con folios autorizados" : null,
-    !rutCertificado ? "el RUT del titular del certificado" : null,
-    !numeroResolucion || !fechaResolucion ? "la resolución del SII que autoriza a emitir" : null,
-  ].filter(Boolean);
 
   return (
     <div className="space-y-4">
@@ -96,15 +98,57 @@ export async function ConfiguracionSii() {
         </div>
       )}
 
-      {faltantes.length > 0 ? (
-        <div className="flex items-start gap-2.5 rounded-xl border border-warn/30 bg-warn-bg p-3">
-          <TriangleAlert className="mt-0.5 h-4 w-4 shrink-0 text-warn" />
-          <p className="text-sm text-warn">
-            Todavía no se puede emitir: falta {faltantes.join(" y ")}. Las facturas
-            se siguen registrando a mano, con folio y fecha tipeados.
-          </p>
-        </div>
-      ) : null}
+      {/* Estado componente por componente. Antes era una sola frase con todo
+          lo que faltaba junto; separarlo importa porque son cosas que se
+          consiguen en momentos distintos y de manos distintas — la key la pone
+          el servidor, el certificado lo compra el representante legal, los
+          folios los da el SII— y quien configura necesita saber cuál de las
+          siete le toca a él ahora. */}
+      <Card>
+        <CardHeader>
+          <CardTitle>
+            {diagnostico.listo ? "Listo para emitir" : "Qué falta para emitir"}
+          </CardTitle>
+        </CardHeader>
+        <CardBody>
+          <ul className="space-y-2">
+            {diagnostico.componentes.map((c) => (
+              <li key={c.clave} className="flex items-start gap-2.5 text-sm">
+                {c.listo ? (
+                  <Check className="mt-0.5 h-4 w-4 shrink-0 text-ok" aria-hidden />
+                ) : (
+                  <X className="mt-0.5 h-4 w-4 shrink-0 text-warn" aria-hidden />
+                )}
+                <span className="min-w-0">
+                  {/* El estado va en TEXTO además del ícono y del color: una
+                      lista donde lo que falta se distingue solo por ser rojo no
+                      se puede leer sin ver los colores. */}
+                  <span className="sr-only">{c.listo ? "Listo: " : "Falta: "}</span>
+                  <span className={c.listo ? "text-foreground" : "font-medium text-warn"}>
+                    {c.etiqueta}
+                  </span>
+                  <span className="text-muted"> — {c.detalle}</span>
+                </span>
+              </li>
+            ))}
+          </ul>
+          {!diagnostico.listo ? (
+            <p className="mt-3 text-xs text-muted">
+              Mientras tanto las facturas se siguen registrando a mano, con folio y
+              fecha tipeados.
+            </p>
+          ) : null}
+        </CardBody>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Ambiente</CardTitle>
+        </CardHeader>
+        <CardBody>
+          <AmbienteForm ambiente={diagnostico.ambiente} />
+        </CardBody>
+      </Card>
 
       <Card>
         <CardHeader>
